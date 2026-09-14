@@ -1,40 +1,76 @@
-%%%%%%%% ICML 2026 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%%
-
 \documentclass{article}
 
-% Recommended, but optional, packages for figures and better typesetting:
-\usepackage{microtype}
+% if you need to pass options to natbib, use, e.g.:
+%     \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading neurips_2026
+
+% The authors should use one of these tracks.
+% Before accepting by the NeurIPS conference, select one of the options below.
+% 0. "default" for submission
+\PassOptionsToPackage{numbers, compress}{natbib}
+\usepackage[preprint]{neurips_2026}
+% the "default" option is equal to the "main" option, which is used for the Main Track with double-blind reviewing.
+% 1. "main" option is used for the Main Track
+%  \usepackage[main]{neurips_2026}
+% 2. "position" option is used for the Position Paper Track
+%  \usepackage[position]{neurips_2026}
+% 3. "eandd" option is used for the Evaluations & Datasets Track
+ % \usepackage[eandd]{neurips_2026}
+ % if you need to opt-in for a single-blind submission in the E&D track:
+ %\usepackage[eandd, nonanonymous]{neurips_2026}
+% 4. "creativeai" option is used for the Creative AI Track
+%  \usepackage[creativeai]{neurips_2026}
+% 5. "sglblindworkshop" option is used for the Workshop with single-blind reviewing
+ % \usepackage[sglblindworkshop]{neurips_2026}
+% 6. "dblblindworkshop" option is used for the Workshop with double-blind reviewing
+%  \usepackage[dblblindworkshop]{neurips_2026}
+
+% After being accepted, the authors should add "final" behind the track to compile a camera-ready version.
+% 1. Main Track
+ % \usepackage[main, final]{neurips_2026}
+% 2. Position Paper Track
+%  \usepackage[position, final]{neurips_2026}
+% 3. Evaluations & Datasets Track
+ % \usepackage[eandd, final]{neurips_2026}
+% 4. Creative AI Track
+%  \usepackage[creativeai, final]{neurips_2026}
+% 5. Workshop with single-blind reviewing
+%  \usepackage[sglblindworkshop, final]{neurips_2026}
+% 6. Workshop with double-blind reviewing
+%  \usepackage[dblblindworkshop, final]{neurips_2026}
+% Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote.
+% For workshops (5., 6.), the authors should add the name of the workshop, "\workshoptitle" command is used to set the workshop title.
+% \workshoptitle{WORKSHOP TITLE}
+
+% "preprint" option is used for arXiv or other preprint submissions
+ % \usepackage[preprint]{neurips_2026}
+
+% to avoid loading the natbib package, add option nonatbib:
+%    \usepackage[nonatbib]{neurips_2026}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+
+% Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% NEW PACKAGES
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage{tikz}
 \usepackage{graphicx}
 \usepackage{subcaption}
-\usepackage{booktabs} % for professional tables
-\usepackage{diagbox}
-% hyperref makes hyperlinks in the resulting PDF.
-% If your build breaks (sometimes temporarily if a hyperlink spans a page)
-% please comment out the following usepackage line and replace
-% \usepackage{icml2026} with \usepackage[nohyperref]{icml2026} above.
-\usepackage{hyperref}
-
-
-% Attempt to make hyperref and algorithmic work together better:
-\newcommand{\theHalgorithm}{\arabic{algorithm}}
-
-% Use the following line for the initial blind version submitted for review:
-\usepackage{icml2026}
-
-% For preprint, use
-% \usepackage[preprint]{icml2026}
-
-% If accepted, instead use the following line for the camera-ready submission:
-% \usepackage[accepted]{icml2026}
-
+\usepackage{booktabs}
 \usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{mathtools}
 \usepackage{amsthm}
-
-
-% if you use cleveref..
-\usepackage[capitalize,noabbrev]{cleveref}
+\usepackage{diagbox}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % THEOREMS
@@ -50,6 +86,10 @@
 \newtheorem{assumption}[theorem]{Assumption}
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% NEW COMMANDS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \newcommand{\R}{{\mathbb R}}
 \newcommand{\Z}{{\mathbb Z}}
@@ -91,131 +131,119 @@
 \newcommand{\m}{{\mathbf m}}
 \newcommand{\p}{{\mathbf p}}
 \newcommand{\q}{{\mathbf q}}
+\newcommand{\g}{{\mathbf g}}
 \newcommand{\s}{{\mathbf s}}
 \newcommand{\w}{{\mathbf w}}
 \newcommand{\x}{{\mathbf x}}
 \newcommand{\bu}{{\mathbf u}}
 \newcommand{\bv}{{\mathbf v}}
 
+\newcommand{\blambda}{{\boldsymbol \lambda}}
+
 \newcommand{\argmin}{\operatorname{argmin}}
 
 \renewcommand{\>}{{\rightarrow}}
 
-% Todonotes is useful during development; simply uncomment the next line
-%    and comment out the line below the next line to turn off comments
-%\usepackage[disable,textsize=tiny]{todonotes}
-\usepackage[textsize=tiny]{todonotes}
 
-% The \icmltitle you define below is probably too long as a header.
-% Therefore, a short form for the running title is supplied here:
-\icmltitlerunning{Layers as Lenses: A Narrative of Feature Learning in Deep Networks}
+\title{Layers as Lenses: Understanding Feature Learning via Positive Feedback in Gated Deep Networks}
 
 
-%Newly added packages
-% \usepackage[T1]{fontenc}
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to LaTeX to determine where to break the
+% lines. Using \AND forces a line break at that point. So, if LaTeX puts 3 of 4
+% authors names on the first line, and the last on the second line, try using
+% \AND instead of \And before the third author name.
+
+
+ \author{%
+   Sri Saravanan \\
+   Dept. of CSE\\
+   IIT Madras\\
+   Chennai, India \\
+%   \texttt{srisaravanan@cse.iitm.ac.in} \\
+    \And
+    Harish G Ramaswamy \\
+    Department of DSAI \\
+	IIT Madras\\
+    Chennai, India \\
+%    \texttt{hariguru@dsai.iitm.ac.in} \\
+    \And
+    Chandrashekar L \\
+   Dept. of CSE\\
+   IIT Madras\\
+   Chennai, India \\
+%   \texttt{chandrashekar@cse.iitm.ac.in} \\
+   % \And
+   % Coauthor \\
+   % Affiliation \\
+   % Address \\
+   % \texttt{email} \\
+   % \And
+   % Coauthor \\
+   % Affiliation \\
+   % Address \\
+   % \texttt{email} \\
+ }
+
 
 \begin{document}
 
-\twocolumn[
-  \icmltitle{Layers as Lenses: A Narrative of Feature Learning in Deep Networks }
 
-  % It is OKAY to include author information, even for blind submissions: the
-  % style file will automatically remove it for you unless you've provided
-  % the [accepted] option to the icml2026 package.
-
-  % List of affiliations: The first argument should be a (short) identifier you
-  % will use later to specify author affiliations Academic affiliations
-  % should list Department, University, City, Region, Country Industry
-  % affiliations should list Company, City, Region, Country
-
-  % You can specify symbols, otherwise they are numbered in order. Ideally, you
-  % should not use this facility. Affiliations will be numbered in order of
-  % appearance and this is the preferred way.
-  \icmlsetsymbol{equal}{*}
-
-  \begin{icmlauthorlist}
-    \icmlauthor{Firstname1 Lastname1}{equal,yyy}
-    \icmlauthor{Firstname2 Lastname2}{equal,yyy,comp}
-    \icmlauthor{Firstname3 Lastname3}{comp}
-  \end{icmlauthorlist}
-
-  \icmlaffiliation{yyy}{Department of XXX, University of YYY, Location, Country}
-  \icmlaffiliation{comp}{Company Name, Location, Country}
-  \icmlaffiliation{sch}{School of ZZZ, Institute of WWW, Location, Country}
-
-  \icmlcorrespondingauthor{Firstname1 Lastname1}{first1.last1@xxx.edu}
-  \icmlcorrespondingauthor{Firstname2 Lastname2}{first2.last2@www.uk}
-
-  % You may provide any keywords that you find helpful for describing your
-  % paper; these are used to populate the "keywords" metadata in the PDF but
-  % will not be shown in the document
-  \icmlkeywords{Machine Learning, ICML}
-
-  \vskip 0.3in
-]
-% \maketitle
-\printAffiliationsAndNotice{}
-
+\maketitle
 
 \begin{abstract}
-% Deep networks with larger number of layers (in the tens typically) significantly outperform shallower counterparts in almost all architecture templates and datasets.  A theoretical and principled reason for their success has eluded the machine learning community over the last decade. Several promising explanations (such as representation power, input space folding, optimization conditioning, and hierarchical feature learning) remain far from being completely proven. We add another potential reason to this list. We hypothesize that, from the perspective of a given layer, other layers in a deep network act as lenses that re-weight the input data. This enables the discovery of features that do not have a global scope and would be missed without the lensing from the other layers. We further describe the feature learning mechanism under gradient descent using a Lure-Trap narrative. It says that network features (when updated by gradient descent) are lured by the decision boundaries of the Bayes optimal classifier close to initialization, based on the strength/scope of decision boundary. Later in training, these decision boundaries act as traps to the model features and do not allow further deviations. This Lure-Trap behavior is made possible mainly because of the hypothesized lensing behavior of the layers. We support our hypothesis/narrative by theoretical arguments and empirical experiments on a recently proposed intrinsically interpretable deep architecture called the deep linearly gated network (DLGN) which takes cues from both deep linear networks and ReLU networks. We also discuss potential reasons for several classic modifications -- pruning, skip-connections, momentum gradient descent -- using our narrative.
 
-% Rewritten using LLMs and tweaked by hand.
-
-Deep neural networks with increasing depth consistently outperform their shallower counterparts across a wide range of architectures and datasets. However, a principled theoretical explanation for this phenomenon remains at a superficial level. While explanations such as representational power, input space folding, optimization conditioning, the neural tangent kernel and hierarchical feature learning have been proposed, they all have glaring deficiencies. We develop a new narrative that postulates the following. From the viewpoint of any given layer, the other layers act as a lens that applies importance weights to the input, facilitating the emergence of features without global scope that would otherwise be overlooked. Gradient methods simply update the parameters of a layer to best fit the data that is importance-weighted by a lens made of other layers. Individual neuron parameters serve a dual role of `separator for data lensed by other layers' and `component of lens for other layers'. This enables a positive feedback loop that forms the core mechanism of feature learning under gradient descent in deep networks. We support our narrative with theoretical analysis and empirical results on the recently proposed Deep Linearly Gated Network (DLGN), an architecture combining elements of deep linear and ReLU networks. We also show how our analysis leads to a natural notion of hierarchical feature discovery in the feature learning regime.
-% Our perspective further provides new insights into the effects of architectural modifications such as pruning, skip-connections, and momentum-based optimization.
-
-
+End-to-end gradient-based training of multi-layer architectures has been immensely successful across machine learning tasks, yet principled explanations for why, when, and how it discovers task-relevant structure in data remain incomplete. Existing viewpoints based on representational power, input-space folding, optimization conditioning, the neural tangent kernel, and hierarchical feature learning offer useful insights, but leave important aspects of end-to-end feature learning unresolved. We propose a new narrative for gated deep networks trained by gradient descent. From the viewpoint of any given layer, the other layers act as a lens that assigns importance weights to the input, facilitating the emergence of features without global scope that might otherwise be overlooked. Gradient methods then update each layer to fit data that has been importance-weighted by a lens formed by the remaining layers. In this view, individual neuron parameters serve a dual role: separator for data lensed by other layers, and component of the lens for other layers. We hypothesize that the resulting positive feedback is a key mechanism underlying feature learning in gated deep networks. We support this narrative with theoretical analysis and empirical results on the recently proposed Deep Linearly Gated Network (DLGN), an architecture that combines elements of deep linear and ReLU networks. In particular, our analysis provides predictive control over gradient-descent trajectories from initialization in the DLGN setting, and leads naturally to a notion of hierarchical feature discovery in the feature-learning regime. We also present evidence suggesting that aspects of this narrative may extend to ReLU networks.
 
 \end{abstract}
 
-
 \section{Introduction}
-% Writing a narrative in the intro for now will move it to appropriate secions later.
 
-Despite the empirical successes of deep neural networks, prevailing explanations for their learnability remain largely superficial. There exists several popular narratives -- such as ``deeper networks represent more complex functions,'' ``finite-width deep networks approximate infinite-width kernel methods,'' or ``feature kernels evolve to become better during training'' (see, e.g., \cite{Nichani+23, Arora+19, Frei+23}). These accounts overlook why such structures can be reliably learned, fail to address where these explanations break down, and do not explain why empirical phenomena routinely deviate from theoretical predictions. They offer at best, limited insight into some key questions -- 
-(1) Why does gradient-based optimization lead to effective solutions?
-(2) Why and how do multiple layers enable this behavior?
-(3) How is the curse of dimensionality avoided?
+End-to-end gradient-based training of multi-layer architectures often finds parameters that fit the training data, discover task-relevant structure in the input, and generalize well. A non-exhaustive list of explanations or narratives for this is given below.
 
-A more expressive theory of feature learning is needed to move beyond the current surface-level intuitions and reveal the mechanisms that truly underpin deep learning.
+\begin{enumerate}
+\item \textit{Deeper networks represent more complex functions.} \cite{Telgarsky+16, Montufar+14}. This is a valuable insight, but it does not explain how gradient descent finds such parameters from random initialization. In fact, many deep architectures that can represent complex functions still fail to discover parameters corresponding to the desired solution from random initialization.
+\item \textit{Deep networks implement kernel methods.} \cite{Jacot+18, Arora+19}. The neural tangent kernel is an extremely strong theoretical baseline, and is mathematically exact for infinite-width networks. However, it does not explain the empirical advantage of finite-width architectures over their infinite-width counterparts, and by itself does not explain finite-width feature learning.
+\item \textit{Feature kernels improve during training.} \cite{Frei+23, Nichani+23, Damian+22}. This is a highly promising direction and likely explains several phenomena in deep networks. However, it often leaves open the mechanistic question of how end-to-end gradient descent in a multi-layer architecture produces this improvement.
+\end{enumerate}
 
-In this paper, we restrict our focus to binary classification problems with feature vector data. Extensions to more complex tasks -- such as generative modelling or structured inputs like images and text -- are beyond the scope of this work. We will also restrict our theoretical arguments to the infinite training data and infinitesimal learning rate setting (corresponding to population gradient flow rather than stochastic gradient descent) for convenience. We strongly believe our arguments can be extended to the SGD setting, but such an extension is beyond the scope of this work. The experiments to support our theoretical arguments are naturally done with finite data and finite learning rate.
+Our work fits most naturally within the third narrative family above. A major challenge in this line of work is that realistic end-to-end analyses of feature improvement in deep networks are difficult. Existing theoretical results therefore often rely on restrictive assumptions, such as layerwise training \cite{Nichani+23, Dandi+24}, one- or two-hidden-layer settings \cite{Nichani+23, Dandi+24, Abbe+21, Damian+22}, or strong assumptions on the data distribution \cite{Abbe+21, Dandi+24}. We make a different tradeoff: we study a gated deep architecture and a structured data model chosen to make inter-layer feature-learning dynamics analytically visible.
 
-\section{Literature Review}
+We study this question through the Deep Linearly Gated Network (DLGN) \cite{Banerjee+25}, a transparent gated architecture that preserves the multiplicative interactions central to our analysis while allowing neuron-level dissection of training dynamics. At a high level, our analysis identifies two competing second-order effects in single-path DLGNs, shows how they help organize training in wider DLGNs, and finds related hierarchical feature-emergence patterns in ReLU networks.
 
-\subsection{An Overview of Current Narratives}
+\subsection{Limitations}
+We restrict attention to binary classification with feature-vector inputs. Our formal theorems are stated for DLGNs in a structured synthetic data setting and in the population-gradient-flow regime. While we believe the broader narrative may extend to more realistic architectures and datasets, such extensions are currently supported only partially and remain directions for future work.
 
-\textbf{Neural Networks and the the Kernel regime:} An important tool for studying the optimization and generalization capabilities of neural networks has been the Neural Tangent Kernel \cite{Jacot+18, Lee+19}. In the infinite-width limit and a certain scaling the network evolution is equivalent to kernel regression given by the NTK. Under this regime, the NTK remains unchanged, making it easier to study the learning dynamics of neural networks \cite{Du+18, Du+19, Arora+18}. The mean-field parameterization \cite{Mei+18, Chizat+18, Bordelon+25} has been a popular alternative to the NTK parameterization since the features evolve under this regime.
-% \cite{Geifman+20} showed that the standard Laplace kernel and the NTK are closely related and thus providing a simple tool to study neural networks.
+\subsection{Contributions}
 
-\textbf{Feature learning and gradient descent}: A growing body of work attributes the empirical gap between neural networks trained by gradient descent and kernel methods to the networks’ ability to learn task-relevant features that fixed kernels cannot capture \cite{Zhu+19, Daniely+20, Li+20, Yehudai+19}. Even a small number of gradient steps on the first layer of a two-layer network produces features that improve downstream performance \cite{Daniely+20, Damian+22} . These results are particularly relevant for data that is high dimensional but have a low-dimensional latent structure: in such settings, feature learning effectively reduces the problem to learning the latent subspace. This results in staircase training dynamics formalized in \cite{Abbe+21, Abbe+22b, Abbe+23}. Empirical investigations show that neural networks discover coarse/simple features first and then they progressively capture finer/complex features, consistent with the theoretical staircase picture \cite{Kalimeris+19}. A complementary analytical tool has been to study the evolution of the data-dependent NTK: unlike the fixed NTK of the infinite-width limit, the empirical NTK changes during finite-width training and tends to align with the target, a behavior labeled kernel alignment \cite{Fort+20, Loo+22, Atanasov+22, Wang+23}.
-
-\textbf{The advantage of depth}: Understanding how depth compositionally enhances feature learning remains a central open question. Deeper networks are hypothesized to build a hierarchical representation of features, where the simple features learned by early layers are composed into more abstract concepts by later layers \cite{Allen-Zhu+20}. \cite{Telgarsky+16} show that deep networks cannot be approximated by shallower networks, unless they have an exponentially large number of nodes. \cite{Montufar+14} show that depth enables models to learn a larger number of linear regions thus approximating the target function better than shallower models. \cite{Nichani+23} show that three-layer neural networks have provably richer feature learning capability compared to two-layer networks.
-
-\subsection{Pitfalls of Current Narratives}
-
-The lazy regime of the NTK \cite{Chizat+19} does not explain why neural networks are able to learn complex features from the data. Studies focusing on the feature learning or rich regime -- while providing interesting/useful results -- often consider very simple settings and have restrictive assumptions. For example: only one gradient step, two-layer networks, linear/quadratic activations, layer-wise training schedules, specific initialization scalings, and strong assumptions about the data \cite{Cui+24, Dandi+24, Ba+22, Damian+22, Daniely+20, Abbe+22b}. There is very little understanding on how well these results transfer to deep networks trained end-to-end using gradient descent. The crucial deep learning narrative question -- given below -- remains unanswered to this date. \textit{How do the multiple layers in a deep neural network interact with each other and jointly adapt during training to discover task-relevant features?} A related question of lesser importance is given as follows: \textit{When an architecture and data setting has multiple functionally different global/local minima, how does the initialization relate to the eventual gradient descent solution?} The latter question is  narrower and more technical than the former. Our inability to answer the latter question convincingly for a non-trivial setting makes the former question even harder to grasp.
+We study a lens/separator viewpoint for feature learning in gated deep networks, in which each layer reweights the data seen by other layers. In the DLGN setting, we provide second-order theoretical results for single-path models, together with empirical analysis of wider models including trajectory prediction, regularization, and intervention experiments. We also present empirical results in ReLU networks that exhibit related hierarchical feature-emergence patterns, and use the ODT setting to motivate a notion of hierarchical feature discovery based on the scope of discontinuities in the target function.
 
 \section{Decision Tree Data and Deep Linearly Gated Network Architecture}
 
-\subsection{ Motivation for the Data Setting}
+\subsection{Motivation for the Data Setting}
 
-A primary goal in selecting a data setting for theoretical study is to ensure genuine non-triviality; the concept class should be complex enough that feature learning via gradient descent on a deep architecture is necessary. While real-world datasets often exhibit this property -- resisting solutions by linear or kernel methods -- their inherent opacity renders precise analysis of model dynamics intractable. By contrast, canonical synthetic benchmarks such as parity functions or linearly separable data or polynomials (see, e.g., \cite{Daniely+20, Frei+23, Soudry+18, Wu+23, Abbe+21} are somewhat simplistic and fail to capture the kind of intricate structure that motivates deep learning theory. Data labeled by an oblique decision tree \cite{Banerjee+25} however, offers synthetic complexity without analytic opacity, furnishing a non-trivial, structured classification task.
+A useful theoretical data setting should be non-trivial enough that feature learning by deep architectures is genuinely needed, while still permitting precise analysis. Real-world datasets often satisfy the first requirement, but their complexity makes the dynamics of gradient descent difficult to analyze. At the other extreme, canonical synthetic benchmarks such as parity functions, linearly separable data, or low-degree polynomials \cite{Daniely+20, Frei+23, Soudry+18, Wu+23, Abbe+21} are analytically convenient but do not capture the kind of hierarchical structure that motivates deep learning theory.
 
-An effective data model should permit generalization of its key mechanisms to broader settings, while remaining amenable to precise analysis. Oblique decision trees occupy this middle ground: although real-world datasets are rarely generated by tree processes, many possess rich, multi-scale hierarchical structure that trees can capture or approximate. The essential elements of a decision tree -- its internal node hyperplanes -- can be isolated and interpreted as discontinuities in the label function, regardless of the tree context. As a result, properties established for tree-structured data are more plausibly extended to realistic data regimes than results derived from artificial settings such as parity functions or polynomials. Because oblique trees combine structural expressiveness with analytic tractability, they provide a robust foundation for arguments that aim to reflect the mechanisms enabling deep network success in real data.
+Data labeled by an oblique decision tree \cite{Banerjee+25} offers a useful middle ground. Although realistic datasets are rarely generated by literal tree processes, many exhibit multi-scale hierarchical structure that trees can capture or approximate. In particular, the internal node hyperplanes of an oblique tree can be interpreted as localized discontinuities in the label function. This makes oblique trees expressive enough to model non-trivial structure, while remaining transparent enough for mechanistic analysis.
 
-\subsection{ Motivation for the Architecture Setting}
+\subsection{Motivation for the Architecture Setting}
 
-To meaningfully advance theory, we require an architecture that is empirically competitive with standard deep networks, such as multilayer ReLU models, on challenging tasks. Classic models favored in theoretical work -- like deep linear networks or single-hidden-layer neural networks -- lack the expressive power and empirical relevance of modern deep architectures. In contrast, the deep linearly gated network (DLGN) achieves close to state-of-the-art performance in feature vector classification tasks \cite{Banerjee+25} and therefore offers a more faithful proxy for understanding deep feature learning in realistic settings.
+To study deep feature learning, we also need an architecture that retains the essential multiplicative interactions of modern deep networks while allowing meaningful parameter-level analysis. Classical models commonly used in theory, such as deep linear networks or shallow neural networks, are often too limited for this purpose. Standard multilayer ReLU networks are more realistic, but their internal parameter interactions make isolated analysis of individual neurons difficult.
 
-A suitable architecture should possess a transparent, layer-wise structure whose parameters can be decomposed into interpretable, semi-independent components. While multilayer ReLU networks have a clear notion of depth, the intricate parameter interactions -- especially in intermediate hidden layers -- often render isolated analysis of individual weights or neurons meaningless. This challenge is typically avoided in theoretical studies by restricting consideration to shallow (e.g., single-hidden-layer) networks, sacrificing insights into deep feature learning. The DLGN architecture, by design, enables meaningful dissection of parameter dynamics at the level of individual neurons, while preserving the hierarchical depth necessary for examining deep learning phenomena.
+We therefore use the Deep Linearly Gated Network (DLGN) \cite{Banerjee+25}, a transparent gated architecture that remains competitive on structured feature-vector tasks while permitting neuron-level dissection of training dynamics. The DLGN preserves the multiplicative gate interactions central to our narrative, while avoiding some of the opacity of standard ReLU models.
 
 \subsection{The Oblique Decision Tree Data Setting}
 \label{sec:ODT_intro}
-The instance $\x$ is drawn uniformly from the surface of a sphere of radius one in $\R^d$. The label $y \in\{+1,-1\}$ is given by a complete, orthogonal and balanced oblique decision tree (COB-ODT according to \cite{Banerjee+25}) of depth $D$ which recursively partitions the space at each internal node using orthogonal hyperplanes. Concretely, consider a depth $D-1$ complete binary tree with nodes indexed $0$ to $N = 2^{D}-2$. Each node $i\in\{0,1,\ldots,N\}$ has a left child $2i+1$, and right child $2i+2$. It is also associated with a `decision vector' $\bu_i \in \R^d$. The $N+1$ decision vectors $\bu_0,\ldots,\bu_N$ are unit norm and mutually orthogonal. Traversal starts at the root; at each node $i$, the data point $\x$ proceeds left (right resp.) if the sign of the inner product $\bu_i \cdot \x$ is negative (positive resp.). The label $y^*(\x)$ is  equal to the sign of $-\bu_i\cdot \x$ at the node $i$ reached after $D-1$ decisions. The label nodes are given numbers $N+1$ to $2N+2$ for convenience, even though they do not have an associated decision.  As a convention, we call the nodes at level $D-1$ as leaf nodes, and the nodes at level $D$ as label nodes, e.g. in the depth $D=4$ tree shown in Figure \ref{fig:ODT}, nodes 7 to 14 are leaf nodes, while nodes 15 to 30 are label nodes.
 
-\begin{figure*}
+The instance $\x$ is drawn uniformly from the unit sphere in $\R^d$. The label $y \in \{+1,-1\}$ is given by a complete, orthogonal, balanced oblique decision tree (shortly, COB-ODT  \cite{Banerjee+25}) of depth $D$.
+
+Concretely, consider a complete binary tree of depth $D-1$ with nodes indexed $0$ to $N=2^D-2$. Each node $i \in \{0,1,\ldots,N\}$ has left child $2i+1$, right child $2i+2$, and an associated decision vector $\bu_i \in \R^d$. The vectors $\bu_0,\ldots,\bu_N$ are unit norm and mutually orthogonal. Traversal starts at the root; at node $i$, the point $\x$ moves left if $\bu_i^\top \x < 0$ and right otherwise. After $D-1$ decisions, the label is given by the sign of $-\bu_i^\top \x$ at the reached node $i$.
+
+For convenience, we number the terminal label nodes from $N+1$ to $2N+2$, even though they have no associated decision vector. We refer to nodes at level $D-1$ as \emph{leaf nodes}, and nodes at level $D$ as \emph{label nodes}. Thus, for a depth-$4$ tree, nodes $7$ to $14$ are leaf nodes and nodes $15$ to $30$ are label nodes. 
+
+\begin{figure}
     \centering
 \begin{tikzpicture}[every node/.style={circle,draw,minimum size=10pt,inner sep=1pt, scale=0.8}]
 
@@ -274,304 +302,234 @@ The instance $\x$ is drawn uniformly from the surface of a sphere of radius one 
 
 \caption{The decision tree with depth $D=4$ has its decision nodes shaded green. Label nodes colored red have $y^*=+1$ and label nodes colored blue have $y^*=-1$.}
 \label{fig:ODT}
-\end{figure*}
+\end{figure}
 
-
-Let $\Gamma$ denote the set of paths in the ODT starting at the root $0$ and terminating at a label node. Each element $\gamma \in \Gamma$ is a $(D+1)$-tuple. 
-% e.g the depth 4 tree in Figure \ref{fig:ODT} has $16$ elements in $\Gamma=\{(0,1,3,7,15),(0,1,3,7,16), \ldots, (0,2,6,14,30)\}$. 
-Let $y^*(\gamma)$ denote the class label corresponding to the path $\gamma$. Every element $\gamma \in \Gamma$ is assoicated with a sign vector $\tau(\gamma) \in \{+1,-1\}^D$ giving the sequence of left/right decisions taken. For example, in the tree shown in Figure \ref{fig:ODT} for $\gamma=(0,1,3,7,15)$, we have $\tau(\gamma)=(-1,-1,-1,-1)$ and $y^*(\gamma) = +1$.
-
-% \begin{equation}
-% y^*(\x) = \sum_{\gamma \in \Gamma_+} \prod_{p = 1}^D \1( \tau_p \bu_{\gamma_p} \cdot \x >0)  - \sum_{\gamma \in \Gamma_-} \prod_{p = 1}^D \1( \tau_p \bu_{\gamma_p} \cdot \x >0)
-% \label{eqn:ODT_defn}
-% \end{equation}
+Let $\Gamma$ denote the set of root-to-label paths in the ODT. Each $\gamma \in \Gamma$ is a $(D+1)$-tuple, and is associated with a sign vector $\tau(\gamma)\in\{+1,-1\}^D$ recording the sequence of left/right decisions. For example, in a depth-$4$ tree, the path $\gamma=(0,1,3,7,15)$ has $\tau(\gamma)=(-1,-1,-1,-1)$ and label $y^*(\gamma)=+1$.
 
 \begin{equation}
 \begin{aligned}
-y^*(\x) &= \sum_{\gamma \in \Gamma} y^*(\gamma) \prod_{p = 1}^D \1( \tau_p \bu_{\gamma_p} \cdot \x >0) 
+y^*(\x) = \sum_{\gamma \in \Gamma} y^*(\gamma)\prod_{p=1}^D \mathbf{1}\!\left(\tau_p \, \bu_{\gamma_p}^\top \x > 0\right),
 \end{aligned}
 \label{eqn:ODT_defn}
 \end{equation}
-
-where $\tau_p$ is used as a shorthand for the $p$-th element of $\tau(\gamma)$. By construction, for any given $\x$, only one of the paths in $\Gamma$ has a non-zero contribution in the above expression.
-
-% The ODT labeling function is surprisingly difficult for standard learning algorithms. Kernel and linear methods fail completely even for moderate values of $d$ and $D$ (around $100$ and $4$ respectively) \cite{Banerjee+25}, as do conventional greedy decision tree algorithms: the information gain for splitting on the (crucial) root direction $\bu_0$ is zero since the hyperplane $\bu_0 \cdot \x = 0$ bisects the data into perfectly balanced labels in each half. Consequently, greedy methods are myopic and typically miss the global structure. In contrast, deep architectures such as ReLU networks and the Deep Linearly Gated Network (DLGN) \cite{Banerjee+25} can recover the full compositional pattern and achieve high accuracy for even larger values of $d$ and $D$. This makes the ODT setting an ideal case study to analyse the feature learning dynamics in neural networks.
-
-% While the ODT is itself an artificial construction, it offers a rich family of label structures that go well beyond the commonly studied linearly separable data \cite{Soudry+18}, parity functions \cite{Frei+23}, or single-index models \cite{Damian+22}. Its analytic tractability and compositional depth make it a compelling, if challenging, testbed for the theory of feature learning. 
-
+where $\tau_p$ denotes the $p$-th entry of $\tau(\gamma)$. By construction, exactly one path in $\Gamma$ contributes non-zero mass for any given $\x$.
 
 \subsection{The Deep Linearly Gated Network Architecture Setting}
 \label{sec:DLGN_intro}
-The deep linearly gated network (DLGN) is defined as a sum of products of sigmoidal activation applied to linear functions. Specifically, the model output is
+
+The Deep Linearly Gated Network (DLGN) is defined as a sum of products of sigmoidal gates applied to linear functions:
 \begin{equation}
-    \hat y(\x) = \sum_{\pi \in \Pi} a_\pi \prod_{\ell =1}^L \phi(\w_{\pi,\ell} ^\top \x)
+    \hat y(\x) = \sum_{\pi \in \Pi} a_\pi \prod_{\ell=1}^L \phi(\w_{\pi,\ell}^\top \x),
+    \label{eq:DLGN_path_dec}
 \end{equation}
-where $\Pi$ is a discrete index set, $L$ is the number of layers and $\phi:\R\> [0,1]$ is a scaled sigmoid, ($\phi(u)=1/(1+\exp(-\beta u))$). The weight vectors $\w_{\pi,\ell}$ form a total of $|\Pi| L$ vectors in $\R^d$ and constitute the parameters of the model along with $|\Pi|$ scale coefficients $a_\pi$. 
+where $\Pi$ is a discrete index set, $L$ is the number of layers, and $\phi:\R\to[0,1]$ is a scaled sigmoid, $\phi(u)=1/(1+\exp(-\beta u))$. The vectors $\w_{\pi,\ell}$ and coefficients $a_\pi$ are the trainable parameters.
 
-To establish stronger connections with standard deep neural networks, the construction in \citet{Banerjee+25} considers $\Pi = [M]^L$  corresponding to all possible paths across a network with $L$ hidden layers and $M$ neurons per layer. Since the number of such paths grows rapidly with depth and width, the model further restricts parameterization via sharing: for $\pi = (m_1, \ldots, m_L) \in [M]^L$, the weight $\w_{\pi,\ell}$ depends only on the index $m_\ell$ in layer $\ell$, i.e. $\w_{\pi,\ell}  = \w_{m_\ell,\ell}$. \citet{Banerjee+25} also set the scalar coefficients $a_\pi$ as the product of edge weights along the path $\pi$ in an associated deep linear network, i.e. $a_\pi  = \prod_{\ell=2}^L a_{\ell,m_{\ell-1},m_{\ell}}$.  
+To connect this model to standard deep architectures, \citet{Banerjee+25} take $\Pi=[M]^L$, corresponding to all paths through a network with $L$ hidden layers and $M$ neurons per layer. The parameterization is then shared across paths: for $\pi=(m_1,\ldots,m_L)\in[M]^L$, the gate vector at layer $\ell$ depends only on $m_\ell$, i.e. $\w_{\pi,\ell}=\w_{m_\ell,\ell}$. The path coefficient $a_\pi$ is taken to be the product of edge weights along $\pi$ in an associated deep linear network,
+$
+a_\pi = \prod_{\ell=2}^L a_{\ell,m_{\ell-1},m_\ell}.
+$
 
-The total number of parameters involved in the above setting is $ML$ for the gating neurons $\w_{m,\ell}$, and $(L-1)M^2$ for the path coefficient parameters $a_{\ell,m_1,m_2}$. This setting also enables efficient model output computation (complexity $O(M^2 L)$) without explicitly summing over $M^L$ paths.
+This shared parameterization still allows the model output to be evaluated in $O(M^2L)$ time without explicitly summing over all $M^L$ paths.
 
-
-Despite its structural simplicity compared to standard ReLU networks, the DLGN has proven to be a surprisingly powerful learning architecture \cite{Banerjee+25}. It maintains a transparent correspondence between parameters and their effect on the output -- each $\w_{i,\ell}$ represents a component whose influence on $\hat y$ can be traced directly. 
-
-% It mirrors the notion of layers and neurons from standard ReLU networks, while allowing detailed theoretical analysis.
-
-% The rest of the paper analyzes the dynamics of parameters of the DLGN model under gradient descent over the log-loss with ODT labeled data. For the sake of simplicity, we assume infinite data and infinitesimal learning rate, i.e. population gradient flow. 
-
-% But all our simulations are with training size ten to hundred times the number of parameters as the ODT model, i.e. $Nd = 2^Ld$, and learning rate set to the largest value for which the training loss curve remains smooth.
-
-% We find it useful to split our analysis of the DLGN learning dynamics into a `Lure' phase and 'Trap' phase. The lure phase is applicable early in training, when the gating features/half-spaces have not discovered anything substantial. More concretely, when the effective weights $V^\ell$
-
-
-\section{Learning Dynamics of Single Path DLGN}
+\section{Learning Dynamics of Single-Path DLGN}
 \label{sec:single-path-DLGN}
-Consider the single path DLGN, with $M=1$. While this is not a useful architecture by itself, it still exhibits interesting behavior that is illustrative of the message we intend to convey for deep architectures in general. Precisely, we consider the model
+
+This model cannot fit the full ODT-labeled task, but it can capture a single ODT path and is therefore a useful setting for isolating the mechanism of interest. We now analyze how gradient descent on this model interacts with the ODT structure.
 \[
-\hat y(\x; a, W) = a \prod_{\ell =1}^L \phi(\w_\ell ^\top \x)
+\hat y(\x; a, W) = a \prod_{\ell=1}^L \phi(\w_\ell^\top \x),
 \]
-with parameters $a \in \R, \w_1 , \ldots, \w_L \in \R^d$. We concatenate the $L$ gating vectors $\w_1, \ldots, \w_L$ together as a single vector $W \in \R^{Ld}$ for convenience. Let $P_\ell:\R^d \>\R^{Ld}$ be such that $P_\ell(\bu)$ sets the $\ell$-th $d$-dimensional block of the output equal to $\bu$ and zero elsewhere. %For example, $W = P_1(\w_1) + \ldots + P_L(\w_L)$.
+with parameters $a \in \R$ and $\w_1,\ldots,\w_L \in \R^d$. For convenience, we concatenate the $L$ gating vectors into $W \in \R^{Ld}$, and let $P_\ell:\R^d\to\R^{Ld}$ denote the operator that writes a vector into the $\ell$-th $d$-dimensional block and zeros elsewhere.
 
-This model is not powerful enough to fit the ODT labeled data. But the form of the model suggests that it might `capture' one of the paths of the ODT labeling function. The analysis for establishing this is worthy of a deep dive.
+This model cannot in general fit the ODT-labeled data exactly, but its form suggests that it can effectively capture one path of the ODT labeling function. We now analyze how gradient descent on this model interacts with the ODT structure.
 
-\subsection{Lens and Blinders}
-The main tool that enables our analysis, is the loss gradient with respect to one of the weight vectors (say) $\w_k$. Consider the loss gradient for a single data point $(\x,y^*)$. 
+\subsection{Lens and blinders}
 
+Our analysis starts from the loss gradient with respect to a single gating vector $\w_k$. For a data point $(\x,y^*)$ with $y^*$ given by \eqref{eqn:ODT_defn}, the logistic loss and its gradient are
 \begin{align}
-\mathcal{L}(\hat y(\x)) 
-&= \log(1+\exp(-y^* \hat y(\x))) \nonumber \\
-% \frac{\partial L(y^*,\hat y(\x))}{ \partial \w_k}  
-% &=  \sigma (-y^* \hat y(\x)) (-y^*) \frac{\partial \hat y(\x)}{ \partial \w_k}\nonumber\\
--\nabla_{\w_k} \mathcal{L} &=  \E [ \underbrace{\sigma (-y^* \hat y(\x))}_{\text{Residue}} 
- \underbrace{ \Lambda_k(\x) }_{\text{Lens}}  \underbrace{\phi'(\w_k ^\top \x)}_{\text{Blinder}} y^* a\x ]\label{eqn:ResidueLensBlinder}
+\mathcal{L}(\hat y(\x))
+&= \log\!\big(1+\exp(-y^* \hat y(\x))\big), \nonumber \\
+-\nabla_{\w_k} \mathcal{L}
+&= \E\!\left[ \underbrace{\sigma(-y^* \hat y(\x))}_{\text{Residue}}
+ \underbrace{\Lambda_k(\x)}_{\text{Lens}}
+ \underbrace{\phi'(\w_k^\top \x)}_{\text{Blinder}} \, y^* a \x \right],
+\label{eqn:ResidueLensBlinder}
 \end{align}
-where $\Lambda_k(\x)=\prod_{\kappa \neq k} \phi(\w_\kappa ^\top \x)$. The negative loss gradient w.r.t. $\w_k$ is a positive scalar multiple of $y^*a\x$ . 
-% This scalar is broken into a product of three terms in Equation \eqref{eqn:ResidueLensBlinder}, which we call the residue, lens and blinder. 
+where $\Lambda_k(\x) = \prod_{\kappa \neq k} \phi(\w_\kappa^\top \x)$.
 
-The gradient descent step for $\w_k$ can now be viewed as a Perceptron-like update over the entire training dataset $S$, with importance weights to a sample $\x,y$ given by the product of the residue, lens and blinder terms. While $\w_k$ is updated to fit the data that is importance weighted based on its lens, it also acts as a component of the lens for other neurons. 
-% This is the key dynamic that allows for interactions between the different layers. 
-% The value of this interaction is as follows. 
-% Important features without a global scope (like the root node of the ODT $\bu_0$) would not contribute anything to the gradient in the absence of a lens term. 
-With the right lens, the gradient will have a strong component along feature directions that do not have a global scope (like the ODT root node $\bu_0$). This dual role of  `component of  lens for other layers' and  `linear separator for data lensed by other layers' served by the vectors $\w_k$ forms a positive feedback loop.
+Thus the update to $\w_k$ is a Perceptron-type update on the whole training set, with each example $(\x,y^*)$ weighted by the product of residue, lens, and blinder terms. From this viewpoint, $\w_k$ is trained as a separator on data reweighted by a lens formed by the other layers, while simultaneously serving as a component of the lens that shapes the gradients of those layers.
 
-\subsection{Second Order Analysis}
+When the lens emphasizes certain regions of input space, the resulting gradient can have a strong component along feature directions that do not dominate globally, such as the ODT root direction $\bu_0$. This creates a positive-feedback mechanism in which movement of one layer can encourage other layers to move toward complementary task-relevant features.
+
+\subsection{Second-order analysis}
 \label{sec:second_order_analysis}
-% A main goal in the paper is to analyze the feature learning dynamics of gradient descent in deep networks. A standard interpretation of `feature' in deep networks would be the Neural Tangent Kernel features, which are simply a property of parameter gradients of the model output \cite{Jacot+18}. Any analysis of `feature learning' would thus have to study how the NTK features change during training,  which essentially corresponds to performing (at least) a second order analysis. 
 
-A natural choice for analyzing `feature learning' is to study how the NTK features change during training, which corresponds to performing a second order analysis.  We  specialize the analysis of the gradient to the ODT labelled data, where $y^*$ is given by Equation \ref{eqn:ODT_defn} and show how the positive feedback between the two roles of a neuron $\w_k$ enables better learning of the ODT features by the model. 
-% We fix the DLGN scaling parameter $a$ to be a constant in our result below, and only view the loss $\mathcal{L}$ as a function of $W$.
+To analyze feature learning, we study how the NTK features change during training, which corresponds to a second-order analysis of the loss. Specializing this analysis to ODT-labeled data, we show how the interaction between the “lens” and “separator” roles of a neuron $\w_k$ can encourage the model to acquire ODT decision vectors that are initially absent from the gradient.
 
-
-\begin{theorem}[Hierarchy seeking lens]
+\begin{theorem}[Hierarchy-seeking lens]
 \label{thm:second_order_lens}
-Let $\h, \z  \in \R^d$. Let $0<a<1, k\neq \ell$. Let $\w_\lambda^\top \h = \w_\lambda^\top \z = 0$ for all $\lambda \in [L]$. The change in gradient of $\mathcal{L}$ w.r.t. $\w_k$ along $\z$,   as $\w_\ell$, moves along $\h$ satisfies
-% \[
-%  -\h^\top  \big[\nabla^2_{\ell,k} L(W) \big] \z =  \lim_{\epsilon \> 0} \frac{1}{\epsilon} \bigg[ -\nabla_{\w_k} L(W + \epsilon P_\ell(\h)) \cdot \z  + \nabla_{\w_k} L(W) \cdot \z \bigg] > 0
-% \]
-
+Let $\h,\z \in \R^d$. Let $0<a<1$ and $k\neq \ell$. Assume $\w_\lambda^\top \h = \w_\lambda^\top \z = 0$ for all $\lambda \in [L]$. Then the change in the gradient of $\mathcal{L}$ with respect to $\w_k$ in direction $\z$ as $\w_\ell$ moves in direction $\h$ satisfies
 \begin{align*}
-\lim_{\epsilon \to 0} \frac{1}{\epsilon} \bigg[ 
- -\nabla_{\w_k} \mathcal{L}(W + \epsilon P_\ell(\h))  
- + \nabla_{\w_k} \mathcal{L}(W)  \bigg]\cdot \z > 0
+\lim_{\epsilon \to 0} \frac{1}{\epsilon} \Big[
+ -\nabla_{\w_k} \mathcal{L}(W + \epsilon P_\ell(\h))
+ + \nabla_{\w_k} \mathcal{L}(W) \Big]\cdot \z > 0,
 \end{align*}
-
-where $\z= s \bu_i, \h = \bu_j$,  $j\in\{N/2,\ldots,N\}$ is a leaf node of the ODT, and $i$ is any ancestor of $j$. The scalar $s=+1$ if $j$ is in the left sub-tree of $i$ and $-1$ otherwise. The above inequality also holds when $\h$ and $\z$ are swapped.
+for the choice $\z = s \bu_i$ and $\h = \bu_j$, where $j\in\{N/2,\ldots,N\}$ is a leaf node of the ODT and $i$ is any ancestor of $j$. The scalar $s=+1$ if $j$ lies in the left subtree of $i$ and $s=-1$ otherwise. The same inequality holds when $\h$ and $\z$ are swapped.
 \end{theorem}
 
-% The structure of gradient descent ensures that $\w_k$ moves along $-\nabla_{\w_k} L(W)$.  Thus,  $\big[ -\nabla_{\w_k} L(W + \epsilon P_\ell(\h)) \cdot \z  + \nabla_{\w_k} L(W) \cdot \z \big]$ captures the extra push that $\w_k$ receives to move along $\z$ when $\w_\ell$ moves along $\h$. 
+As one concrete consequence, if $\w_\ell$ moves along $-\bu_j$ for some leaf node $j$ on the left of the root node $0$, then $\w_k$ is pushed along $-\bu_0$. This formalizes a tendency of gradient descent in this model: movement of one neuron along a leaf direction can increase the incentive for another neuron to move along an ancestor direction. In high-dimensional settings where the initial $\w_k$ are nearly orthogonal to all ODT directions, the raw gradient has negligible component along internal-node directions such as $\bu_0$, so this second-order effect provides a concrete route by which such features can enter the dynamics.
 
-An example implication  of Theorem \ref{thm:second_order_lens} follows.  If $\w_\ell$ moves along $-\bu_j$ for some leaf node $j$ on the left side of the root node $0$, then $\w_k$ is pushed along $-\bu_0$. This tendency of gradient descent to push a neuron based on the movement of another neuron is fundamental to the feature learning dynamics of the DLGN -- and plausibly to all multi-layer non-linear architectures. This enables the model to handle the curse of dimensionality -- i.e. even in a worst case initialization where all the neurons $\w_k$ are orthogonal to all the ODT directions $\bu_i$, the neurons evolving under gradient descent have a chance of capturing the ODT features $\bu_i$ corresponding to non-leaf nodes $i$. The gradient at initialization has little to no component along these $\bu_i$ at initialization. Without the kind of second order mechanism described by Theorem \ref{thm:second_order_lens} these decision vectors which are crucial for good generalization performance will not be captured. 
+Under a symmetric initialization such as $W=0$ with $a>0$, gradient descent reaches a saddle point $W^*$ where each of the $L$ neurons takes the same vector $\w^* = c\sum_{j} -\bu_j$, with $j$ ranging over leaf indices $N/2$ to $N$. The second-order dynamics captured in Theorem~\ref{thm:second_order_lens} imply that small asymmetric perturbations away from this saddle can trigger a positive feedback loop in which different layers specialize toward different ODT directions. We illustrate this effect with an explicit initialization in Section~\ref{sec:single_trajectory}.
 
-%This is much less of a serious problem at lower values of $d$ --  the initialization is quite likely to have some component along $\bu_i$.
+Second-order effects can also produce undesirable couplings.
 
-Under a symmetric initialization (like $W=0, a>0$), gradient descent will hit a saddle point $W^*$,  corresponding to each of the $L$ neurons taking the same vector $\w^* = c \sum_j -\bu_j$,  where $j$ ranges over leaf node indices $N/2$ to $N$.  However,  the second order dynamics in Theorem \ref{thm:second_order_lens} ensure that with a little asymmetry a positive feedback loop kicks in. A detailed example is discussed in Section \ref{sec:single_trajectory}
-
-%Theorem \ref{thm:second_order_lens} captures the important early phase of training, when the initial weights $\w_\ell$ have no correlation with the relevant data features $\bu_j$. It aligns with goals of the learner and is a desirable property of deep networks and captures a key reason for its success. However, 
-Second order dynamics of gradient descent in this problem also has a potentially undesirable behavior.
-
-
-\begin{theorem}[Self-opposing Lens]
+\begin{theorem}[Self-opposing lens]
 \label{thm:second_order_backlash}
-Let $\h$ be a vector in $\R^d$ that is orthogonal to the ODT decision vectors $\bu_i$ for all $i \in \{0,1,\ldots,n\}$. 
-% Let the lens for layer $k$ be at most mildly positively correlated with the label $y$, i.e. $\E[\Lambda_k(\x) y ] < \frac{1}{N}\E[\Lambda_k(\x)]$. 
-Let $\w_\lambda \cdot \h = 0$ for all $\lambda \in\{1,\ldots,L\}$. Let $\w_\lambda \cdot \bu_j = 0$ for all $\lambda \in\{1,\ldots,L\}$ and $j \in \{N/2,\ldots, N\}$. The change in gradient of $\mathcal{L}$ w.r.t. $\w_k$ along $\h$  as $\w_\ell$ (for some $\ell \neq k$) moves along $-\h$ satisfies the following relation.
-
-% \[
-%  \h^\top  \big[\nabla^2_{\ell,k} L(W) \big] \h =  \lim_{\epsilon \> 0} \frac{1}{\epsilon} \bigg[ -\nabla_{\w_k} L(W + \epsilon P_\ell(\h)) \cdot (-\h)  + \nabla_{\w_k} L(W) \cdot (-\h) \bigg] > 0
-% \]
-
+Let $\h \in \R^d$ be orthogonal to all ODT decision vectors $\bu_i$ for $i \in \{0,1,\ldots,N\}$. Assume $\w_\lambda \cdot \h = 0$ for all $\lambda \in\{1,\ldots,L\}$ and $\w_\lambda \cdot \bu_j = 0$ for all $\lambda$ and all $j \in \{N/2,\ldots, N\}$. Then the change in the gradient of $\mathcal{L}$ with respect to $\w_k$ along $\h$ as $\w_\ell$ (for some $\ell \neq k$) moves along $-\h$ satisfies
 \begin{align*}
-\lim_{\epsilon \to 0} \frac{1}{\epsilon} \bigg[ 
- -\nabla_{\w_k} \mathcal{L}(W + \epsilon P_\ell(\h))  
- + \nabla_{\w_k} \mathcal{L}(W)  \bigg]\cdot (-\h) > 0
+\lim_{\epsilon \to 0} \frac{1}{\epsilon} \Big[
+ -\nabla_{\w_k} \mathcal{L}(W + \epsilon P_\ell(\h))
+ + \nabla_{\w_k} \mathcal{L}(W) \Big]\cdot (-\h) > 0.
 \end{align*}
 \end{theorem}
 
-% Refer Appendix \ref{app:second_order_backlash} for detailed proof. 
-In words,  Theorem \ref{thm:second_order_backlash} says that if some neuron $\w_\ell$ moves along some $\h$, the tendency of other neurons $\w_k$ to move along $-\h$ increases. For example, if for some reason (due to say finite data imbalances or some initial perturbation), some neuron $\w_\ell$ is moved along a direction $\h$ that is spurious from a generalisation perspective (e.g. $\h \cdot \bu_i =0$ for all $i$) then other layers tend to move along $-\h$ and the component of the gating vectors along $\h$ and $-\h$ keep increasing. Informally,  each neuron tries to correct for mistakes in some other layers' neuron, and becomes part of the mistake that other neurons try to correct.  The problematic nature of this behaviour becomes apparent only in the multi-path DLGN with deeper ODT label functions.  We will discuss this further in Section \ref{sec:gating_regularization}.
- 
-Theorems \ref{thm:second_order_lens} and \ref{thm:second_order_backlash}, is approximately applicable at most initialization for the large $d$ setting, i.e. $d >> 2^D$. The initial weight vectors then are quite likely to be close to orthogonal to all the ODT vectors. It is also applicable at the zero initialization $W=0$. The second order quantity in these theorems is a continuous function of the parameters $W$, and hence can clearly be extended to hold beyond strict orthogonality. Analysis of the exact amount of orthogonality relaxation under which the Theorems still hold is beyond the scope of this paper. The insights from Theorems \ref{thm:second_order_lens} and \ref{thm:second_order_backlash} are valid well beyond their restrictive orthogonality assumptions -- the second order dynamics are merely responsible for pushing the parameter into an appropriate basin in the loss landscape, and hence do not need to hold strongly throughout training. We support this argument in Sections \ref{sec:single_trajectory} and \ref{sec:trajectory_prediction} where we use the hints from the hierarchy-seeking lens and self-opposing lens at initialization, to successfully predict the result of gradient descent training.
-%For example, if $|\w_\kappa .\bu_0|$ is already large for some $\kappa$, then there is no need for some other layer $\w_k$ to move along $\bu_0$.
+Informally, if some neuron $\w_\ell$ is perturbed along a direction $\h$ that is orthogonal to all ODT decision vectors, then other neurons $\w_k$ tend to move along $-\h$, increasing the magnitude of both $\h$ and $-\h$ components across layers. In other words, neurons can end up trying to correct each other’s spurious movements and, in doing so, reinforce structure in directions that are irrelevant for generalization. This phenomenon becomes more pronounced in the multi-path DLGN, where many such couplings can interact; we return to this point in Section~\ref{sec:gating_regularization}.
 
-\subsection{Trajectory Analysis for a Chosen Initialization}
+Theorems~\ref{thm:second_order_lens} and \ref{thm:second_order_backlash} are derived under orthogonality assumptions (in particular, $d \gg D$ so that random initial weights are likely to be nearly orthogonal to all $\bu_i$). The relevant second-order quantities are continuous in $W$, so the qualitative effects persist under small deviations from strict orthogonality. In our experiments, we use these theorems as a guide to interpret and predict training trajectories, rather than as a complete description of the dynamics at all times.
+
+\subsection{Trajectory analysis for a chosen initialization}
 \label{sec:single_trajectory}
 
-\begin{figure*}
-\includegraphics[width=1.05\textwidth]{figs/Single_path_DLGN/parameter_trajectory_0178_400epochs.pdf}
-\includegraphics[width=1.05\textwidth]{figs/Single_path_DLGN/gradient_trajectory_0178_400epochs.pdf}
-\caption{The parameter and gradient trajectories as a function of training time.}
-\label{fig:single_trajectory_0178} 
-\end{figure*} 
+\begin{figure}
+\includegraphics[width=1\linewidth]{figs/Single_path_DLGN/parameter_trajectory_0178_400epochs.pdf}
+\includegraphics[width=1\linewidth]{figs/Single_path_DLGN/gradient_trajectory_0178_400epochs.pdf}
+\caption{Parameter and gradient trajectories for a single-path DLGN under gradient descent.}
+\label{fig:single_trajectory_0178}
+\end{figure}
 
-In this Section (and the next) we consider the ODT labelling function with depth $D=4$ in Figure \ref{fig:ODT}, and a single path DLGN with $L=D=4$ layers.  We focus on the solutions to weight vectors $\w_\ell$ and freeze the scalar coefficient $a=1$. We analyse in detail how Theorem \ref{thm:second_order_lens} and \ref{thm:second_order_backlash} determine the parameter trajectory under gradient flow from a given initialization. All of this analysis can be extended to deeper trees and DLGNs as well. 
+We now illustrate the above mechanisms with an explicit trajectory. We consider a depth-$D=4$ ODT label function and a single-path DLGN with $L=D=4$, fix $a=1$, and study the evolution of the gating vectors $\w_\ell$ under gradient flow. The same construction can be extended to deeper trees and DLGNs.
 
-Firstly note that $a>0$ means the model can achieve non-trivial log loss (loss values less than $\log(2)$) only on positive labelled points, i.e. data reaching label nodes $15,17,\ldots,29$. All these label nodes lie on the left side of their parents. Thus, when a DLGN is initialized with $W=0$ and $a>0$, gradient descent pushes all $\w_k$ along $\sum_j -\bu_j$, where $j$ takes on leaf node indices $N/2$ to $N$. This happens till the parameter $W$ reaches the saddle point $W^*$ and stays there. The gradient has no component along any other direction due to symmetry.    
+Because $a>0$, the model can achieve non-trivial log loss (values below $\log 2$) only on positively labeled points, i.e. data reaching label nodes $15,17,\ldots,29$, which all lie on the left side of their parents. With initialization $W=0$ and $a>0$, symmetry implies that gradient descent pushes each $\w_k$ along $\sum_j -\bu_j$, where $j$ ranges over leaf indices $N/2$ to $N$, until it reaches the saddle point $W^*$; the gradient has no component along other directions at this point.
 
-But, the properties of the loss landscape $\mathcal{L}(W)$ (mainly relating to Theorem \ref{thm:second_order_lens}) cause interesting things to happen even under a slight perturbation in an appropriate direction. Let the parameter $W$ be initialized to a perturbation of the fully symmetric zero initialization, such that
-$\w_1 = \0$, 
-$\w_2 =  - \epsilon \bv $,
-$\w_3 =  - \epsilon \bv -\epsilon \bu_7$,
-$\w_4 =  - \epsilon \bv -\epsilon \bu_8$. 
-for some small $\epsilon>0$ and $\bv = \bu_7+\bu_8+\bu_9+\bu_{10}$. The parameter and gradient trajectories with this initialization is given in Figure \ref{fig:single_trajectory_0178}. This infinitesimal push from $\0$ starts a feedback loop between the neurons in different layers. The perturbation directions above were carefully chosen based on Theorem \ref{thm:second_order_lens}. From the perspective of $\w_1$, all the other layers have moved along $-\bu_7, -\bu_8, -\bu_9$ and $-\bu_{10}$. Thus Theorem \ref{thm:second_order_lens} says that $\w_1$ experiences an increased push towards $-\bu_0$. Now consider the version of Theorem \ref{thm:second_order_lens} with $\h$ and $\z$ swapped.  This movement of $\w_1$ towards $-\bu_0$ pushes all the other layers further along the leaf node ODT directions and hence completes a feedback loop. Meanwhile, the minor extra movement of $\w_3$ and $\w_4$ along $-\bu_7$ and $-\bu_8$ at initialization cause $\w_2$ to move along $-\bu_1$ from Theorem \ref{thm:second_order_lens}. This tendency of $\w_2$ to move along $-\bu_1$ is weak at initialization, and becomes stronger only after $\w_1$ has moved sufficiently along $-\bu_0$. The neurons $\w_k$ have a natural self-inhibitory tendency as indicated by Theorem \ref{thm:second_order_backlash} which causes $\w_1$ moving along $-\bu_0$ to dissuade other neurons from doing the same -- in fact the other layers move slightly along $+\bu_0$ around the same time as $\w_1$ experiences its largest push towards $-\bu_0$. Even though all the neurons have an increased tendency to move along $-\bu_0$ at initialization, this effect is strongest for $\w_1$. 
-
-% Also, note that in the early stages, the second order effects from \ref{thm:second_order_lens} are yet to fully kick in, and the parameter movements are primarily determined from the first order dynamics that take the model from $W=0$ to the saddle point $W=W^*$. As long as the perturbation remains directionally intact at the end of this beginning phase, the second order dynamics from Theorems \ref{thm:second_order_lens} and \ref{thm:second_order_backlash} become active long enough to push the parameter into the corresponding solution basin in the optimization landscape.
-
-Now we can read the parameter trajectories under gradient descent shown in Figure \ref{fig:single_trajectory_0178}. The initialization scale $\epsilon$ is too small to be seen on the plot. The first 10 epochs correspond to the parameter movement from the initialization close to zero to the saddle point at $W^*$. The effect of second order dynamics from Theorem \ref{thm:second_order_lens} begin to be visible only from this point. From around epoch 10 to 50  the gradient component of $\w_1$ along $-\bu_0$ keeps increasing. From around epoch 50 to 90, the gradient component of $\w_2$ along $-\bu_1$ keeps increasing. The neurons $\w_3$ and $\w_4$ which were closer to $-\bu_7$ and $-\bu_8$ at initialization grow along $-\bu_7$ and $-\bu_8$ respectively. The final gradient descent convergent solution is closely approximated (up to a scaling factor) by $\w_1 = -\bu_0, ~ \w_2 = -\bu_1,~ \w_3 = -\bu_7+0.3\bu_3$ and $ \w_4 = -\bu_8-0.3 \bu_3$, as can be seen in Figure \ref{fig:full_trajectory} in the Appendix. This corresponds  to a superposition of two adjacent ODT paths to a positively labelled node -- corresponding to $-\bu_0, -\bu_1, -\bu_7, -\bu_3$ and $-\bu_0, -\bu_1, +\bu_3, -\bu_8$. There are 4 such solutions, corresponding to the 2 leaf nodes being $7,8$ or $9,10$ or $11,12$ or $13,14$. Each of these 4 solutions can appear in $4!=24$ configurations due to permutation invariance of the layers in the DLGN model. Thus making for a total of 96 solutions in the parameter space (or $2^{D-2}D!$ in general with $D=L$). One can easily design minor perturbations of $W=0$ that reach any of these solutions under gradient descent. 
-
-We will use a $D$-tuple to compactly represent the $2^{D-2}D!$ solutions, based on the argmax of absolute value of the projections of the neurons along the ODT directions. i.e for a solution $\tilde W \in \R^{D \times d}$ its representation $\upsilon(\tilde W) \in \{0,1,\ldots,2^{D}-2\}^D$ is 
+We now perturb this initialization slightly in a direction suggested by Theorem~\ref{thm:second_order_lens}. Let
 \[
-\upsilon_\ell(\tilde W) = \text{argmax}_{i \in \{0,\ldots,2^D-2\}} |\w_\ell \cdot \bu_i|.
+\w_1 = 0,\quad
+\w_2 = -\epsilon \bv,\quad
+\w_3 = -\epsilon \bv - \epsilon \bu_7,\quad
+\w_4 = -\epsilon \bv - \epsilon \bu_8,
 \]
-For example, if $\tilde W$ is the convergent solution to the trajectory illustrated in Figure \ref{fig:single_trajectory_0178}, then $\upsilon(\tilde W) = [0,1,7,8]$.
- 
+for some small $\epsilon>0$ and $\bv = \bu_7+\bu_8+\bu_9+\bu_{10}$. The resulting parameter and gradient trajectories are shown in Figure~\ref{fig:single_trajectory_0178}. From the perspective of $\w_1$, the other layers have moved along $-\bu_7,-\bu_8,-\bu_9,-\bu_{10}$, so Theorem~\ref{thm:second_order_lens} predicts an increased push on $\w_1$ toward $-\bu_0$. Swapping the roles of $\h$ and $\z$ in the theorem implies that movement of $\w_1$ toward $-\bu_0$ increases the tendency of the other layers to move along leaf-node directions, closing a feedback loop. The small additional perturbations of $\w_3$ and $\w_4$ along $-\bu_7$ and $-\bu_8$ similarly induce a tendency for $\w_2$ to move along $-\bu_1$, which becomes pronounced once $\w_1$ has moved sufficiently toward $-\bu_0$.
 
-%The parameter trajectory is explained and the initial perturbations are designed mainly through the insight from Theorems \ref{thm:second_order_lens} and \ref{thm:second_order_backlash}. Both these theorems are not strictly applicable at any point in the solution trajectory beyond the zero initialization due to the orthogonality requirements. However, they likely remain valid for much longer enabling a coherent narrative explaining the entire parameter trajectory. 
+At the same time, Theorem~\ref{thm:second_order_backlash} implies a self-inhibitory effect: movement of $\w_1$ toward $-\bu_0$ discourages other neurons from doing the same, and indeed the other layers briefly move slightly along $+\bu_0$ around the time $\w_1$ experiences its largest push toward $-\bu_0$. Although all neurons initially have an increased tendency to move toward $-\bu_0$, this effect is strongest for $\w_1$.
 
+Figure~\ref{fig:single_trajectory_0178} shows that the first $\approx 10$ epochs move the parameters from the perturbed initialization to the saddle $W^*$. The influence of the second-order dynamics described above becomes visible thereafter: from roughly epoch $10$ to $50$, the gradient component of $\w_1$ along $-\bu_0$ strengthens; from epoch $50$ to $90$, the gradient component of $\w_2$ along $-\bu_1$ increases; and $\w_3,\w_4$, which were initially biased toward $-\bu_7$ and $-\bu_8$, continue to grow along those directions. The convergent solution (up to scaling) is well approximated by
+\[
+\w_1 \approx -\bu_0,\quad
+\w_2 \approx -\bu_1,\quad
+\w_3 \approx -\bu_7 + 0.3\,\bu_3,\quad
+\w_4 \approx -\bu_8 - 0.3\,\bu_3,
+\]
+as shown in Appendix Figure~\ref{fig:full_trajectory}. This corresponds to a superposition of two adjacent positively labeled ODT paths, e.g. $(-\bu_0,-\bu_1,-\bu_7,-\bu_3)$ and $(-\bu_0,-\bu_1,+\bu_3,-\bu_8)$.
 
+For $D=L=4$, there are four such solutions, corresponding to the leaf pairs $(7,8)$, $(9,10)$, $(11,12)$, and $(13,14)$. Permutation invariance across the $L$ layers yields $4!=24$ configurations per pair, for a total of $96$ solutions in parameter space (in general, $2^{D-2} D!$ when $D=L$). Small perturbations around $W=0$ can be constructed to reach any of these solutions under gradient descent.
 
+We represent these solutions compactly by a $D$-tuple recording which ODT direction each neuron aligns with most strongly. For a solution $\tilde W \in \R^{D\times d}$, define $\upsilon(\tilde W) \in \{0,1,\ldots,2^D-2\}^D$ by
+\[
+\upsilon_\ell(\tilde W) = \arg\max_{i \in \{0,\ldots,2^D-2\}} |\w_\ell \cdot \bu_i|.
+\]
+For the trajectory in Figure~\ref{fig:single_trajectory_0178}, we obtain $\upsilon(\tilde W) = [0,1,7,8]$.
 
-\subsection{Solution Prediction from Random Initialization}
+\subsection{Solution prediction from random initialization}
 \label{sec:trajectory_prediction}
 
-% Again, let us consider the ODT problem with depth $D=4$ in Figure \ref{fig:ODT}, and a single path DLGN with $L=4$ layers.  We focus on the solutions to weight vectors $\w_\ell$ and freeze the scalar coefficient $a=1$.
+The construction above shows that carefully designed perturbations can steer gradient descent toward any of the $2^{D-2}D!$ canonical solutions. For typical random initializations, however, the perturbations from $0$ need not align perfectly with a single canonical pattern, and several solutions may be supported simultaneously. Assuming that gradient descent converges to one of the $96$ solutions, we ask: which one does a given initialization select?
 
-Constructing bespoke initializations close to zero that make parameter trajectory go to any of the solutions demonstrates a level of control and understanding over the gradient descent dynamics. However, in typical random initializations, the perturbations from $\0$ are not going to perfectly match one of these canonical perturbations. A typical scenario might have initialization supporting multiple solutions simultaneously. Assuming that gradient descent takes such a  random initialization to one of the $96$ solutions, which is it?
+We do not have a closed-form answer, but we can build a heuristic score that uses Theorems~\ref{thm:second_order_lens} and \ref{thm:second_order_backlash} to estimate the support an initialization $W(0)$ gives to each solution. The construction, detailed in Appendix~\ref{sec:appendix_heuristic_score}, combines three terms: a proximity term measuring how close $W(0)$ is to the solution, a hierarchy-seeking term weighted by $c_{\text{HS}}\ge 0$, and a self-opposing term weighted by $c_{\text{SO}}\ge 0$.
 
-%Firstly, we should note that a significant fraction (about half, based on our experiments) of the initializations remain stuck in $W^*$ or some other saddle point. We will ignore such initializations in our analysis.\footnote{In all such runs the training loss saturates at a level between $\log(2)$ and $\frac{15}{16}\log(2)$}. Even for trajectories that reach one of the 96 solutions, we do not yet have a full comprehensive theory of why gradient descent takes $W$ to that solution from the corresponding initialization. 
+We run gradient descent for the single-path DLGN with $2000$ different initializations, each evaluated on $5$ independently sampled datasets to separate initialization effects from finite-data noise. For $368$ initializations, the convergent solution is stable across datasets, and we treat these as “deterministic” initializations. We search $c_{\text{HS}}, c_{\text{SO}} \in \{0.0,0.1,\ldots,0.9\}$, and find that the best-performing pair $(c_{\text{SO}},c_{\text{HS}})=(0.7,0.4)$ correctly predicts the converged solution for $179$ out of $368$ deterministic initializations, corresponding to $49\%$ accuracy in a $96$-class prediction problem.
 
-We do not have a full answer for this question. However, we can design heuristics that use Theorem \ref{thm:second_order_lens} and \ref{thm:second_order_backlash} to `measure' the support the initial parameter $W(0)$ gives to each of the $96$ solutions. The details of this heuristic score construction are  somewhat intricate and given in Appendix \ref{sec:appendix_heuristic_score}. Briefly, it is the sum of three terms -- a term measuring the proximity of the init to a solution, a term measuring the hierarchy seeking lens' support weighted by a scalar $c_{\text{HS}}\geq 0$,  and a term measuring the self-opposing lens' support weighted by a scalar $c_{\text{SO}}\geq 0$. 
-
-
-We run gradient descent for the single path DLGN with $2000$ different initializations, each with 5 different datasets sampled from the same distribution. This is done to ensure that the gradient descent convergent solution is purely a property of the initialization, and not any finite data effects. $368$ of these initializations passed the test -- i.e. the gradient descent convergent solution for these initializations did not change with data. The parameters $c_{\text{HS}}, c_{\text{SO}}$ of the score function were searched from $0.0$ to $0.9$ in increments of $0.1$ for a total of 100 possible configurations. The best performing coefficients (which happened to be $c_\text{SO}=0.7, c_\text{HS}=0.4$) gave the correct solution for $179$ out of these $368$ initializations (corresponding to an accuracy of $49\%$ for a $96$-class classification problem). 
-
-A baseline predictor that just predicts the solution nearest to initialization (corresponding to $c_\text{SO}=0, c_\text{HS}=0$) achieves a prediction accuracy of $13\%$. In particular, both the hierarchy-seeking and self-opposition components are crucial to the score -- the best accuracy when setting $c_\text{HS} = 0$ (resp. $c_\text{SO} = 0$) is $28\%$ (resp. $36\%$). This makes our notion of `layers as lenses' a viable explanation of the learning dynamics of the DLGN. 
+A simple baseline that predicts the solution closest (in parameter space) to the initialization corresponds to $(c_{\text{SO}},c_{\text{HS}})=(0,0)$ and attains only $13\%$ accuracy. Moreover, the best achievable accuracy when forcing $c_{\text{HS}}=0$ is $28\%$, and when forcing $c_{\text{SO}}=0$ is $36\%$. Both the hierarchy-seeking and self-opposing terms are therefore important for predictive power in this heuristic, providing quantitative support for our viewpoint in the single-path DLGN setting.
 
 
-\section{The Multi-Path DLGN}
+
+\section{Learning Dynamics of Multi-Path DLGN}
 \label{sec:multi-path-DLGN}
 
 \begin{figure*}
-\begin{center}
-\includegraphics[width=0.33 \textwidth]{figs/Multi_path_DLGN/Regularization_0_phase1/Epoch_0.pdf}
-\includegraphics[width=0.33 \textwidth]{figs/Multi_path_DLGN/Regularization_0_phase1/Epoch_1000.pdf}
-\includegraphics[width=0.33 \textwidth]{figs/Multi_path_DLGN/Regularization_2e-4_phase1/Epoch_1000.pdf}    
-\end{center}
-\caption{Gating norms vs cosine sim. to ODT vectors at (a) the beginning of training (b,c) end of training without and with L2 penalty.}
-\label{fig:norms_cosine_scatter_no_reg_final}
+\centering
+\includegraphics[width=0.48\linewidth, trim={0 0 0 0.9cm},clip]{figs/Multi_path_DLGN/DLGN_one_phase_scatter.pdf}
+\includegraphics[width=0.48\linewidth, trim={0 0 0 0.9cm},clip]{figs/Multi_path_DLGN/DLGN_2phase_phase1_scatter.pdf}
+\caption{Gating norms vs.\ cosine similarity to ODT vectors for a 5-layer DLGN with $M=16$: (a) standard log-loss training, (b) with an additional $L_2$ penalty on gating vectors.}
+\label{fig:norms_cosine_scatter_DLGN}
 \end{figure*}
 
-\begin{figure*}
-\begin{center}
-\includegraphics[width=0.33\textwidth]{figs/Multi_path_DLGN/Regularization_2e-4_phase1/Epoch_1.pdf}
-\includegraphics[width=0.33\textwidth]{figs/Multi_path_DLGN/Regularization_2e-4_phase1/Epoch_3.pdf}
-\includegraphics[width=0.33\textwidth]{figs/Multi_path_DLGN/Regularization_2e-4_phase1/Epoch_5.pdf}
-\end{center}
-\caption{Gating norms and cosine similarity to ODT  vectors during training (with the L2 penalty).}
-\label{fig:hieararchical_feat}
-\end{figure*} 
+We now turn to the more practical multi-path DLGN with $M>1$. With $M=1$, the model can at best capture data entering one leaf node of the ODT, achieving low loss on only a $2^{-D}$ fraction of examples and close to random performance on the rest. Wider DLGNs do not suffer from this limitation.
 
-\begin{figure*}
-\begin{center}
-\includegraphics[width=0.33 \textwidth]{figs/ReLU_3layer/Epoch0_Update0.pdf}
-\includegraphics[width=0.33 \textwidth]{figs/ReLU_3layer/Epoch0_Update100.pdf}
-\includegraphics[width=0.33 \textwidth]{figs/ReLU_3layer/Epoch0_Update999.pdf}    
+Throughout this section we consider $d=100$, depth-$5$ ODT-labeled data, and a 5-layer DLGN with $M=16$ neurons per layer. In this setting, the DLGN achieves low training loss and low test error on the full dataset, whereas linear, kernel, and standard tree-based baselines remain above $30\%$ test error (see Appendix~\ref{app:performance}).
 
-\includegraphics[width=0.33 \textwidth]{figs/ReLU_3layer/3.pdf}    
-\includegraphics[width=0.33 \textwidth]{figs/ReLU_3layer/40.pdf}    
-\includegraphics[width=0.33 \textwidth]{figs/ReLU_3layer/400.pdf}    
-\end{center}
-\caption{Gating norms vs cosine similarity of first layer ReLU neurons to ODT vectors at different points in training.}
-\label{fig:norms_cosine_scatter_ReLU}
-\end{figure*}
-
-
-In this section we consider the more practical multi-path DLGN with $M>1$. Setting $M=1$ upper bounds the representative power of the DLGN -- it can at best capture ODT data entering one leaf node, which corresponds to low loss on $\frac{1}{2^D}$ fraction of the data, and close to random performance on the rest of the data. Larger width DLGN models do not suffer from this problem.  For example, in this section we will consider a setting of $100$ dimension, depth $5$ ODT labelled data, and a $5$-layer DLGN model having $16$ nodes per layer, i.e $d=100, D=5, L=5, M=16$. It is possible to achieve low losses and error rates on the entire data using such models. We note that no linear/kernel/tree based method perform satisfactorily (error rates remain $> 30\%$) for this data. Thus this data is an example that shows successful feature learning by deep models. See Appendix \ref{app:performance} for a comparison of DLGN with other models.
-
-\subsection{Effect of Gating Regularization}
+\subsection{Effect of gating regularization}
 \label{sec:gating_regularization}
 
-Let the DLGN model be trained under a standard set-up where the log loss (over both the scaling parameters $a$ and gating parameters $\w$) is minimized using a gradient descent method. This gives reasonable performance -- the train loss goes down from $\log(2)=0.69$ at initialization to around $0.05$. The test error rate goes from $50\%$ at initialization to about $10\%$. This would be the end point for a standard architecture (like the ReLU network), or some other dataset (like CIFAR10) as no further debugging/performance analysis is possible -- only mindless hyperparameter tuning till we get better performance.  
+We first train the DLGN by minimizing the log loss over both path coefficients $a$ and gating vectors $\w$ using a standard gradient-based optimizer. In this regime, the train loss decreases from $\log 2 \approx 0.69$ at initialization to about $0.05$, and the test error drops from roughly $50\%$ to about $17\%$. For a typical architecture/dataset combination this would often be considered satisfactory, with further improvement delegated to hyperparameter tuning.
 
+In our ODT setting, however, we can inspect learning behavior more directly using the known ODT decision vectors $\bu_j$. Ideally, as training progresses, gating vectors $\w_{m,\ell}$ that grow in norm should also align with some ODT direction $\bu_j$, since any component orthogonal to all $\bu_i$ does not help fit the target function. Figure~\ref{fig:norms_cosine_scatter_DLGN}(a) shows, at the end of standard training, the norm of each gating vector versus its maximum cosine similarity with any ODT direction. While the initialization cloud sits around $(0.6,0.25)$ with no structure, after training we see many high-norm gating vectors that remain poorly aligned with all ODT directions. This suggests that a significant fraction of capacity is devoted to directions that are not directly related to the ODT structure.
 
-However, we are training a DLGN model on the ODT dataset, and hence we know exactly what the desirable learning behaviour is -- as training progresses the gating vectors $\w_{m,\ell}$ should increase in norm along one of the ODT decision vectors $\bu_j$. It is clear that any component of $\w_{m,\ell}$ along a direction orthogonal to all $\bu_i$ can be of no help in learning the target function. Figure \ref{fig:norms_cosine_scatter_no_reg_final}(b) gives a scatter plot showing how the $16*5=80$ neurons are at the end of training. The x-axis corresponds to the norm of the gating vector, and the y-axis corresponds to the max cosine similarity  with any of the ODT vectors. A corresponding figure for the same before training begins is given in Figure \ref{fig:norms_cosine_scatter_no_reg_final}(a). We can see that a significant fraction of the neurons have high norms, but do not correspond to any of the ODT vectors. This is clearly undesirable behaviour. 
+Motivated by the self-opposing behavior in Theorem~\ref{thm:second_order_backlash}, where movement along spurious directions can propagate across layers, we explore a simple modification: adding an $L_2$ penalty on gating norms to the loss. This penalty is not primarily intended as a conventional regularizer for test performance, but as a way to discourage large-norm components in directions that are not supported by the ODT features, thereby altering the optimization landscape. As shown in Figure~\ref{fig:norms_cosine_scatter_DLGN}(b), training with this penalty leads to a markedly different outcome: almost all large-norm gating vectors align closely with some ODT decision vector.
 
+The $L_2$ penalty, however, also limits the norms that gating vectors can achieve along ODT directions and slightly reduces attainable performance: in this regime the final training loss bottoms out around $0.03$, with test error near $13\%$. To retain the alignment benefits while allowing larger norms, we adopt a two-phase procedure. We first train with the $L_2$ penalty as above, then restart training from the convergent solution with the penalty removed. At the restart, we additionally prune gating vectors whose norms fall below a small threshold by setting them to zero and keeping them fixed in the second phase. This pruning step is motivated by Figure~\ref{fig:norms_cosine_scatter_DLGN}(b), which suggests that most useful gating vectors can be identified by their norms.
 
+This two-phase strategy further reduces test error to about $6\%$ in our example. Averaging over 10 random seeds, we observe the following pattern: standard log-loss training yields $17.8\%\pm0.7\%$ test error; adding gating regularization alone improves this to $13\%\pm0.7\%$; restarting from the regularized solution without further regularization yields $8.9\%\pm0.7\%$; and adding pruning between the two phases attains $6\%\pm0.7\%$ test error. These results are consistent with the view that second-order interactions along irrelevant directions can produce undesirable behavior, and that shaping the gating norms can help mitigate this in the multi-path setting.
 
-We conjecture that, a major component of this undesirable behaviour is from Theorem \ref{thm:second_order_backlash}, where one neuron moving along a spurious direction makes other neurons move in spurious directions too. If this is indeed the reason for the undesirable behaviour, a potential fix might be to add an L2 penalty term for the gating norm to the objective, instead of pure cross entropy loss. Note that the L2 penalty term is not intended to be a regulariser for improving test performance, but rather it is designed to remove undesirable structures in the training loss optimisation landscape. This simple change to the objective causes a significant change in the optimization behavior. The resulting scatter plot showing gating vector norms and cosine similarity to the ODT decision vectors at the end of training with a L2 penalty is given in Figure \ref{fig:norms_cosine_scatter_no_reg_final}(c). Almost all large norm gating vectors are aligned with one of the ODT decision vectors. 
-
-%\begin{figure}
-%\includegraphics[width=0.48 \textwidth]{Figs/Multi_path_DLGN/Regularization_2e-4_phase1/Epoch_0.pdf}
-%\includegraphics[width=0.48 \textwidth]{Figs/Multi_path_DLGN/Regularization_2e-4_phase1/Epoch_1000.pdf}
-%\caption{Gating vector norms and cosine similarity to ODT decision vectors at the beginning and end of standard training.}
-%\label{fig:norms_cosine_scatter_with_reg_final}
-%\end{figure}
-
-However, this L2 penalty restricts the gating vectors from also moving along the ODT decision vectors, and thus converges to a worse training loss of $0.2$ and a test error of $15\%$. We propose a natural modification to keep the benefits of regularization, while also letting the gating vectors grow in norm. We simply restart training with the L2 penalty convergent solution as the initialization, and remove the L2 penalty in this second phase of training. Additionally, during the initialisation we also forcibly set gating vectors below a threshold norm to $0$ and keep it fixed throughout the second phase of training. This is motivated from Figure \ref{fig:norms_cosine_scatter_no_reg_final}(c) which suggests we can retain most of the `useful' gating vector simply by thresholding based on their norms. 
-This modification is successful and reduces the test error further to around $5\%$. Note that this is a legitimate training strategy, as we never explicitly use the ODT vectors in the training procedure and only use it in the scatter plots to illustrate the problem and motivate a modification to standard gradient descent.
-
-
-
-
-\subsection{Hierarchical Feature Emergence}
+\subsection{Hierarchical feature emergence}
 \label{sec:hierarchical_feature_emergence}
 
+Theorem~\ref{thm:second_order_lens} suggests a hierarchical preference: random motion of a gating vector along any leaf-node direction tends to enhance movement along the root direction $\bu_0$, whereas similar second-order effects for deeper internal nodes require more specific conditions. The trajectory in Figure~\ref{fig:single_trajectory_0178} reflects this, with gating vectors first moving along the ODT root and then progressively along its children.
+
+A similar pattern appears in the multi-path DLGN. We define the \emph{capture epoch} of an ODT direction $\bu_j$ as the first epoch at which there exists a gating vector with norm exceeding a fixed threshold (e.g.\ $>2.5$) and cosine similarity above a fixed threshold (e.g.\ $>0.8$) to $\bu_j$. Figure~\ref{fig:DLGN_ReLU_Hierarchical_feature_emergence}(a) shows these capture epochs for all ODT nodes when training a 5-layer DLGN with an $L_2$ penalty on the gating vectors from a random initialization. We observe a clear trend in which parent nodes tend to be captured earlier than their children, providing an empirical notion of hierarchical feature emergence consistent with the single-path analysis.
+
+In the next section, we examine whether a related hierarchy is visible in standard ReLU networks as well.
+
+\begin{figure}
+\includegraphics[width=0.5\textwidth, trim={0 0 0 1cm},clip]{figs/Multi_path_DLGN/DLGN_phase1_odt_hit_epoch_trees_5178.pdf}
+\includegraphics[width=0.5\textwidth, trim={0 0 0 1cm},clip]{figs/ReLU_3layer/relu_odt_capture_epochs_6178.pdf}
+\caption{ODT node capture epochs for a depth-5 ODT: (a) across all gating vectors in a 5-layer DLGN, (b) across first-layer weight vectors in a 3-layer ReLU network.}
+\label{fig:DLGN_ReLU_Hierarchical_feature_emergence}
+\end{figure}
 
 
-Looking into the learning dynamics of the multi-path DLGN with a L2 penalty on the gating vectors, we find interesting details that support our narrative of feature learning established in Section \ref{sec:single_trajectory}. Figure \ref{fig:single_trajectory_0178} suggests that the initial movement of the gating vectors is along the leaf node decision vectors until it reaches a saddle point, after which the ODT hierarchy kicks-in -- i.e. the gating vectors move along the ODT root node vectors, then its children, and so on. 
-
-This hierarchical feature emergence can also be seen in the multi-path DLGN. Figure \ref{fig:hieararchical_feat} shows the scatter plot of gating vector norms and cosine similarity to the ODT vectors at different points in training from a random initialization while training with a L2 penalty on the gating vectors. The individual gating neurons are colored based on the tree level of the nearest ODT decision vector. From a random initialisation (in Figure \ref{fig:norms_cosine_scatter_no_reg_final}a), we can see a surge of neurons moving closer to the leaf nodes (Figure \ref{fig:hieararchical_feat}a) , then the root node is captured (Figure \ref{fig:hieararchical_feat}b), then its children (Figure \ref{fig:hieararchical_feat}c) and so on till the end when most of the ODT decision vectors are captured (Figure \ref{fig:norms_cosine_scatter_no_reg_final}c).
 
 
 
 
-This adds another candidate theory of feature emergence, usually based on spectral bias arguments motivated by the NTK. Of course, a general labeling function would not be a perfect COB-ODT and we will have to stretch our analogy to apply to this setting. One could view the hierarchy of the ODT mainly being present in the labeling function via a `\textit{scope of discontinuity}' -- the root node $0$ is more prominent than its child node $1$ because a significantly more data points (half exactly) would flip labels if $\x \cdot \bu_0$ were to flip signs, than if $\x\cdot \bu_1$ were to flip signs (a quarter exactly). This notion of scope of discontinuity is more applicable to general labeling functions, and could form a natural basis for a new theory on the dynamics of feature learning.
+\section{ReLU evidence and broader interpretation}
 
-\section{Impacts}
 
-\subsection{Extension to ReLU networks}
+While our theoretical results are proved for the DLGN, our experiments suggest that related phenomena also appear in ReLU networks. On the same ODT dataset, ReLU networks with two or more hidden layers (three or more weight matrices) achieve performance comparable to DLGNs and exhibit a similar hierarchical feature-emergence pattern. Figure~\ref{fig:DLGN_ReLU_Hierarchical_feature_emergence}(b) shows the capture epochs of ODT node vectors by the first layer of a ReLU network; the order of emergence closely resembles that observed in DLGNs.
 
-While the theoretical results in the paper only hold for the DLGN, we believe the insights are applicable to any deep learning architecture. For example, on the same ODT dataset, we can get similar performances to a DLGN with a ReLU network having 2 or more hidden layers (note that this corresponds to 3 or more weight matrices/layers in standard terminology). More importantly, we see a very similar hierarchical feature emergence with the ReLU network too. Figure \ref{fig:norms_cosine_scatter_ReLU} shows a scatter plot of weight vector norms and cosine similarity to ODT vectors for the first layer of the ReLU network. The order of emergence, and the pattern of appearance is remarkably similar to that of DLGNs in Figure \ref{fig:hieararchical_feat} and \ref{fig:norms_cosine_scatter_no_reg_final}. Note that unlike the DLGN, only the first layer weights can be interpreted this way for a ReLU network. This extra transparency we get with the DLGN is one of the main reasons we use it as a `translucent box surrogate' to the `black box' ReLU networks. Further details and hyperparameters of the ReLU and DLGN training runs are given in the appendix. 
+We also perform intervention experiments in which gradient updates for the first layer weights of the  are projected onto the orthogonal complement of a chosen ODT direction $\bu_j$ during training. In these ReLU settings, such projections typically degrade final performance and substantially reduce alignment with ODT directions under the subtree of $j$, indicating that suppressing an internal-node direction can hinder the learning of its descendants. These observations are consistent with a hierarchical feature-discovery process in which internal features facilitate the acquisition of more local descendant features.
 
-We strongly believe that the following statement -- ``the multiplicative interaction of the layers in gradient computation acts like importance weighted linear separator learning from the perspective of any given neuron'' -- is a pervasive truth for any non-linear multi-layer architecture. The DLGN \cite{Banerjee+25} and its predecessor the deep gated network (DGN) \cite{LakshmiSingh20} were directly motivated from the observation that the deep ReLU network is equal to the product of parameter matrices with interleaved diagonal activation matrices.
+Viewed more broadly, the ODT setting can be interpreted through the concept of a \emph{scope of discontinuity}: the root node $0$ is more prominent than its child node $1$ because flipping the sign of $\x\cdot\bu_0$ would change labels for half the data, whereas flipping the sign of $\x\cdot\bu_1$ affects only a quarter. This notion of scope is tied to the labeling function rather than to the specific tree construction, and may be adaptable to more general settings where label changes concentrate along a hierarchy of increasingly localized discontinuities.
 
-\subsection{Future Directions}
-A better understanding of why and when feature learning works and fails is likely to accelerate development of better optimisation algorithms than gradient descent. For example, we can see hints as to why momentum methods and MuON \cite{jordan2025muon} are superior to standard gradient descent in terms of learning/generalisation, and not just optimisation speed, with our ``layers as lenses''  viewpoint. MuON for example amplifies the gradient updates along less important directions, and avoids the clustering of updates along powerful directions (like $\pm \bu_0$ at around epoch 1 with ReLU nets or around epoch 3 with DLGNs (see Figure \ref{fig:norms_cosine_scatter_ReLU}c and Figure \ref{fig:hieararchical_feat}b). 
+Throughout, the multiplicative cross-layer interactions in gradient computation act as an effective weighting mechanism from the viewpoint of each layer, potentially creating a positive feedback loop between the two roles of individual neurons: fitting the currently weighted data and helping shape the data seen by other neurons. Our DLGN analysis makes this structure explicit and tractable, but the underlying multiplicative dependence between layers is shared by many gated architectures, including ReLU networks. We view this as a plausible narrative for feature learning beyond 
 
-A better understanding of feature learning is essential to explain various oddities in empirical deep learning. For example, ``why do `lottery tickets' of subnetworks exist that when trained alone (while pruning the rest) achieve close to best performance?''. The `lottery ticket hypothesis' \cite{FrankleCarbin19} can be better explained using our narrative with the DLGN and ODT setting, than any other explanation (to the best of our knowledge). The ideal training evolution of single path DLGN is to provide coverage to a single (or small number) of ODT leaf nodes. This happens most unambiguously when the hierarchy-seeking lens, and the self-opposition lens act in conjunction to strongly support a single ODT path. However, most DLGN paths in a multi-layer network will not have such a clear winner. The small fraction of paths that support a clear winner are far more important to retain than the other paths, thus causing the `lottery ticket' phenomenon. The important observation here is that the elementary units to analyse learning are `paths' rather than neurons or layers. This is especially valuable because of the exponential number of paths, and `paths that support a clear winner' is \textbf{not} an attribute that can be linearly decomposed into neuron-wise or layer-wise attributes.
+
 
 
 
 \section{Conclusion}
-We propose a novel narrative of feature learning in deep networks that treats depth as an integral component of the model. We give theoretical support to it via second order behavior close to initialization, and provide empirical support via a detailed analysis of a single `cell' of the deep learning architecture we study. Extending the theoretical analysis from the cell (the single path DLGN) to the tissue (the multi-path DLGN) and even further to the organ (deep ReLU networks) is an exciting direction of future research.
 
-\section{Impact Statement}
+This paper studied a mechanistic lens/separator view of feature learning in gated deep networks through the analytically transparent DLGN--ODT setting. In this view, individual neurons both fit the currently weighted data and help determine the effective weighting seen elsewhere in the network. 
 
-This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here.
-\bibliography{Neurips_2025_layers_featureLearning}
-\bibliographystyle{icml2026}
-\appendix
-\onecolumn
-\section{Notations}
+Our single-path analysis identified two competing second-order effects in gradient descent: a hierarchy-seeking effect that can promote movement toward task-relevant internal features, and a self-opposing effect that can amplify movement along spurious directions. In wider DLGNs, these ideas help interpret both the emergence of ODT-aligned features and the optimization behavior that motivates regularization and two-phase training. We also observed related hierarchical feature-emergence patterns in ReLU networks, together with intervention results consistent with the proposed mechanism.
+
+While our formal guarantees are restricted to the DLGN--ODT setting, the results suggest a broader connection between multiplicative cross-layer structure, gradient-based optimization, and hierarchical feature discovery. We hope this viewpoint provides a useful starting point for a more general theory of feature learning in deep networks.
+
+\small
+\bibliographystyle{plainnat}
+\bibliography{References_NeurIPS_2026}
+\normalsize
+
+\section{Appendix}
+\subsection{Notations}
 \begin{table}[]
     \centering
     \caption{Table of notations}
@@ -605,10 +563,25 @@ This paper presents work whose goal is to advance the field of Machine Learning.
     \label{tab:notations}
 \end{table}
 
+
+% \section{ReLU setup}
+
+%Consider a standard ReLU network with $L$ hidden layers and $M$ hidden nodes per layer. With activations $\x^\ell =\psi(W^\ell \x^{\ell-1})$, where $\x^0 = \x \in \R^d$ and the output of the model $\hat {y}(\x) = W^{L+1} \cdot \x^L$. Here $\psi$ is the ReLU function. Here $W^1 \in \R^{M \times d}$ and $W^2,\ldots,W^L \in \R^{M \times M}$ and $W^{L+1} \in \R^{1\times M}$. Let $\g^1, \g^2,\ldots, \g^L$ be the pre-activations (i.e. $\psi(\g^\ell) = \x^\ell$) for the hidden layers. Let $\blambda^1, \ldots, \blambda^L \in \{0,1\}^M$ denote the activation status of the hidden neurons, i.e. $\blambda^\ell = \1(\g^\ell \geq 0)$. Note that $\x^\ell, \g^\ell, \blambda^\ell$ are all functions of the input $\x$. The ReLU network also admits a path decomposition of the form of Equation \ref{eq:DLGN_path_dec}, i.e.
+%\begin{equation}
+%    \hat y(\x) = \sum_{\pi \in [M]^L} \left( W^1_{m_1} \cdot \x \right) \prod_{\ell=1}^L \lambda^\ell_{m_\ell}(\x)   \left(W^{\ell+1}_{m_{\ell+1}, m_\ell}\right)
+%\end{equation}
+%where $\pi = (m_1, m_2,\ldots,m_L)$, and $m_{L+1}=1$ as convention. The main difference between ReLU and DLGN is that the gating functions $\lambda^\ell_{i_\ell}$ for the ReLU network are significantly more complex than the half-spaces for the DLGN (with $\phi(u)$ being the step function). 
+%
+%Despite this complication, one can show a similar result as the Hierarchy-seeking and self-opposing lens theorems for the DLGN.
+%
+%\begin{theorem}
+%    
+%\end{theorem}
+
 For any vectors $\h,\z$, We use both $\h \cdot \z$ and $\h^\top \z$ to both mean the dot product, and will use $\h \cdot \z$, whenever it is inconvenient to use $\h^\top \z$. Table \ref{tab:notations} lists all the notations used in the paper.
 
 
-\section{Proof for Theorem \ref{thm:second_order_lens}}
+\subsection{Proof for Theorem \ref{thm:second_order_lens}}
 \begin{theorem*}
 Let $\h, \z$ be vectors in $\R^d$. Let $0<a<1, k\neq \ell$. Let $\w_\lambda^\top \h = \w_\lambda^\top \z = 0$ for all $\lambda$. The change in gradient of $\mathcal{L}$ w.r.t. $\w_k$ along $\z$,   as $\w_\ell$, moves along $\h$ satisfies
 % \[
@@ -639,7 +612,8 @@ We will analyze the sum of these conditional expectation terms separately for ea
 \begin{align}
 \lefteqn{\sum_{\x=\x',\tilde\x} \sigma (-y^*(\x) \hat y(\x)\alpha(\x)) \Lambda_k(\x) \alpha(\x) \phi'(\w_k^\top \x) y^*(\x)a \x \cdot \z } \nonumber  \\
 &=
-\sum_{\x=\x',\tilde\x} \left(\sigma(-y^*(\x) \hat y(\x))+\epsilon(-y^*(\x) \hat y(\x)) \sigma'(-y^*(\x) \hat y(\x))\frac{\h^\top \x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)} \right) \Lambda_k(\x) \left(1+\frac{\epsilon \h^\top\x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)}\right) \phi'(\w_k^\top \x) y^*(\x) a \x \cdot \z \nonumber  \\
+\sum_{\x=\x',\tilde\x} \left(\sigma(-y^*(\x) \hat y(\x))+\epsilon(-y^*(\x) \hat y(\x)) \sigma'(-y^*(\x) \hat y(\x))\frac{\h^\top \x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)} \right) \nonumber \\ 
+&\Lambda_k(\x) \left(1+\frac{\epsilon \h^\top\x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)}\right) \phi'(\w_k^\top \x) y^*(\x) a \x \cdot \z \nonumber  \\
 &= \sum_{\x=\x',\tilde\x} \sigma(-y^*(\x) \hat y(\x)) \Lambda_k(\x) \phi'(\w_k^\top \x) y^*(\x)a \x \cdot \z ~ +   \nonumber  \\
 & \qquad \qquad \frac{\epsilon \h^\top\x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)}\left( \sigma(-y^*(\x) \hat y(\x))- y^*(\x) \hat y(\x) \sigma'(-y^*(\x) \hat y(\x) \right)\Lambda_k(\x) \phi'(\w_k^\top \x) y^*(\x)a \x \cdot \z  \label{eq:second_order_eq1a} 
 \end{align}
@@ -671,16 +645,12 @@ Now, consider the case when $\h$ and $\z$ are swapped. Let the $dL \times dL$ He
 To prove the same for $\h$ and $\z$ swapped, requires just seeing that $P_\ell(\h)^\top H P_k(\z) = P_\ell(\z)^\top H P_k(\h)$, which is true by symmetry of $H$.
 \end{proof}
 
-\section{Proof for Theorem \ref{thm:second_order_backlash}}
+\subsection{Proof for Theorem \ref{thm:second_order_backlash}}
 \label{app:second_order_backlash}
 \begin{theorem*}
 Let $\h$ be a vector in $\R^d$ that is orthogonal to the ODT decision vectors $\bu_i$ for all $i \in \{0,1,\ldots,n\}$. 
 % Let the lens for layer $k$ be at most mildly positively correlated with the label $y$, i.e. $\E[\Lambda_k(\x) y ] < \frac{1}{N}\E[\Lambda_k(\x)]$. 
 Let $\w_\lambda \cdot \h = 0$ for all $\lambda \in\{1,\ldots,L\}$. Let $\w_\lambda \cdot \bu_j = 0$ for all $\lambda \in\{1,\ldots,L\}$ and $j \in \{N/2,\ldots, N\}$. The change in gradient of $\mathcal{L}$ w.r.t. $\w_k$ along $\h$  as $\w_\ell$ (for some $\ell \neq k$) moves along $-\h$ satisfies the following relation.
-
-% \[
-%  \h^\top  \big[\nabla^2_{\ell,k} L(W) \big] \h =  \lim_{\epsilon \> 0} \frac{1}{\epsilon} \bigg[ -\nabla_{\w_k} L(W + \epsilon P_\ell(\h)) \cdot (-\h)  + \nabla_{\w_k} L(W) \cdot (-\h) \bigg] > 0
-% \]
 
 \begin{align*}
 \lim_{\epsilon \to 0} \frac{1}{\epsilon} \bigg[ 
@@ -701,7 +671,8 @@ For each $\x'$, such $y^*(\x')=1$ consider its reflection $\tilde \x$ along $\bu
 \begin{align}
 \lefteqn{\sum_{\x=\x',\tilde\x} \sigma (-y^*(\x) \hat y(\x)\alpha(\x)) \Lambda_k(\x) \alpha(\x) \phi'(\w_k^\top \x) y^*(\x)a \x \cdot (-\h) } \nonumber  \\
 &=
-\sum_{\x=\x',\tilde\x} \left(\sigma(-y^*(\x) \hat y(\x))-\epsilon y^*(\x)\hat y(\x) \sigma'(-y^*(\x) \hat y(\x))\frac{\h^\top \x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)} \right) \Lambda_k(\x) \left(1+\frac{\epsilon \h^\top\x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)}\right) \phi'(\w_k^\top \x) y^*(\x)a \x \cdot (-\h) \nonumber  \\
+\sum_{\x=\x',\tilde\x} \left(\sigma(-y^*(\x) \hat y(\x))-\epsilon y^*(\x)\hat y(\x) \sigma'(-y^*(\x) \hat y(\x))\frac{\h^\top \x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)} \right) \nonumber \\
+&\Lambda_k(\x) \left(1+\frac{\epsilon \h^\top\x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)}\right) \phi'(\w_k^\top \x) y^*(\x)a \x \cdot (-\h) \nonumber  \\
 &= \sum_{\x=\x',\tilde\x} \sigma(-y^*(\x) \hat y(\x)) \Lambda_k(\x) \phi'(\w_k^\top \x) y^*(\x)a \x \cdot (-\h) ~ +   \nonumber  \\
 & \qquad \qquad \frac{\epsilon \h^\top\x \phi'(\w_\ell^\top \x)}{\phi(\w_\ell^\top \x)}\Big( \sigma(-y^*(\x) \hat y(\x))-y^*(\x)\hat y(\x) \sigma'(-y^*(\x) \hat y(\x)) \Big)\Lambda_k(\x) \phi'(\w_k^\top \x) y^*(\x) a \x \cdot (-\h)  \label{eq:second_order_backlash_eq1a} 
 \end{align}
@@ -736,7 +707,7 @@ and thus
 
 
 
-\section{Single Path DLGN parameter trajectory}
+\subsection{Single Path DLGN parameter trajectory}
 As an extension to Figure \ref{fig:single_trajectory_0178} in Section \ref{sec:single_trajectory}, Figure \ref{fig:full_trajectory} shows the paramter trajectories when updated using gradient descent for 10000 epochs.
 
 % \begin{figure*}
@@ -752,7 +723,7 @@ As an extension to Figure \ref{fig:single_trajectory_0178} in Section \ref{sec:s
 \label{fig:full_trajectory} 
 \end{figure} 
 
-\section{Heuristic Solution Predictor}
+\subsection{Heuristic Solution Predictor}
 \label{sec:appendix_heuristic_score}
 The Heuristic score for a given initialization $W$ to move towards a solution $\tilde W$ is constructed using a node score $s_{i,\ell}(W)$ that captures the tendency of $\w_\ell$ to move along $\bu_i$. 
 
@@ -800,7 +771,8 @@ The full table giving the total percentage of initializations (out of 368) that 
 The best prediction accuracy of $49\%$ for the $96$-class prediction task is achieved with $c_{\text{SO}}=0.7$ and $c_{\text{HS}}=0.4$. Both the self-opposition terms and hierarchy seeking terms are essential to the score function -- zeroing either of these results in a significantly worse accuracy. Setting both $c_{\text{SO}}$ and $c_{\text{HS}}$ equal to zero, corresponds to a baseline predictor that uses the proximity of the init $W$ to a solution $\tilde W$ alone to make a prediction. This achieves a much lower accuracy of only $13 \%$.
 
 
-\section{Performance comparison of different models on $D=5$, $d=100$ ODT dataset}
+
+\subsection{Performance comparison of different models on $D=5$, $d=100$ ODT dataset}
 \label{app:performance}
 
 We compare the performance of DLGN, ReLU and SVM on the depth $D$ = 5, dimension $d$=100 ODT dataset containing 80,000 training points. Table \ref{tab:comparison} reports the best Test Accuracy (\%) of each model.
@@ -825,7 +797,7 @@ We compare the performance of DLGN, ReLU and SVM on the depth $D$ = 5, dimension
 
 \begin{table}[h]
     \centering
-    \caption{Comparison of Test Accuracy (\%) on different datasets.}
+    \caption{Comparison of Test Accuracy (\%) of different models.}
     \begin{tabular}{|l|c|c|c|}
         \hline
         \textbf{Dataset} & \textbf{DLGN} ($L=5$) & \textbf{ReLU} & \textbf{SVM} \\
@@ -882,6 +854,9 @@ kernel & polynomial, \textbf{RBF}, sigmoid, linear \\ \hline
 \end{tabular}
 \label{tab:svm5a}
 \end{table}
+
+\subsection{Details of Experiments compute resources:}
+All experiments were performed on NVIDIA A100 GPU. A single run of the single-path trajectory analysis and the multi-path DLGN experiments can be completed in 10-20 minutes under this setup. The heuristic solution predictor experiments take a considerably long time because there are a total of 2000*5 runs (2000 model initializations and 5 different datasets.)
 
 \newpage
 \subsection{Hyper-parameters for Experiments}
@@ -1105,6 +1080,14 @@ This section contains the hyperparameter search space for the performance compar
 %         \hline
 %     \end{tabular}
 % \end{table}
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\input{checklist.tex}
 
 
 \end{document}
