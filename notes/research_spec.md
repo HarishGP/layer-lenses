@@ -372,3 +372,126 @@ codebase, and how to compute them efficiently.
 - Whether to add a `bias=False` parallel run for cleanly comparing
 first-layer alignment.
 
+
+
+
+
+## H. ReLU extension plan:
+
+---
+name: ReLU Lens Theorem Elicitation
+overview: Experimental program to generalize the single-path DLGN construction and the heuristic solution predictor to ReLU MLPs, with the concrete target of predicting the final convergent hyperplane of each first-layer neuron in a 3x40 ReLU net trained on COB-ODT data.
+todos:
+  - id: label-harness
+    content: Build per-neuron convergence labelling + data-invariance filter (Track B1) on multi-seed ReLU runs
+    status: pending
+  - id: trajectories
+    content: Add per-neuron signed-cos trajectory extraction and lock-in epoch detection over checkpoints
+    status: pending
+  - id: cell-census
+    content: Run Track A ReLU-cell ([D,1,1]) convergence census and bespoke-init trajectory replication, D=4
+    status: pending
+  - id: predictor-p0-p3
+    content: Implement proximity (P0) and gradient-probe (P3) predictors with commitment curves
+    status: pending
+  - id: effective-gates
+    content: Implement effective-gate computation for layers 2-3 (mean input-space normals over active sets)
+    status: pending
+  - id: predictor-full
+    content: Implement full heuristic score (SO + HS terms) with c_SO/c_HS grid search and confusion matrices
+    status: pending
+  - id: second-order-probes
+    content: Implement finite-difference second-order probes and sign-pattern heatmap vs DLGN theorems
+    status: pending
+  - id: session-log
+    content: Log this planning session in notes/session_log.md and link durable decisions
+    status: pending
+isProject: false
+---
+
+# ReLU Layers-as-Lenses: Experimental Setup to Elicit Candidate Theorems
+
+## Framing
+
+The paper's two artifacts to generalize:
+
+- **Single-path DLGN (paper Sec. 3):** a product of D input-space halfspaces converges to one of \(2^{D-2}D!\) solutions, each aligning layer neurons with ODT directions along one root-to-leaf path.
+- **Heuristic solution predictor (paper Sec. 3.4 / App. C):** score \(s_{i,\ell}(W) = w_\ell\cdot u_i + c_{SO}\sum_{k\ne\ell}(-w_k\cdot u_i) + c_{HS}A_{i,\ell}(W)\), predicting the gradient-descent solution from initialization at 49% vs 13% proximity-only baseline.
+
+Target question: **for a trained ReLU net (3 hidden layers, 40 wide, on d=100 ODT data), predict which ODT hyperplane \(\pm u_i\) a given first-layer neuron converges to.**
+
+Key structural facts that shape the design (from `notes/research_spec.md` Sec. B):
+
+- First-layer ReLU rows are honest input-space hyperplanes; deeper neurons only have *effective* input-dependent normals \(\tilde w_{\ell,i}(x)\).
+- The lens on first-layer neuron \(m\) is path-summed: \(\Lambda_m(x)=\sum_{\pi\ni m} a_\pi \prod_{\ell\ge2} \mathbb{1}[\cdot]\), with path coefficients \(a_\pi\) products of downstream weights.
+- A width-1 ReLU chain is degenerate (single-index function, no lens) — the minimal non-degenerate "cell" needs multiple first-layer neurons feeding a narrow downstream chain.
+
+## Track A — Generalized single-path construction: the "ReLU cell"
+
+**Architecture:** `ReLUMLP(hidden_dims=[D, 1, 1])` (and `[D, 2, 2]` as a robustness variant) on depth-D ODT data, D=4, d=100, bias=False. The D first-layer neurons play the role of the D DLGN layers; the width-1 downstream chain provides two deep gates whose input-space regions are shaped by all D first-layer halfspaces — the ReLU lens.
+
+**Experiments:**
+
+1. **Convergence census.** Many seeds (start ~200 inits x 3–5 dataset resamples, mirroring the paper's data-invariance filter). For each run, record the \(\upsilon\)-tuple: for each first-layer neuron, argmax signed-cos ODT direction (or "unaligned" below threshold \(\tau\approx0.85\)). Question: do runs converge to a discrete solution family analogous to the DLGN's \(2^{D-2}D!\) set (one neuron per node along an ODT path, possibly a two-adjacent-path superposition)? Also record saddle/failure runs (train loss stuck between \(\frac{15}{16}\log 2\) and \(\log 2\)).
+2. **Bespoke-init trajectory replication** (paper Sec. 3.3 analog): initialize near zero with small perturbations \(-\epsilon u_j\) on chosen neurons; verify the perturbation steers the solution as the hierarchy-seeking narrative predicts. Plot per-neuron signed-cos trajectories against all \(u_i\) (analog of paper Fig. parameter trajectories).
+3. **Controls:** width-1 first layer `[1, k, k]` (expected: collapses to single-index, likely \(\pm u_0\)-ish direction — demonstrates the lens requires multiple first-layer features); frozen-downstream variant (no lens evolution, tests H11 causally at cell scale).
+
+**Candidate theorem A:** at (near-)orthogonal init, the cross-block second-order structure of the ReLU cell has the same sign pattern as DLGN Theorems 1–2, with each term weighted by the path coefficient signs \(a_\pi\); consequently the cell converges to per-path solutions. Track A's census + probes give the empirical shape of this statement before attempting proof.
+
+## Track B — Per-neuron fate prediction in the full-width net (the concrete target)
+
+Setting: current scratch config (d=100, D=5, `[40,40,40]`, or D=4 for a cleaner first pass), multi-seed.
+
+### B1. Ground-truth labelling protocol
+
+- Label of first-layer neuron m = signed argmax-cos ODT node at convergence if \(|\cos|\ge\tau\) and stable over the last k checkpoints; else "unaligned". Label set: \(\{\pm u_0,\dots,\pm u_N,\varnothing\}\) (63 classes at D=5, 31 at D=4).
+- Port the paper's *data-invariance filter*: fixed init seed, 3–5 dataset/order resamples; keep only neurons whose label is invariant (neuron identity is preserved because init is shared). This defines the clean prediction benchmark, as in the paper's 368/2000.
+- Sweep to check label robustness against: weight decay (0 vs 0.005/0.01 — WD may play the role of the DLGN's L2-then-prune cleanup), cosine LR schedule vs constant.
+
+### B2. Predictor ladder (each rung is a testable claim)
+
+1. **P0 proximity:** signed cos of \(W_1[m,:]\) with each \(\pm u_i\) at init. This is the 13%-analog baseline.
+2. **P1 + self-opposition (reinterpreted):** in the multipath net, the competitors of neuron (1,m) are *other first-layer neurons*, weighted by lens overlap (shared downstream path mass), not "other layers" as in the single path. Term: \(-c_{SO}\sum_{m'\ne m} \rho_{mm'}\, w_{m'}\cdot u_i\) with \(\rho_{mm'}\) = downstream-path-coefficient overlap.
+3. **P2 + hierarchy-seeking:** port \(A_{i,\ell}\) using *effective gates* of downstream neurons: compute \(\bar{\tilde w}_{\ell,j}\) = mean input-space normal of neuron \((\ell,j)\) over its active set (research-spec H14 machinery), take alignments with ancestors/descendants of \(u_i\) along ODT paths, weight by connection strength \(|a_{\pi}|\) between (1,m) and \((\ell,j)\). Grid-search \(c_{SO}, c_{HS}\) as in the paper (0–0.9 x 0–0.9).
+4. **P3 gradient probe:** one population-gradient step at init; predict by the gradient's dominant ODT component. Cheap, and separates "information present at init" from "score design".
+5. **Commitment curves:** run every predictor from checkpoints at epochs \(t=0,1,2,\dots\) (quadratic snapshots exist). Plot accuracy vs t. The epoch where proximity-only becomes near-perfect defines the **lock-in time**; the gap between P2-at-init and P0-at-init measures how much the lens terms explain.
+
+**Metrics:** per-neuron top-1 accuracy vs P0 and chance; stratified by ODT level (leaves vs root vs internal); confusion matrices (spec V9); survival analysis of label switches.
+
+### B3. Mechanism validation (justifies the score terms)
+
+- **Second-order probes (H9/H10):** at init and early checkpoints, finite-difference Hessian-vector probes: perturb \(W_2[j,:]\) (or a first-layer competitor) along directions that map to \(\pm u_{leaf}\) in effective-gate space, measure the induced change in \(\nabla_{W_1[m,:]}\mathcal{L}\cdot u_{ancestor}\). Produce the sign-pattern heatmap (spec V7) and compare against DLGN Theorems 1–2 predictions. Agreement here is the empirical core of any ReLU theorem.
+- **Frozen-layer ablation (H11):** freeze layers 2–3 at init; expect first-layer alignment to stall or lose hierarchy ordering.
+
+## Candidate theorems this setup is designed to elicit
+
+- **CT1 (leaf-first first-order dynamics):** for orthogonal-to-ODT init on the sphere, the expected first-layer gradient has components only along leaf directions, weighted by path-coefficient sums — ReLU analog of the DLGN saddle \(W^*\).
+- **CT2 (path-weighted hierarchy-seeking lens):** the DLGN Theorem 1 inequality holds for ReLU cross-neuron Hessian blocks with each term multiplied by \(\mathrm{sign}(a_\pi)\) of the connecting path — verified/falsified by B3 heatmaps.
+- **CT3 (lock-in / commitment):** there exists an early epoch \(t^*\) (empirically: around root capture) after which the eventual label of aligned neurons is determined; before \(t^*\) init-proximity is weakly informative and the lens terms carry the predictive signal.
+- **CT4 (winner-take-most competition):** per (node, sign) at most a few first-layer neurons grow norm; competition is mediated by residue shrinkage, and the SO term with lens-overlap weighting captures it.
+
+## Implementation mapping (when we build)
+
+- `src/layer_lenses/relu_analysis.py`: add effective-gate computation for deeper layers, per-neuron trajectory extraction (signed cos over checkpoints), lock-in epoch detection. Existing `first_layer_odt_alignment`, ablation and leaf-activity tools are reused as-is.
+- New module `src/layer_lenses/relu_predictor.py`: label extraction + data-invariance filter, P0–P3 scores, \(c_{SO}/c_{HS}\) grid, evaluation/confusion-matrix helpers.
+- New module or extension for second-order probes (finite-difference HVPs on a checkpoint).
+- Multi-seed runner extending `run_single_relu_seed` (grid over init seeds x dataset seeds); artifacts under `results/`.
+- Track A cell experiments live in a new notebook first (per repo policy), with stable logic migrated to `src/`.
+- Config choices (D, widths, WD, \(\tau\), seed counts) go to `configs/` per reproducibility rules.
+
+## Suggested sequencing
+
+1. Track B1 labelling harness + trajectories (cheap, uses existing runs) — establishes the benchmark and lock-in phenomenology.
+2. Track A cell census (small models, fast) — the direct single-path generalization; likely the clearest theorem material.
+3. B2 predictor ladder P0/P3, then effective gates + P1/P2.
+4. B3 second-order probes — connects empirics back to provable statements.
+
+## Decision points to settle before coding
+
+- Primary depth: D=4 (cleaner, matches the paper's 96-solution setting, smaller label space) vs current D=5 scratch setting. Recommendation: D=4 primary, D=5 replication.
+- Unaligned threshold \(\tau\) and whether "unaligned" is a predicted class or excluded from the benchmark (paper excludes non-convergent runs; recommend excluding unaligned neurons from accuracy but reporting their fraction).
+- Weight decay: current scratch uses 0.01; run a WD=0 arm since WD may itself do the alignment cleanup and confound the lens story.
+
+## Pitfalls carried over from the research spec
+
+Sign asymmetry of ReLU (use signed cos, not \(|\cos|\)), permutation identity preserved via shared init seeds, linear-region explosion handled by active-set averages only, saddle/failed seeds analyzed separately rather than dropped silently.

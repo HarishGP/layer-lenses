@@ -2419,3 +2419,239 @@ Add a cell using `plot_complete_binary_tree_values` with `odt_capture_epochs` af
 
 ### Open questions
 - None.
+
+---
+
+## 2026-07-21 00:25 IST — Per-layer masks for ReLU graph
+
+### Goal
+Allow the layered ReLU graph to mask hidden layers with different widths.
+
+### User prompts (verbatim)
+- "Edit plot_layered_relu_graph function in relu_analysis.py to take in node masks as a list of numpy arrays also. That way hidden layers with different sizes can also be handled."
+
+### Changes
+- `src/layer_lenses/relu_analysis.py`: accepted and validated one 1D NumPy mask per hidden layer while retaining the existing rectangular-array interface.
+- `tests/test_relu_analysis.py`: added coverage for a `[4, 3, 2]` hidden-width graph with per-layer masks.
+
+### Decisions
+- Per-layer masks must exactly match their corresponding hidden-layer widths; rectangular masks remain supported with padding to the widest layer.
+
+### Current state / where to pick up
+- Focused ReLU analysis tests pass (`9 passed`).
+
+### Open questions
+- None.
+
+---
+
+## 2026-07-26 21:16 IST — Variable-depth ReLU graph
+
+### Goal
+Plot ReLU MLP connectivity for models with one, two, or three hidden layers.
+
+### User prompts (verbatim)
+- "Change the plot_layered_relu_graph function so that it can also plot neural nets with one or two or three hidden layers. Not just three."
+
+### Changes
+- `src/layer_lenses/relu_analysis.py`: dynamically discovers hidden-layer weights and builds layer positions, edges, labels, masks, and plot bounds for one to three hidden layers.
+- `tests/test_relu_analysis.py`: added graph and edge-count coverage for one-, two-, and three-hidden-layer models.
+
+### Decisions
+- The plotting API explicitly supports one through three contiguous hidden layers and raises a clear error outside that range.
+
+### Current state / where to pick up
+- Focused ReLU analysis tests pass (`10 passed`).
+
+### Open questions
+- None.
+
+---
+
+## 2026-07-29 09:26 IST — Variable-depth scratch notebook analysis
+
+### Goal
+Remove fixed three-layer/equal-width assumptions from the latter part of the ReLU scratch notebook and its reusable analysis helpers.
+
+### User prompts (verbatim)
+- "Go through the scratch.ipynb notebook. You may edit cells starting from the markdown cell \"## Load neural net parameters from given epoch into W0, W1, W2 and Wout\".
+
+Several places require that the ReLU network have 3 hidden layers with same neurons. Find and edit those to handle 1 or 2 or 3 hidden layers with different number of neurons in each layer. Some functions in relu_analysis.py would also need changes for this. Go ahead and do this.
+
+Use the HIDDEN_DIMS object defined early on in the notebook. You may assume that the seed_result contains neural networks compatible with HIDDEN_DIMS."
+- "Perform any necessary follow-up actions in response to the subagent completion above. If no follow-up work is needed, no further action is required. If you mention an agent or subagent in your response, link it with the `[Name](id)` Don't use generic label such as `[agent]`, `[worker]`, or `[subagent]`. For cloud subagents, when the agent has edited code, link to `[Review](bc-id#changes)`, or, if you know the exact added and deleted line counts, `[Review +A −D](bc-id#changes)`, replacing A and D with those counts. Never write A or D literally. Use `[Try Live](bc-id#desktop)` only when the agent used computer use. Don't repeat the same confirmation every time."
+
+### Changes
+- `notebooks/scratch.ipynb`: generalized weight loading, graph masks, ablation masks, masked evaluation, activity queries, weighted-lens gradient analysis, and all dependent projection/plot/example cells from the authorized markdown cell onward using `HIDDEN_DIMS` and dynamic ODT dimensions.
+- `src/layer_lenses/relu_analysis.py`: centralized hidden-layer/mask validation, added list-mask support to masked inference and responsibility analysis, and added `first_layer_neuron_weighted_lens` for architecture-independent active-path sums.
+- `tests/test_relu_analysis.py`: covered heterogeneous list masks, responsibility analysis, and weighted-lens agreement with autograd for one to three hidden layers.
+
+### Decisions
+- Per-layer mask lists are the notebook default because they represent heterogeneous widths without padding.
+- Weighted-lens path sums use backward dynamic programming rather than architecture-specific nested path loops.
+
+### Current state / where to pick up
+- All notebook code cells from the authorized section onward compile and contain no remaining searched fixed-depth/equal-width patterns.
+- Full test suite passes (`47 passed`).
+
+### Open questions
+- Notebook cells were syntax-checked but not executed because doing so would rerun expensive training and analysis.
+
+## 2026-08-19 09:34 IST — SGD momentum on ReLUTrainConfig
+
+### Goal
+Add a momentum parameter to the ReLU training config for the SGD optimizer.
+
+### User prompts (verbatim)
+- "in the relu training config can you add a momentum parameter for use with the sgd optimizer option?"
+
+### Changes
+- `src/layer_lenses/relu_training.py`: added `momentum: float = 0.0` to `ReLUTrainConfig`. SGD already passed `config.momentum` into `torch.optim.SGD`.
+- `src/layer_lenses/relu_analysis.py`: threaded `momentum` through `run_single_relu_seed`.
+- `tests/test_relu_training.py`: default-zero check and a same-init SGD run showing momentum `0.0` vs `0.9` produce different weights.
+- `README_detailed.md`: documented that momentum applies only to SGD.
+
+### Decisions
+- Default `momentum=0.0` preserves the previous plain-SGD behavior.
+- AdamW ignores `momentum`; it is only passed to `torch.optim.SGD`.
+- Nesterov remains off.
+
+### Current state / where to pick up
+- Full test suite passes (`49 passed`).
+
+### Open questions
+- None.
+
+---
+
+## 2026-09-14 IST — Single-path ReLU cell notebook
+
+### Goal
+Create a clean notebook for the Track A "ReLU cell" experiments — the ReLU
+analog of the single-path DLGN — to test the lens / positive-feedback
+narrative in a minimal, fully interpretable model.
+
+### User prompts (verbatim)
+- "Do you have access to the chats in which we discuss ReLU network feature learning and in particular setups to validate the notion of positive feedback extending the lens notion of DLGNs? \n\nIf so, create a new jupyter python notebook in the notebooks folder for testing ReLU network single path. Use the other python files in src like odt, relu_training and relu_analysis. You can look at the scratch.ipynb notebook for a rough idea of how they are used. But create a clean version here."
+
+### Changes
+- Added `notebooks/ReLU_single_path_runner.ipynb` (36 cells, interleaved
+  markdown/code, no stored outputs). Sections: config + run wrapper,
+  reference run, loss/dead-path diagnostics, signed-cos trajectories,
+  convergence labels (upsilon-tuple) with the root-to-leaf path test,
+  capture epochs + ODT tree plot, norm-vs-|cos| scatter, lens leaf
+  concentration and its entropy over training, first-layer gradient mass
+  by ODT level, layered graph, frozen-downstream control (H11), width-1
+  first-layer control, and a mini seed census.
+- No `src/` or test changes; the notebook composes existing APIs
+  (`run_single_relu_seed`, `first_layer_odt_alignment`,
+  `first_layer_neuron_weighted_lens`, `activation_tensor_by_layer_neuron_data`,
+  `log_loss_gradients`, `plot_layered_relu_graph`,
+  `plot_complete_binary_tree_values`, `collect_start_end_metrics`).
+
+### Decisions
+- "Single path" for ReLU is implemented as the **ReLU cell**
+  `hidden_dims=[D, 1, 1]` from `notes/research_spec.md` Sec. H Track A, not a
+  literal `[1,1,1]` chain: a width-1 chain is a single-index function with no
+  lens, so it cannot exhibit the dual-role feedback. The `[1, W, W]` control
+  is included to make that degeneracy visible.
+- Defaults follow the Track A recommendation: D=4 primary, d=100,
+  `bias=False`, full-batch GD, and `weight_decay=0` so alignment cleanup is
+  not attributable to the regulariser.
+- Labels use **signed** cosine (ReLU has no sign symmetry); `COS_THRESHOLD`
+  defaults to 0.85 per the spec's tau.
+- Frozen-downstream control reuses the existing `parameter_update_mask`
+  plumbing in `ReLUTrainConfig` rather than new training code, and reuses the
+  same master seed so data and init match the free run exactly.
+- Helper functions (trajectories, labels, capture epochs, lens profiles) are
+  kept in the notebook for now; the notebook's closing section flags that they
+  should migrate to `src/layer_lenses/relu_analysis.py` once stable, per the
+  notebook-migration policy.
+
+### Current state / where to pick up
+- Notebook was smoke-executed out-of-place with a tiny config
+  (d=20, D=3, n=4000, 60 epochs, CPU): all 36 cells run without error. It is
+  committed with outputs cleared and has **not** been run at the real config.
+- Next: run at D=4 defaults, then the items in the notebook's final section —
+  bespoke near-zero init with `-eps*u_j` perturbations (paper Sec. 3.3 analog),
+  second-order probes (H9/H10, CT2), full census with the data-invariance
+  filter, and the `[D, 2, 2]` robustness variant.
+
+### Open questions
+- Whether `adamw` or plain full-batch `sgd` is the right optimizer for the cell
+  census; the DLGN single-path study used plain GD, and Adam's per-coordinate
+  scaling may distort the trajectory comparison.
+- Whether a `[D,1,1]` run that stalls near `log 2` is a genuine saddle (the
+  paper's failure mode) or just a dead downstream gate; the active-fraction
+  diagnostic distinguishes them but the census does not yet separate the two.
+
+---
+
+## 2026-09-14 IST — Frozen sign-pattern ReLU cell: single-path trajectory analog
+
+### Goal
+Build a notebook for the user's proposed ReLU architecture — d -> D (trainable)
+-> 2^D (frozen {+1,-1} bit-vector rows) -> 1 (frozen random {+1,-1}) — as the
+ReLU analog of the single-path DLGN trajectory study, with hand-picked
+first-layer inits and probes for the hierarchy-seeking / self-opposing lens
+theorems.
+
+### User prompts (verbatim)
+- "Ok. Can you create a new notebook specifically to test the single path trajectory analog for ReLU nets. In an earlier unlogged conversation I asked:\n\nOk. Consider another question below analogous to the hieararchy-seeking lens theorem. This is applicable to ReLU nets.\n\nLet's say we have a depth D-ODT labelling function, d-dimensional data and a ReLU net (with no bias) with architecture given by : d input nodes, D first layer hidden nodes, 2^D second layer hidden nodes, and one output node. The second layer parameters are frozen such that each of the 2^D nodes has its incoming weights set to a unique D-dimension {+1,-1} bit vector and frozen. The last layer connecting the 2^D neurons to the output is init to a random {+1,-1} vector and frozen. Only the first layer parameters are updated by population gradient flow.   \n\nA similar setup to the DLGN where the first layer neurons are carefully initialised to emphasize hierarchy can be chosen. I will choose the inits here myself by hand.\n\nCan you set this up in a separate notebook, with D=4?"
+
+### Changes
+- Added `notebooks/ReLU_single_path_trajectory.ipynb` (38 cells, no stored
+  outputs): config, data/ODT basis, frozen layer construction, hand-picked init
+  cell, population gradient flow, freeze check, lens-vs-autograd validation,
+  parameter and gradient trajectories in the ODT basis, upsilon-tuple and
+  capture epochs, lens unpacked per sign pattern and per ODT leaf,
+  hierarchy-seeking probe (Thm. 1) with split-half stability, swapped-role
+  probe, output-sign sweep, self-opposing probe (Thm. 2), and an init-variant
+  sweep.
+- No `src/` changes; the notebook composes `generate_cob_odt_data`, `ReLUMLP`,
+  `train_relu_mlp` + `ReLUTrainConfig` (with `parameter_update_mask`),
+  `log_loss_gradients`, `activation_tensor_by_layer_neuron_data`,
+  `first_layer_neuron_weighted_lens`, `plot_complete_binary_tree_values`.
+
+### Decisions
+- Trained via `train_relu_mlp` directly rather than `run_single_relu_seed`,
+  because the init is hand-built from the ODT basis and must be constructed
+  after the tree is known. Gradient flow = full batch + plain SGD, momentum 0,
+  weight decay 0, and `lr_scheduler_eta_min_ratio=1.0` so the cosine schedule
+  does not decay the step size.
+- Init is specified as an ODT-basis coefficient matrix `init_coeffs[k, i]`; the
+  off-ODT random component is projected out of the ODT span, so `w_k . u_i`
+  equals the hand-set coefficient exactly regardless of `INIT_RANDOM_SCALE`.
+- `W1 = 0` is NOT usable for ReLU (h1 = 0 => all layer-2 pre-activations 0 =>
+  gradient vanishes identically), unlike the DLGN's W = 0 start. The default
+  init is therefore the paper's Sec. 3.3 perturbation plus a small component
+  orthogonal to every ODT direction. Documented in the notebook header.
+- `first_layer_neuron_weighted_lens` is exactly Lambda_k for this architecture;
+  the notebook asserts this by rebuilding -grad from residue x lens x blinder
+  x y x and comparing against autograd (agrees to ~1e-8).
+
+### Measured during setup (preliminary, not a result)
+- Probe step size matters: at d=100, n=1e5 per half, split-half sign stability
+  of the Thm-1 finite difference was 0.95 at eps=1e-2, 0.84 at 1e-3, 0.60 at
+  1e-4. Default is now `PROBE_EPS = 1e-2`, and the probe reports its own
+  split-half stability with a warning below 0.9.
+- The frozen output vector largely decides whether the Thm-1 sign structure
+  appears at all. At the paper init, agreement was 0.93 (`all_positive`), 0.94
+  (`majority`), 0.76 (`parity`), and 0.37 / 0.70 / 0.50 for random +-1 vectors
+  at seeds 178 / 0 / 42. `all_positive` is the direct analog of the paper's
+  fixed a > 0. Default stays `"random"` per the stated spec, with the sweep
+  cell in Sec. 10 making the comparison reproducible.
+
+### Current state / where to pick up
+- Smoke-executed out-of-place at tiny config (d=40, n=20k, 40 epochs, CPU): all
+  38 cells run; the stability warning correctly fires at that sample size. Not
+  run at the real config.
+- Next: user supplies hand-picked `init_coeffs`; then check whether the
+  parameter/gradient trajectories reproduce the DLGN staging (saddle, then w1
+  toward -u0, then w2 toward -u1, with a brief +u0 backlash).
+
+### Open questions
+- Whether the random-sign output is the right specification for the trajectory
+  comparison, given the measured sensitivity above.
+- `LR = 0.5` for the flow step size is a guess; the right value depends on the
+  init scale, which is hand-set.

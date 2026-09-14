@@ -29,8 +29,9 @@ class ReLUTrainConfig:
     weight_decay: float = 0.0
     lr_scheduler_eta_min_ratio: float = 0.2
     show_progress: bool = False
-    # "adamw" (default) or "sgd" (plain SGD, momentum=0; mini-batch if batch_size < n).
+    # "adamw" (default) or "sgd" (mini-batch SGD; momentum is used only for SGD).
     optimizer: str = "adamw"
+    momentum: float = 0.0
     first_layer_grad_orthogonal_to: tuple[float, ...] | np.ndarray | None = None
     parameter_update_mask: ParameterUpdateMask | None = None
 
@@ -239,13 +240,13 @@ def train_relu_mlp(
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=config.lr,
-            momentum=0.0,
+            momentum=config.momentum,
             weight_decay=config.weight_decay,
             nesterov=False,
         )
     else:
         raise ValueError(
-            'optimizer must be "adamw" or "sgd" (plain gradient descent with momentum=0), '
+            'optimizer must be "adamw" or "sgd", '
             f"got {config.optimizer!r}"
         )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(

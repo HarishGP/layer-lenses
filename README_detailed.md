@@ -77,7 +77,7 @@ Standard ReLU MLP model definition.
 
 Training and evaluation utilities for ReLU MLPs.
 
-- `ReLUTrainConfig`: dataclass for single-phase ReLU MLP training (`optimizer`: `"adamw"` default or `"sgd"` for plain SGD with `momentum=0`; optional `first_layer_grad_orthogonal_to` projection vector; optional 0/1 `parameter_update_mask` for freezing individual parameter entries).
+- `ReLUTrainConfig`: dataclass for single-phase ReLU MLP training (`optimizer`: `"adamw"` default or `"sgd"`; `momentum` is used only with SGD and defaults to `0.0`; optional `first_layer_grad_orthogonal_to` projection vector; optional 0/1 `parameter_update_mask` for freezing individual parameter entries).
 - `_labels_pm1_to_binary`: converts labels from `{−1,+1}` to `{0,1}`.
 - `evaluate_relu_mlp`: evaluates BCE-with-logits loss, zero-one loss, and accuracy.
 - `checkpoint_model_from_state`: copies a template ReLU MLP and loads one checkpoint state dict.

@@ -115,6 +115,7 @@ def run_single_relu_seed(
     show_progress: bool = True,
     lr_scheduler_eta_min_ratio: float = 0.05,
     optimizer: str = "adamw",
+    momentum: float = 0.0,
     project_first_layer_grad_orthogonal: int | None = None,
 ) -> dict[str, Any]:
     """Generate COB-ODT data, train one ReLU MLP seed, and return notebook-friendly state.
@@ -203,6 +204,7 @@ def run_single_relu_seed(
             show_progress=show_progress,
             lr_scheduler_eta_min_ratio=lr_scheduler_eta_min_ratio,
             optimizer=optimizer,
+            momentum=momentum,
             first_layer_grad_orthogonal_to=first_layer_projection_vector,
             parameter_update_mask=parameter_update_mask,
         ),
@@ -327,33 +329,114 @@ def _layer_y_positions(width: int) -> np.ndarray:
     return np.linspace(0.98, 0.02, width)
 
 
+def _hidden_weights_from_state_dict(
+    state_dict: dict[str, torch.Tensor],
+) -> tuple[list[torch.Tensor], torch.Tensor]:
+    hidden_layer_indices = sorted(
+        int(name.split(".")[1])
+        for name in state_dict
+        if name.startswith("hidden_layers.") and name.endswith(".weight")
+    )
+    num_hidden_layers = len(hidden_layer_indices)
+    if not 1 <= num_hidden_layers <= 3:
+        raise ValueError(
+            "Expected one to three hidden layers, "
+            f"but found {num_hidden_layers}."
+        )
+    if hidden_layer_indices != list(range(num_hidden_layers)):
+        raise ValueError(
+            "Hidden-layer weight indices must be contiguous and start at zero; "
+            f"found {hidden_layer_indices}."
+        )
+
+    hidden_weights = [
+        state_dict[f"hidden_layers.{layer_idx}.weight"].detach().cpu()
+        for layer_idx in hidden_layer_indices
+    ]
+    output_weight = state_dict["output_layer.weight"].detach().cpu()
+    return hidden_weights, output_weight
+
+
+def _normalize_hidden_node_masks(
+    node_mask: np.ndarray | list[np.ndarray] | None,
+    hidden_widths: list[int],
+    *,
+    name: str = "node_mask",
+) -> list[np.ndarray]:
+    if node_mask is None:
+        return [np.ones(width, dtype=bool) for width in hidden_widths]
+
+    if isinstance(node_mask, list):
+        if len(node_mask) != len(hidden_widths):
+            raise ValueError(
+                f"{name} must contain one array per hidden layer. "
+                f"Expected {len(hidden_widths)}, got {len(node_mask)}."
+            )
+
+        layer_node_masks = []
+        for layer_idx, (mask, width) in enumerate(
+            zip(node_mask, hidden_widths, strict=True)
+        ):
+            layer_mask = np.asarray(mask, dtype=bool)
+            if layer_mask.ndim != 1 or layer_mask.shape[0] != width:
+                raise ValueError(
+                    f"{name}[{layer_idx}] must have shape ({width},), "
+                    f"got {layer_mask.shape}."
+                )
+            layer_node_masks.append(layer_mask)
+        return layer_node_masks
+
+    rectangular_mask = np.asarray(node_mask, dtype=bool)
+    if rectangular_mask.ndim != 2 or rectangular_mask.shape[1] != len(
+        hidden_widths
+    ):
+        raise ValueError(
+            f"{name} array must be 2D with one column per hidden layer; "
+            f"got shape {rectangular_mask.shape}."
+        )
+    if rectangular_mask.shape[0] < max(hidden_widths):
+        raise ValueError(
+            f"{name} array needs at least one row per node in the widest "
+            f"hidden layer. Expected at least {max(hidden_widths)}, "
+            f"got {rectangular_mask.shape[0]}."
+        )
+    return [
+        rectangular_mask[:width, layer_idx]
+        for layer_idx, width in enumerate(hidden_widths)
+    ]
+
+
 def plot_layered_relu_graph(
     *,
     state_dict: dict[str, torch.Tensor],
     tree: COBODTTree,
     depth: int,
     epoch: int,
-    node_mask: np.ndarray | None = None,
+    node_mask: np.ndarray | list[np.ndarray] | None = None,
     alignment_abs_threshold: float = 0.5,
     edge_abs_threshold: float = 0.2,
     figsize: tuple[float, float] = (14, 18),
     require_both_edge_endpoints_selected: bool = True,
 ):
-    """Plot a layered hidden-node graph with ODT labels on first-layer neurons."""
+    """Plot a layered hidden-node graph with ODT labels on first-layer neurons.
+
+    ``node_mask`` may be either a row-by-layer array or one one-dimensional
+    boolean array per hidden layer. The latter supports layers with different
+    widths without padding.
+    """
     alignment = first_layer_odt_alignment(state_dict=state_dict, tree=tree)
-    w0 = state_dict["hidden_layers.0.weight"].detach().cpu()
-    w1 = state_dict["hidden_layers.1.weight"].detach().cpu()
-    w2 = state_dict["hidden_layers.2.weight"].detach().cpu()
-    wout = state_dict["output_layer.weight"].detach().cpu()
+    hidden_weights, output_weight = _hidden_weights_from_state_dict(state_dict)
+    num_hidden_layers = len(hidden_weights)
+    hidden_widths = [weight.shape[0] for weight in hidden_weights]
+    layer_node_masks = _normalize_hidden_node_masks(node_mask, hidden_widths)
 
-    if node_mask is None:
-        node_mask = np.ones((w0.shape[0], 3), dtype=bool)
-    else:
-        node_mask = np.asarray(node_mask, dtype=bool)
-
-    widths = [w0.shape[0], w1.shape[0], w2.shape[0], 1]
-    x_positions = [0.0, 1.6, 3.2, 4.8]
-    layer_names = ["hidden 1", "hidden 2", "hidden 3", "output"]
+    output_layer_idx = num_hidden_layers
+    widths = [*hidden_widths, output_weight.shape[0]]
+    x_positions = [1.6 * layer_idx for layer_idx in range(num_hidden_layers + 1)]
+    layer_names = [
+        *(f"hidden {layer_idx + 1}" for layer_idx in range(num_hidden_layers)),
+        "output",
+    ]
 
     node_pos = {}
     for layer_idx, width in enumerate(widths):
@@ -363,10 +446,12 @@ def plot_layered_relu_graph(
 
     fig, ax = plt.subplots(figsize=figsize)
     edge_mats = [
-        (w1, 0, 1),
-        (w2, 1, 2),
-        (wout, 2, 3),
+        (hidden_weights[dst_layer], dst_layer - 1, dst_layer)
+        for dst_layer in range(1, num_hidden_layers)
     ]
+    edge_mats.append(
+        (output_weight, num_hidden_layers - 1, output_layer_idx)
+    )
 
     visible_edges = []
     for mat, src_layer, dst_layer in edge_mats:
@@ -376,8 +461,12 @@ def plot_layered_relu_graph(
                 if abs(weight) < edge_abs_threshold:
                     continue
 
-                src_selected = bool(node_mask[src_idx, src_layer])
-                dst_selected = True if dst_layer == 3 else bool(node_mask[dst_idx, dst_layer])
+                src_selected = bool(layer_node_masks[src_layer][src_idx])
+                dst_selected = (
+                    True
+                    if dst_layer == output_layer_idx
+                    else bool(layer_node_masks[dst_layer][dst_idx])
+                )
                 keep_edge = src_selected and dst_selected
                 if not require_both_edge_endpoints_selected:
                     keep_edge = src_selected or dst_selected
@@ -410,7 +499,7 @@ def plot_layered_relu_graph(
                     colors.append("#d62728")
                 else:
                     colors.append("#1f77b4")
-        elif layer_idx in (1, 2):
+        elif layer_idx < num_hidden_layers:
             colors = ["#f2f2f2"] * width
         else:
             colors = ["#f7d774"]
@@ -418,24 +507,32 @@ def plot_layered_relu_graph(
         ax.scatter(
             xs,
             ys,
-            s=260 if layer_idx < 3 else 520,
+            s=260 if layer_idx < num_hidden_layers else 520,
             c=colors,
             edgecolors="black",
             linewidths=0.6,
             zorder=3,
         )
 
-    for i in range(w0.shape[0]):
+    for i in range(hidden_widths[0]):
         x, y = node_pos[(0, i)]
         label = f"{int(closest_odt[i])}\n{float(signed_closest_cos[i]):+.2f}"
         ax.text(x, y, label, ha="center", va="center", fontsize=5, zorder=4)
 
-    for layer_idx in [1, 2]:
+    for layer_idx in range(1, num_hidden_layers):
         for i in range(widths[layer_idx]):
             x, y = node_pos[(layer_idx, i)]
             ax.text(x, y, str(i), ha="center", va="center", fontsize=5, zorder=4)
 
-    ax.text(*node_pos[(3, 0)], "out", ha="center", va="center", fontsize=8, weight="bold", zorder=4)
+    ax.text(
+        *node_pos[(output_layer_idx, 0)],
+        "out",
+        ha="center",
+        va="center",
+        fontsize=8,
+        weight="bold",
+        zorder=4,
+    )
     for layer_idx, name in enumerate(layer_names):
         ax.text(
             x_positions[layer_idx],
@@ -453,7 +550,7 @@ def plot_layered_relu_graph(
         f"Edges shown if |weight| >= {edge_abs_threshold}.",
         fontsize=13,
     )
-    ax.set_xlim(-0.45, 5.25)
+    ax.set_xlim(-0.45, x_positions[-1] + 0.45)
     ax.set_ylim(-0.04, 1.08)
     ax.axis("off")
 
@@ -493,39 +590,97 @@ def plot_layered_relu_graph(
     ]
     ax.legend(handles=legend_handles, loc="lower center", bbox_to_anchor=(0.5, -0.03), ncol=3)
 
-    print(f"Visible edges: {len(visible_edges)} / {w1.numel() + w2.numel() + wout.numel()}")
-    print(f"First-layer aligned nodes: {int((max_abs_cos >= alignment_abs_threshold).sum())} / {w0.shape[0]}")
+    total_edges = sum(weight.numel() for weight, _, _ in edge_mats)
+    print(f"Visible edges: {len(visible_edges)} / {total_edges}")
+    print(
+        "First-layer aligned nodes: "
+        f"{int((max_abs_cos >= alignment_abs_threshold).sum())} / "
+        f"{hidden_widths[0]}"
+    )
     return alignment, visible_edges, fig, ax
+
+
+def first_layer_neuron_weighted_lens(
+    *,
+    state_dict: dict[str, torch.Tensor],
+    activation_tensor: np.ndarray,
+    first_layer_neuron_id: int,
+    node_mask: np.ndarray | list[np.ndarray] | None = None,
+) -> np.ndarray:
+    """Sum active path weights from one first-layer neuron to the output.
+
+    The result contains one value per example in ``activation_tensor``. A
+    per-layer ``node_mask`` can restrict the sum to paths through selected
+    hidden neurons.
+    """
+    hidden_weights, output_weight = _hidden_weights_from_state_dict(state_dict)
+    hidden_widths = [weight.shape[0] for weight in hidden_weights]
+    num_hidden_layers = len(hidden_widths)
+
+    if not 0 <= first_layer_neuron_id < hidden_widths[0]:
+        raise ValueError(
+            "first_layer_neuron_id must be in "
+            f"[0, {hidden_widths[0] - 1}], got {first_layer_neuron_id}."
+        )
+    if activation_tensor.ndim != 3:
+        raise ValueError(
+            "activation_tensor must have shape (layers, neurons, num_data), "
+            f"got {activation_tensor.shape}."
+        )
+    if activation_tensor.shape[0] != num_hidden_layers:
+        raise ValueError(
+            "activation_tensor must contain one slice per hidden layer. "
+            f"Expected {num_hidden_layers}, got {activation_tensor.shape[0]}."
+        )
+    if activation_tensor.shape[1] < max(hidden_widths):
+        raise ValueError(
+            "activation_tensor has too few neuron entries for the widest "
+            f"hidden layer. Expected at least {max(hidden_widths)}, "
+            f"got {activation_tensor.shape[1]}."
+        )
+    if output_weight.shape != (1, hidden_widths[-1]):
+        raise ValueError(
+            "Expected a scalar output layer with weight shape "
+            f"(1, {hidden_widths[-1]}), got {tuple(output_weight.shape)}."
+        )
+
+    layer_node_masks = _normalize_hidden_node_masks(node_mask, hidden_widths)
+    activations = np.asarray(activation_tensor, dtype=bool)
+    downstream = output_weight[0].numpy()[:, None]
+
+    for layer_idx in range(num_hidden_layers - 1, 0, -1):
+        width = hidden_widths[layer_idx]
+        gated_downstream = (
+            activations[layer_idx, :width]
+            * layer_node_masks[layer_idx][:, None]
+            * downstream
+        )
+        downstream = hidden_weights[layer_idx].numpy().T @ gated_downstream
+
+    first_layer_active = (
+        activations[0, first_layer_neuron_id]
+        * layer_node_masks[0][first_layer_neuron_id]
+    )
+    return first_layer_active * downstream[first_layer_neuron_id]
 
 
 def masked_relu_logits(
     model: ReLUMLP,
     x: np.ndarray,
-    node_mask: np.ndarray,
+    node_mask: np.ndarray | list[np.ndarray],
     *,
     batch_size: int = 8192,
     device: str = "cpu",
 ) -> np.ndarray:
-    """Run ReLU MLP while zeroing hidden activations where ``node_mask[row, layer] == 0``."""
+    """Run a ReLU MLP while zeroing hidden activations selected by a mask."""
     model = model.to(device)
     model.eval()
 
-    keep = torch.as_tensor(node_mask.astype(bool), device=device)
     hidden_widths = [layer.out_features for layer in model.hidden_layers]
-    num_hidden_layers = len(hidden_widths)
-
-    if keep.ndim != 2:
-        raise ValueError(f"node_mask must be 2D, got shape {node_mask.shape}.")
-    if keep.shape[1] != num_hidden_layers:
-        raise ValueError(
-            "node_mask must have one column per hidden layer. "
-            f"Expected {num_hidden_layers}, got {keep.shape[1]}."
-        )
-    if keep.shape[0] < max(hidden_widths):
-        raise ValueError(
-            f"node_mask has too few rows. Need at least {max(hidden_widths)}, "
-            f"got {keep.shape[0]}."
-        )
+    keep = [
+        torch.as_tensor(mask, device=device)
+        for mask in _normalize_hidden_node_masks(node_mask, hidden_widths)
+    ]
 
     x_t = torch.from_numpy(x).float().to(device)
     logits_batches = []
@@ -536,7 +691,7 @@ def masked_relu_logits(
 
             for layer_idx, layer in enumerate(model.hidden_layers):
                 h = torch.relu(layer(h))
-                layer_keep = keep[: hidden_widths[layer_idx], layer_idx].float()
+                layer_keep = keep[layer_idx].float()
                 h = h * layer_keep.unsqueeze(0)
 
             logits = model.output_layer(h).squeeze(-1)
@@ -548,7 +703,7 @@ def masked_relu_logits(
 def masked_accuracy_by_odt_leaf(
     *,
     model: ReLUMLP,
-    node_mask: np.ndarray,
+    node_mask: np.ndarray | list[np.ndarray],
     x_eval: np.ndarray,
     y_eval: np.ndarray,
     tree: COBODTTree,
@@ -603,7 +758,7 @@ def neuron_leaf_responsibility_from_ablation(
     x_eval: np.ndarray,
     y_eval: np.ndarray,
     tree: COBODTTree,
-    base_node_mask: np.ndarray | None = None,
+    base_node_mask: np.ndarray | list[np.ndarray] | None = None,
     min_log_loss_delta: float = 0.05,
     min_relative_log_loss_delta: float | None = None,
     min_accuracy_drop: float | None = None,
@@ -612,26 +767,18 @@ def neuron_leaf_responsibility_from_ablation(
 ) -> tuple[dict[tuple[int, int], dict[str, Any]], pd.DataFrame, pd.DataFrame]:
     """Assign hidden neurons to ODT leaves by single-neuron ablation impact."""
     hidden_widths = [layer.out_features for layer in model.hidden_layers]
-    num_hidden_layers = len(hidden_widths)
-    max_width = max(hidden_widths)
-
-    if base_node_mask is None:
-        base_node_mask = np.ones((max_width, num_hidden_layers), dtype=int)
-    else:
-        base_node_mask = np.array(base_node_mask, dtype=int, copy=True)
-
-    if base_node_mask.shape[1] != num_hidden_layers:
-        raise ValueError(
-            f"base_node_mask must have {num_hidden_layers} columns, got {base_node_mask.shape[1]}."
+    layer_node_masks = [
+        mask.copy()
+        for mask in _normalize_hidden_node_masks(
+            base_node_mask,
+            hidden_widths,
+            name="base_node_mask",
         )
-    if base_node_mask.shape[0] < max_width:
-        raise ValueError(
-            f"base_node_mask must have at least {max_width} rows, got {base_node_mask.shape[0]}."
-        )
+    ]
 
     baseline_df = masked_accuracy_by_odt_leaf(
         model=model,
-        node_mask=base_node_mask,
+        node_mask=layer_node_masks,
         x_eval=x_eval,
         y_eval=y_eval,
         tree=tree,
@@ -651,11 +798,11 @@ def neuron_leaf_responsibility_from_ablation(
 
     for layer_idx, width in enumerate(hidden_widths):
         for neuron_id in range(width):
-            if base_node_mask[neuron_id, layer_idx] == 0:
+            if not layer_node_masks[layer_idx][neuron_id]:
                 continue
 
-            ablated_mask = base_node_mask.copy()
-            ablated_mask[neuron_id, layer_idx] = 0
+            ablated_mask = [mask.copy() for mask in layer_node_masks]
+            ablated_mask[layer_idx][neuron_id] = False
 
             ablated_df = masked_accuracy_by_odt_leaf(
                 model=model,
