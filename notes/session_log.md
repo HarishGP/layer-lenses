@@ -2655,3 +2655,65 @@ theorems.
   comparison, given the measured sensitivity above.
 - `LR = 0.5` for the flow step size is a guess; the right value depends on the
   init scale, which is hand-set.
+
+---
+
+## 2026-09-14 IST — One-hidden-layer control added to the trajectory notebook
+
+### Goal
+Add a simpler experiment before the two-hidden-layer one: d -> 4 (trainable)
+-> 1 output with a frozen +-1 vector, no 2^D layer.
+
+### User prompts (verbatim)
+- "Can you also create a simpler experiment first with just one hidden layer, with 4 units? No second layer with 2^4 units. Directly connect to the output with a similar a vector.  Add this in the cells before the more complicated 2 hidden layer experiments."
+
+### Changes
+- Restructured `notebooks/ReLU_single_path_trajectory.ipynb` (38 -> 50 cells):
+  shared helpers now precede both experiments, then Experiment A (one hidden
+  layer), then Experiment B (2^D frozen sign patterns), then an A-vs-B
+  comparison, the Thm-2 probe run on both, and an init sweep run in both
+  architectures.
+- Helpers generalised to be architecture-agnostic: `first_layer_only_mask`
+  takes `hidden_dims`; `second_order_probe` and `hierarchy_seeking_table` take a
+  template model and probe data explicitly; added `train_first_layer`, `as_run`,
+  `lens_matrix`, `check_lens_reproduces_gradient`, `upsilon_summary`,
+  `capture_epoch_table`, `gradient_trajectory`, `report_hierarchy_seeking`.
+- Both experiments share one hand-edit init cell (`INIT_COEFFS`), with per-
+  experiment override points (`coeffs_A`, `coeffs_B`).
+
+### Decisions
+- Experiment A is framed as the **no-lens control**, not merely a smaller model:
+  with one hidden layer the lens is the constant `a_k`, so a neuron is a
+  separator but nobody's lens. The only remaining coupling is the shared
+  residue. The notebook header derives the resulting closed form,
+  `-a_k a_l E[sigma' g_k g_l (h.x)(z.x)]`, which vanishes at an ODT-orthogonal
+  init except through the label dependence of sigma'.
+- `first_layer_neuron_weighted_lens` handles the one-hidden-layer case
+  correctly (returns `a_k * blinder`); verified in the notebook by asserting the
+  lens takes only values {0, a_k} and by the residue x lens x blinder rebuild.
+- The A-vs-B comparison reports median |response| ratio, not just sign
+  agreement, because A's predicted response is near zero and sign agreement is
+  then meaningless.
+- Softened the split-half stability warning: low stability in A is the expected
+  outcome (the estimand is ~0), not a misconfigured probe.
+
+### Measured during setup (preliminary, not a result)
+- Probes at the paper init, d=100, 1e5 per half, PROBE_EPS=1e-2, no training:
+  - A (no lens): Thm-1 agreement 0.483, median |response| 1.8e-06, split-half
+    stability 0.566, correlation 0.181.
+  - B (lens): agreement 0.365, median |response| 5.0e-03, stability 0.951,
+    correlation 0.859.
+  - So the cross-neuron second-order coupling is ~2700x larger with the lens
+    present; the residue-only channel is negligible, matching the derivation.
+  - B's *sign* agreement at this random output vector is below chance, which is
+    the `OUTPUT_SIGN_CHOICE` sensitivity logged in the previous entry.
+
+### Current state / where to pick up
+- Smoke-executed out-of-place at tiny config (d=40, n=20k, 40 epochs, CPU): all
+  50 cells run. Not run at the real config; outputs cleared.
+- Next: user's hand-picked `INIT_COEFFS`, then compare the A and B trajectories
+  for the DLGN staging.
+
+### Open questions
+- Unchanged from the previous entry: random vs all-positive output signs, and
+  the `LR = 0.5` flow step size.

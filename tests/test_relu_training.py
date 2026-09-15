@@ -30,6 +30,11 @@ def test_train_relu_mlp_smoke() -> None:
     assert set(out["checkpoint_snapshots"].keys()) == {0, 2, 4}
 
 
+def test_relu_train_config_sgd_momentum_default_is_zero() -> None:
+    assert ReLUTrainConfig().momentum == 0.0
+    assert ReLUTrainConfig(optimizer="sgd").momentum == 0.0
+
+
 def test_train_relu_mlp_sgd_smoke() -> None:
     x = np.random.randn(128, 10).astype(np.float32)
     y = np.where(np.random.randn(128) > 0, 1, -1).astype(np.int8)
@@ -50,6 +55,39 @@ def test_train_relu_mlp_sgd_smoke() -> None:
     )
     assert len(out["epoch_losses"]) == 4
     assert set(out["checkpoint_snapshots"].keys()) == {0, 2, 4}
+
+
+def test_train_relu_mlp_sgd_momentum_changes_updates() -> None:
+    x = np.random.randn(128, 10).astype(np.float32)
+    y = np.where(np.random.randn(128) > 0, 1, -1).astype(np.int8)
+    model_plain = ReLUMLP(input_dim=10, hidden_dims=[16, 16], bias=False)
+    model_momentum = ReLUMLP(input_dim=10, hidden_dims=[16, 16], bias=False)
+    model_momentum.load_state_dict(model_plain.state_dict())
+
+    shared_kwargs = dict(
+        epochs=4,
+        lr=1e-2,
+        batch_size=32,
+        seed=456,
+        snapshot_epochs=(0, 4),
+        optimizer="sgd",
+    )
+    out_plain = train_relu_mlp(
+        model=model_plain,
+        x_train=x,
+        y_train=y,
+        config=ReLUTrainConfig(**shared_kwargs, momentum=0.0),
+    )
+    out_momentum = train_relu_mlp(
+        model=model_momentum,
+        x_train=x,
+        y_train=y,
+        config=ReLUTrainConfig(**shared_kwargs, momentum=0.9),
+    )
+
+    w_plain = out_plain["checkpoint_snapshots"][4]["hidden_layers.0.weight"]
+    w_momentum = out_momentum["checkpoint_snapshots"][4]["hidden_layers.0.weight"]
+    assert not torch.allclose(w_plain, w_momentum)
 
 
 def test_first_layer_gradient_projection_keeps_sgd_update_orthogonal() -> None:

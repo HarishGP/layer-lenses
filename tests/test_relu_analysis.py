@@ -1,17 +1,138 @@
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 
 from layer_lenses.odt import generate_cob_odt_data
 from layer_lenses.relu_analysis import (
     activation_tensor_by_layer_neuron_data,
     active_point_mask_for_neuron,
     count_active_points_for_neuron_leaf,
+    first_layer_neuron_weighted_lens,
     log_loss_gradients,
+    masked_relu_logits,
+    neuron_leaf_responsibility_from_ablation,
+    plot_layered_relu_graph,
     run_single_relu_seed,
     summarize_neuron_leaf_activity,
 )
 from layer_lenses.relu_mlp import ReLUMLP
 from layer_lenses.relu_training import ReLUTrainConfig, train_relu_mlp
+
+
+def test_first_layer_weighted_lens_matches_autograd_for_one_to_three_layers() -> None:
+    rng = np.random.default_rng(1)
+    x = rng.normal(size=(12, 5)).astype(np.float32)
+
+    for hidden_dims in ([4], [4, 3], [4, 3, 2]):
+        model = ReLUMLP(input_dim=5, hidden_dims=list(hidden_dims), bias=False)
+        activations = activation_tensor_by_layer_neuron_data(
+            model=model,
+            x_eval=x,
+        )
+        x_t = torch.from_numpy(x)
+        first_preactivation = model.hidden_layers[0](x_t)
+        first_preactivation.retain_grad()
+        h = torch.relu(first_preactivation)
+        for layer in model.hidden_layers[1:]:
+            h = torch.relu(layer(h))
+        model.output_layer(h).sum().backward()
+
+        for neuron_id in range(hidden_dims[0]):
+            lens = first_layer_neuron_weighted_lens(
+                state_dict=model.state_dict(),
+                activation_tensor=activations,
+                first_layer_neuron_id=neuron_id,
+            )
+            expected = first_preactivation.grad[:, neuron_id].numpy()
+
+            assert np.allclose(lens, expected, atol=1e-6)
+
+
+def test_masked_relu_logits_accepts_different_width_per_layer_masks() -> None:
+    rng = np.random.default_rng(2)
+    x = rng.normal(size=(12, 5)).astype(np.float32)
+    model = ReLUMLP(input_dim=5, hidden_dims=[4, 3, 2], bias=False)
+    node_masks = [
+        np.ones(4, dtype=bool),
+        np.ones(3, dtype=bool),
+        np.ones(2, dtype=bool),
+    ]
+
+    masked_logits = masked_relu_logits(model, x, node_masks)
+    expected_logits = model(torch.from_numpy(x)).detach().numpy()
+
+    assert np.allclose(masked_logits, expected_logits, atol=1e-6)
+
+
+def test_neuron_responsibility_accepts_per_layer_masks() -> None:
+    x, y, tree, _ = generate_cob_odt_data(
+        num_data=32,
+        dim=5,
+        depth=2,
+        seed=4,
+    )
+    model = ReLUMLP(input_dim=5, hidden_dims=[3, 2], bias=False)
+    base_node_mask = [
+        np.ones(3, dtype=bool),
+        np.ones(2, dtype=bool),
+    ]
+
+    _, detail, baseline = neuron_leaf_responsibility_from_ablation(
+        model=model,
+        x_eval=x,
+        y_eval=y,
+        tree=tree,
+        base_node_mask=base_node_mask,
+        min_log_loss_delta=-1e6,
+    )
+
+    assert set(detail["layer"]) == {0, 1}
+    assert set(detail["neuron_id"]) == {0, 1, 2}
+    assert not baseline.empty
+
+
+def test_plot_layered_relu_graph_supports_one_to_three_hidden_layers() -> None:
+    _, _, tree, _ = generate_cob_odt_data(num_data=32, dim=5, depth=2, seed=2)
+
+    for hidden_dims in ([4], [4, 3], [4, 3, 2]):
+        model = ReLUMLP(input_dim=5, hidden_dims=list(hidden_dims), bias=False)
+        expected_edges = sum(
+            src_width * dst_width
+            for src_width, dst_width in zip(hidden_dims, hidden_dims[1:])
+        ) + hidden_dims[-1]
+
+        _, visible_edges, fig, _ = plot_layered_relu_graph(
+            state_dict=model.state_dict(),
+            tree=tree,
+            depth=2,
+            epoch=0,
+            edge_abs_threshold=0.0,
+        )
+
+        assert len(visible_edges) == expected_edges
+        plt.close(fig)
+
+
+def test_plot_layered_relu_graph_accepts_per_layer_masks_with_different_widths() -> None:
+    _, _, tree, _ = generate_cob_odt_data(num_data=32, dim=5, depth=2, seed=3)
+    model = ReLUMLP(input_dim=5, hidden_dims=[4, 3, 2], bias=False)
+    node_masks = [
+        np.array([True, False, False, False]),
+        np.array([True, True, False]),
+        np.array([False, True]),
+    ]
+
+    _, visible_edges, fig, _ = plot_layered_relu_graph(
+        state_dict=model.state_dict(),
+        tree=tree,
+        depth=2,
+        epoch=0,
+        node_mask=node_masks,
+        edge_abs_threshold=0.0,
+    )
+
+    assert len(visible_edges) == 5
+    plt.close(fig)
 
 
 def test_summarize_neuron_leaf_activity_matches_point_queries() -> None:
