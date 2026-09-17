@@ -107,6 +107,7 @@ def run_single_relu_seed(
     weight_decay: float,
     snapshot_epochs,
     bias: bool = False,
+    activation: str = "relu",
     model_init: ReLUMLP | None = None,
     odt_hyperplanes: Literal["random_orthogonal", "coordinate_axes"] = "random_orthogonal",
     parameter_update_mask: dict[str, np.ndarray | torch.Tensor] | None = None,
@@ -121,7 +122,8 @@ def run_single_relu_seed(
     """Generate COB-ODT data, train one ReLU MLP seed, and return notebook-friendly state.
 
     If ``model_init`` is provided, training starts from a copy of that model instead of
-    constructing a new model from ``master_seed + 1000``.
+    constructing a new model from ``master_seed + 1000``; the model's own activation
+    convention is then used and ``activation`` is ignored.
 
     If ``project_first_layer_grad_orthogonal`` is an integer, first-layer weight
     gradients are projected orthogonal to that ODT internal node's normal vector.
@@ -172,7 +174,12 @@ def run_single_relu_seed(
 
     if model_init is None:
         set_seed(init_seed)
-        model = ReLUMLP(input_dim=dim, hidden_dims=hidden_dims, bias=bias)
+        model = ReLUMLP(
+            input_dim=dim,
+            hidden_dims=hidden_dims,
+            bias=bias,
+            activation=activation,
+        )
     else:
         if model_init.input_dim != dim:
             raise ValueError(
@@ -612,6 +619,33 @@ def first_layer_neuron_weighted_lens(
     The result contains one value per example in ``activation_tensor``. A
     per-layer ``node_mask`` can restrict the sum to paths through selected
     hidden neurons.
+
+    Write the bias-free network with hidden layers ``i = 0, ..., M-1`` as
+
+        h_{-1} = x,   z_i = W_i h_{i-1},   h_i = phi(z_i),   yhat = a . h_{M-1}
+
+    with ``phi = ReLU`` and blinders ``g_i[j] = phi'(z_i[j])`` in ``{0, 1}``
+    (the boolean gates supplied in ``activation_tensor``). For first-layer
+    neuron ``k`` this function returns
+
+        Lambda_k(x) = d yhat / d z_0[k]
+                    = g_0[k] * sum over paths k -> output of
+                        (product of the weights along the path)
+                      * (product of the blinders of the *interior* neurons on it)
+
+    i.e. the lens that the rest of the network presents to neuron ``k``, times
+    that neuron's own blinder. It is exactly the scalar in the first-layer chain
+    rule,
+
+        dL / dw_k = E[ (dL / d yhat) * Lambda_k(x) * x ],
+
+    so it is the "lens x blinder" half of the residue x lens x blinder x y x
+    factorisation the notebooks use.
+
+    With a single hidden layer (``M = 1``) there are no interior neurons, the
+    path sum is the single edge ``a_k``, and the result collapses to
+    ``a_k * g_0[k]`` -- taking only the two values ``{0, a_k}``. That is the
+    no-lens case: the factor no longer depends on the other neurons at all.
     """
     hidden_weights, output_weight = _hidden_weights_from_state_dict(state_dict)
     hidden_widths = [weight.shape[0] for weight in hidden_weights]
@@ -646,22 +680,59 @@ def first_layer_neuron_weighted_lens(
 
     layer_node_masks = _normalize_hidden_node_masks(node_mask, hidden_widths)
     activations = np.asarray(activation_tensor, dtype=bool)
-    downstream = output_weight[0].numpy()[:, None]
+
+    # ``downstream`` is the reverse accumulation ``d yhat / d h_{i-1}``, carried
+    # one layer at a time from the output back toward the first layer. Entry
+    # ``[j, n]`` is that derivative for neuron ``j`` of layer ``i-1`` on example
+    # ``n``. Equivalently: the sum over all paths from that neuron to the output
+    # of the product of path weights, keeping only paths whose interior neurons
+    # are all active and unmasked.
+    #
+    # Seed at the output layer: ``d yhat / d h_{M-1}[j] = a_j``, the same for
+    # every example. The trailing axis is therefore length 1; it broadcasts
+    # against the per-example gates below and becomes example-dependent at the
+    # first gating step.
+    downstream = output_weight[0].numpy()[:, None]          # (w_{M-1}, 1)
 
     for layer_idx in range(num_hidden_layers - 1, 0, -1):
         width = hidden_widths[layer_idx]
-        gated_downstream = (
-            activations[layer_idx, :width]
-            * layer_node_masks[layer_idx][:, None]
-            * downstream
-        )
-        downstream = hidden_weights[layer_idx].numpy().T @ gated_downstream
 
+        # Apply layer i's blinders, turning d yhat / d h_i into d yhat / d z_i:
+        #
+        #     d yhat / d z_i[j] = g_i[j] * m_i[j] * d yhat / d h_i[j]
+        #
+        # The mask factor ``m_i`` is how the caller deletes paths: a zero there
+        # drops every path through neuron j from the sum, exactly as a closed
+        # gate would.
+        gated_downstream = (
+            activations[layer_idx, :width]                  # (width, n)  gates g_i
+            * layer_node_masks[layer_idx][:, None]          # (width, 1)  mask m_i
+            * downstream                                    # (width, n) or (width, 1)
+        )                                                   # -> (width, n)
+
+        # Step back through the linear map z_i = W_i h_{i-1}:
+        #
+        #     d yhat / d h_{i-1}[j'] = sum_j W_i[j, j'] * d yhat / d z_i[j]
+        #
+        # which is W_i transposed applied to the gated vector. One such product
+        # per iteration extends every path by one more edge.
+        downstream = hidden_weights[layer_idx].numpy().T @ gated_downstream
+        #            (w_{i-1}, width) @ (width, n)  ->  (w_{i-1}, n)
+
+    # The loop stops before ``layer_idx == 0``, so ``downstream`` now holds
+    # ``d yhat / d h_0``: all path weights from each first-layer neuron to the
+    # output, with the blinders of every interior neuron applied but *not* the
+    # first layer's own. That remaining factor is the lens Lambda_k in the paper's
+    # sense -- it depends only on the other neurons.
+    #
+    # Multiplying by neuron k's own gate (and its mask entry) closes the chain
+    # rule at ``d yhat / d z_0[k]``. When ``M == 1`` the loop body never ran and
+    # ``downstream`` is still the seed ``a``, giving ``a_k * g_0[k]``.
     first_layer_active = (
         activations[0, first_layer_neuron_id]
         * layer_node_masks[0][first_layer_neuron_id]
     )
-    return first_layer_active * downstream[first_layer_neuron_id]
+    return first_layer_active * downstream[first_layer_neuron_id]   # (n,)
 
 
 def masked_relu_logits(
@@ -690,7 +761,7 @@ def masked_relu_logits(
             h = x_t[start : start + batch_size]
 
             for layer_idx, layer in enumerate(model.hidden_layers):
-                h = torch.relu(layer(h))
+                h = model.activation.apply(layer(h))
                 layer_keep = keep[layer_idx].float()
                 h = h * layer_keep.unsqueeze(0)
 
@@ -1006,8 +1077,12 @@ def _precompute_hidden_activation_masks(
             h = x_t[start : start + batch_size]
             for layer_idx, layer in enumerate(model.hidden_layers):
                 pre_act = layer(h)
-                hidden_masks_per_layer[layer_idx].append((pre_act > 0).detach().cpu())
-                h = torch.relu(pre_act)
+                # Blinders must follow the model's own subgradient convention:
+                # ``relu`` gates on ``> 0``, ``relu_one_at_zero`` on ``>= 0``.
+                hidden_masks_per_layer[layer_idx].append(
+                    model.activation.gate(pre_act).detach().cpu()
+                )
+                h = model.activation.apply(pre_act)
 
     activation_masks = [torch.cat(parts, dim=0).numpy() for parts in hidden_masks_per_layer]
     layer_widths = [layer.out_features for layer in model.hidden_layers]

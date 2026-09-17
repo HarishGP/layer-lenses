@@ -2717,3 +2717,147 @@ Add a simpler experiment before the two-hidden-layer one: d -> 4 (trainable)
 ### Open questions
 - Unchanged from the previous entry: random vs all-positive output signs, and
   the `LR = 0.5` flow step size.
+
+## 2026-09-15 IST — ReLU subgradient convention at zero (phi'(0) = 1)
+
+### Goal
+Give a bias-free neuron sitting exactly at `w_k = 0` a way to leave the origin
+without hand-picking its escape direction, so the paper's Sec. 3.3 init (which
+starts `w_1 = 0`) can be run literally with `INIT_RANDOM_SCALE = 0.0`.
+
+### User prompts (verbatim)
+- "what derivative does pytorch assign to relu at 0?"
+- "is there a modified relu that we can use that behaves the same as relu on a forward pass but assigns a derivative of 1 at 0 instead? that would also be a valid interpretation of relu, right?"
+- "yes, add it to src and add the switch to the notebook"
+
+### Changes
+- New `src/layer_lenses/activations.py`: `ReLUOneAtZero` (autograd Function with
+  `phi'(0) = 1`), `relu_one_at_zero`, an `ActivationSpec` dataclass pairing a
+  forward map with its matching blinder predicate, the `RELU` /
+  `RELU_ONE_AT_ZERO` specs, `ACTIVATIONS`, and `resolve_activation`.
+- `ReLUMLP` takes `activation: str | ActivationSpec = "relu"` and applies
+  `self.activation.apply` in `forward`. Default preserves existing behaviour.
+- `relu_analysis`: `masked_relu_logits` and `_precompute_hidden_activation_masks`
+  now use the model's own spec instead of hardcoding `torch.relu` / `> 0`;
+  `run_single_relu_seed` gained an `activation` kwarg for the no-`model_init`
+  path.
+- New `tests/test_activations.py` (7 tests): forward bit-identity to
+  `torch.relu` in float32/float64 including `-0.0`, the gradients differing only
+  at zero, name resolution, gate/backward agreement, the zero-row neuron being
+  frozen under `relu` and freed otherwise (with other neurons' gradients
+  unchanged), and analysis blinders following the model's convention.
+- `notebooks/ReLU_single_path_trajectory.ipynb` (50 -> 53 cells): `ACTIVATION`
+  config switch (default `"relu_one_at_zero"`), passed to both model builders; a
+  post-init cell reporting `||w_k||` and warning if a neuron is at the origin
+  under `"relu"`; a diagnostic cell in Experiment A tabulating per-neuron
+  gradient norms under both conventions and printing the freed neuron's top ODT
+  gradient coordinates; rewritten intro caveat; an ablation note in Sec. 8.
+
+### Decisions
+- `phi'(0) = 1` is the upper endpoint of the Clarke subdifferential
+  `d phi(0) = [0, 1]`; PyTorch picks the lower one. Neither is canonical, so this
+  is a convention switch, not a modified activation. Forward is bit-identical.
+- The `ActivationSpec` carries a `gate` predicate alongside `apply` because the
+  analysis code reconstructs blinders from pre-activations rather than from
+  autograd: `relu` gates on `> 0`, `relu_one_at_zero` on `>= 0`. Keeping these
+  in one object is what stops the lens computation from silently disagreeing
+  with the gradient.
+- Notebook default is `"relu_one_at_zero"` because the user's current config has
+  `INIT_RANDOM_SCALE = 0.0` and an all-zero `INIT_COEFFS` row 0, i.e. `w_1 = 0`
+  exactly, which `"relu"` would freeze for the entire run.
+- Framing: this is an *escape rule for a degenerate point*, not an ongoing
+  change. The conventions differ only on `{x : w_k . x = 0}`, measure-zero once
+  the neuron is off the origin. At the origin the blinder is 1 everywhere, so
+  the neuron takes one step as if linear, seeing the full unmasked
+  `E[residue * a_k * y x]`.
+
+### Measured during setup (preliminary, not a result)
+- Paper Sec. 3.3 init with `w_1 = 0` exactly, d=100, D=4, n=20k, one-hidden-layer
+  model: loss identical under both conventions (0.691647); per-neuron gradient
+  norms `[0.0, 0.008037, 0.008244, 0.008180]` under `relu` versus
+  `[0.014436, 0.008037, 0.008244, 0.008180]` under `relu_one_at_zero`. Only the
+  degenerate row changes, to every printed digit.
+
+### Process note
+- Re-running the previous session's scratchpad builder (`build_nb3.py`)
+  overwrote the user's own notebook edits (`N_TRAIN` 1e6, `EPS` 0.01,
+  `INIT_RANDOM_SCALE` 0.0, `LR` 0.25, flipped init signs, both output presets
+  `"all_positive"`). Restored from the committed copy and switched to in-place
+  `nbformat` edits. The builder is now stale and was renamed
+  `STALE_DO_NOT_RUN_build_nb3.py`; the notebook in the repo is the source of
+  truth. **Do not regenerate this notebook from a builder script.**
+
+### Current state / where to pick up
+- Full test suite green (56 tests). Notebook smoke-executed out-of-place at tiny
+  config (d=40, n=20k, 40 epochs): all 53 cells run. The user's 17 committed
+  cell outputs were preserved, not cleared.
+- Next: rerun at the real config and use the `ACTIVATION` ablation to check
+  whether any hierarchy staging depends on how `w_1` leaves the origin.
+
+### Open questions
+- Whether `phi'(0) = 1` biases where `w_1` lands: at the origin the neuron sees
+  both half-spaces, so its first step is the full linear signal. Worth comparing
+  against several `INIT_RANDOM_SCALE > 0` seeds to see if they agree on the
+  landing node.
+- Unchanged from previous entries: random vs all-positive output signs, and the
+  flow step size.
+
+## 2026-09-17 IST — Math comments for the lens path-sum accumulator
+
+### Goal
+Make the `downstream` reverse accumulation in
+`first_layer_neuron_weighted_lens` readable without re-deriving it.
+
+### User prompts (verbatim)
+- "Can you add some detailed comments expressing mathematically what the "downstream" variable in function first_layer_neuron_weighted_lens of relu_analysis.py is doing? It seems too dense for a quick check."
+
+### Changes
+- Comments and docstring only in `src/layer_lenses/relu_analysis.py`; no
+  behaviour change. The docstring now states the identity the function computes,
+  `Lambda_k(x) = d yhat / d z_0[k]`, its path-sum form, its role in
+  `dL/dw_k = E[(dL/d yhat) * Lambda_k(x) * x]`, and the `M = 1` collapse to
+  `a_k * g_0[k]`. Inline comments label each loop step
+  (`d yhat / d h_i` -> `d yhat / d z_i` -> `d yhat / d h_{i-1}`) with shapes.
+
+### Decisions
+- Documented the return as the *weighted* lens (lens x own blinder), not the
+  lens alone, since that is what the code returns and what the notebooks
+  multiply by the residue.
+- No new test: `test_first_layer_weighted_lens_matches_autograd_for_one_to_three_layers`
+  already pins exactly this identity by comparing against
+  `first_preactivation.grad[:, neuron_id]`.
+
+### Verified
+- Re-derived against autograd for `hidden_dims` `[4]`, `[5, 3]`, `[4, 6, 3]`:
+  max |manual - autograd| = 0.0, 9.3e-10, 1.9e-09.
+- `M = 1` lens takes exactly the two values `{0, a_k}` for every neuron.
+- Full suite green (56 tests).
+
+## 2026-09-17 IST — Correction: notebook half of the ACTIVATION entry was overwritten
+
+### What happened
+The 2026-09-15 entry above records a `notebooks/ReLU_single_path_trajectory.ipynb`
+change (50 -> 53 cells: an `ACTIVATION` config switch, a post-init degeneracy
+report, and a both-conventions gradient diagnostic in Experiment A). Those cells
+are **not** in the repo. The notebook was open in an editor and a later save from
+it overwrote the agent's edits; the file is back to 50 cells with no `ACTIVATION`
+constant. The `src/` and `tests/` half of that entry is accurate and intact.
+
+### Current notebook state (the user's own edits, committed here)
+- `activation="relu_one_at_zero"` hardcoded at both `ReLUMLP(...)` call sites
+  instead of read from a config constant, so the convention is not a one-line
+  ablation switch and the two call sites can drift apart.
+- `V_NODES = [11, 12, 13, 14]` with the extra tilts moved to `u_13` / `u_14`
+  (was `[7, 8, 9, 10]` with tilts on `u_7` / `u_8`). The `# paper's v = ...`
+  comment still names the old nodes.
+- New `train_all_layers` helper: `parameter_update_mask=None`, so it does train
+  every layer; its docstring is a stale copy of `train_first_layer`'s and still
+  says "W_1 only".
+- No diagnostic for the `w_1 = 0` degeneracy, so with `INIT_RANDOM_SCALE = 0.0`
+  nothing in the notebook reports which neurons sit at the origin.
+
+### Process note
+Second clobber of this notebook in three days (the first was the agent's stale
+builder script, logged above). The notebook is edited interactively; agents
+should re-read it immediately before editing and prefer `src/` for anything
+durable.

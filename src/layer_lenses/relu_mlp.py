@@ -7,6 +7,8 @@ import math
 import torch
 from torch import nn
 
+from layer_lenses.activations import ActivationSpec, resolve_activation
+
 
 class ReLUMLP(nn.Module):
     """Simple MLP that returns scalar logits of shape (batch,)."""
@@ -17,6 +19,7 @@ class ReLUMLP(nn.Module):
         input_dim: int,
         hidden_dims: list[int],
         bias: bool = False,
+        activation: str | ActivationSpec = "relu",
     ) -> None:
         super().__init__()
         if not hidden_dims:
@@ -24,6 +27,7 @@ class ReLUMLP(nn.Module):
 
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
+        self.activation = resolve_activation(activation)
         self.hidden_layers = nn.ModuleList()
 
         prev = input_dim
@@ -45,5 +49,5 @@ class ReLUMLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = x
         for layer in self.hidden_layers:
-            h = torch.relu(layer(h))
+            h = self.activation.apply(layer(h))
         return self.output_layer(h).squeeze(-1)
