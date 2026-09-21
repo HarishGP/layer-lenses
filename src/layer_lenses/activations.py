@@ -55,18 +55,28 @@ class ActivationSpec:
     gate: Callable[[torch.Tensor], torch.Tensor]
 
 
+def gate_strict(pre_activation: torch.Tensor) -> torch.Tensor:
+    """Blinder for ``phi'(0) = 0``: the kink itself is off."""
+    return pre_activation > 0
+
+
+def gate_inclusive(pre_activation: torch.Tensor) -> torch.Tensor:
+    """Blinder for ``phi'(0) = 1``: the kink itself is on."""
+    return pre_activation >= 0
+
+
 RELU = ActivationSpec(
     name="relu",
     subgradient_at_zero=0.0,
     apply=torch.relu,
-    gate=lambda pre_activation: pre_activation > 0,
+    gate=gate_strict,
 )
 
 RELU_ONE_AT_ZERO = ActivationSpec(
     name="relu_one_at_zero",
     subgradient_at_zero=1.0,
     apply=relu_one_at_zero,
-    gate=lambda pre_activation: pre_activation >= 0,
+    gate=gate_inclusive,
 )
 
 ACTIVATIONS: dict[str, ActivationSpec] = {
