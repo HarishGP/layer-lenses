@@ -2861,3 +2861,336 @@ Second clobber of this notebook in three days (the first was the agent's stale
 builder script, logged above). The notebook is edited interactively; agents
 should re-read it immediately before editing and prefer `src/` for anything
 durable.
+
+---
+
+## 2026-09-22 12:12 IST — Replayable training: optimizer-state snapshots and one-epoch replay
+
+### Goal
+Separate the optimizer's contribution (Adam, mini-batches) from the population
+gradient in the ReLU-on-ODT learning-dynamics analysis. Concretely: snapshot the
+optimizer state alongside the model state so any snapshot epoch can be re-run
+step-by-step, exposing the per-mini-batch gradients, updates, and Adam step
+sizes. Also stop storing the data arrays in `seed_result`, which had pushed
+pickles past 1 GB.
+
+### User prompts (verbatim)
+- "Populate your context from the relevant notes in the project.\n\nI have trained several ReLU nets on the depth 5 ODT dataset with various hyperparameters, and only low batchsize Adam actually trains (current hyperparams in scratch.ipynb).\n\nI am trying to build a theory of feature learning in multiple layers, and even population gradient flow is hard to analyse so Adam with min-batches is beyond my current ability. I do however believe that the fundamental feature learning mechanism is mostly in population gradient flow itself, and the mini-batches and Adam simply enable the existing mechanism in population gradient flow.  How this \"enabling\" happens is also an intriguing question I want to analyse, but later.\n\nEither way, I want to separate out the effect of Adam/SGD from my analysis. I am right now saving a longish run (about 20 minutes) at checkpoint epochs and trying to analyse the gradient. And the gradient (over the entire dataset) at some intermediate epoch seems to be pointing in a very different direction to the difference in parameters between nearby epochs. This is likely due to the effect of the parameters in neighbouring epochs coming from a dynamic update over multiple steps and also Adam step-size shenanigans. \n\nI want a way to see the sequence of actual updates in an intermediate epoch. To this end I need my seed_result to save the state of the optimizer.  That way I can give a checkpoint and get the sequence of gradients, updates, and step-size for that epoch. \n\nCan you create a new notebook with just this training functionality similar to scratch.ipynb? No analysis cells after the loss plot required for now. Also, have the seed_result not store the data, but rather just generate it again when needed. As the file sizes are getting too big to store the snapshots and the majority of it is coming from the data size (1million 100 dimensional data is more than 1 GB). \n\nAlso create helper functions in ReLU_analysis which takes in a snapshot epoch and reruns the training from that point for just one epoch and gives the relevant gradients, updates, and step-sizes etc. \n\nOnly create this new notebook and add functions to ReLU_analysis. Make no other changes."
+- "Yes, add the session log entry"
+
+### Changes
+- `src/layer_lenses/relu_analysis.py` (+776 lines, appended at the end plus an
+  extended import block):
+  - `train_relu_mlp_with_optimizer_snapshots` — mirrors `train_relu_mlp` but
+    additionally records, at each snapshot epoch, `optimizer.state_dict()` on CPU
+    (Adam moments and step counters, or SGD momentum buffers, plus the LR in
+    force) and, under `shuffle_each_epoch=True`, the state of the generator that
+    draws the mini-batch permutation.
+  - `run_single_relu_seed_replayable` — same seed convention and arithmetic as
+    `run_single_relu_seed`, but returns `data_spec` instead of `data`, plus
+    `model_spec`, the `ReLUTrainConfig` used, and the optimizer snapshots.
+  - `regenerate_seed_result_data` — rebuilds the train/eval split from
+    `data_spec`, asserting the regenerated ODT matches the stored tree. Falls
+    through to a legacy `seed_result["data"]` if present.
+  - `replay_epoch_from_snapshot` — restores model + optimizer at the start of a
+    snapshot epoch, re-runs that epoch's mini-batches, and records per step: the
+    gradient the optimizer consumed (post projection/mask), the parameter update,
+    the optimizer state after the step, the Adam decomposition
+    (`adam_step_size`, `adam_direction`, `adam_update`, `weight_decay_update`),
+    and optionally the full-dataset population gradient at that step's starting
+    parameters. Verifies the replayed end-of-epoch parameters and Adam moments
+    against the next stored snapshot.
+  - `epoch_replay_summary_table` — one row per step: gradient/update norms and
+    cosines between update, mini-batch gradient, population gradient, and the
+    whole-epoch parameter change; Adam per-coordinate step-size quantiles and the
+    weight-decay fraction of the update.
+  - `epoch_replay_parameter_series`, `flatten_named_tensors`, and the
+    `save_seed_result_pickle` / `load_seed_result_pickle` pair (moved in from
+    `scratch.ipynb` cell 1), plus small private helpers
+    (`_build_relu_optimizer`, `_relu_training_step`, `_epoch_permutation`,
+    `_generate_cob_odt_split`, `_adam_step_decomposition`, ...).
+- `notebooks/ReLU_replayable_training.ipynb` (new, 10 cells): training-only
+  counterpart of `scratch.ipynb` with the same hyperparameters (seed 5178, d=100,
+  depth 5, 1M train, [40,40,40], 10k epochs, Adam, batch 10k, cuda). Imports,
+  config, run, save/load, data regeneration, loss plot, then a single usage cell
+  demonstrating `replay_epoch_from_snapshot` + `epoch_replay_summary_table`.
+
+### Decisions
+- **The replay trainer lives in `relu_analysis.py`, not `relu_training.py`.** The
+  user asked for changes confined to the new notebook and `relu_analysis`, so
+  `train_relu_mlp` is untouched and the replayable variant imports
+  `relu_training`'s private step helpers (`_relu_training_step` is a thin wrapper
+  around the same projection → mask → step → restore sequence). **Consequence:
+  if `train_relu_mlp`'s step arithmetic changes, `_relu_training_step` must be
+  updated in lockstep or the bit-for-bit parity below silently breaks.**
+- **Data is regenerated, never stored.** `data_spec` holds `(dim, depth, n_train,
+  data_seed, threshold, odt_hyperplanes)` — everything
+  `run_single_relu_seed` uses to build the split. The regenerated tree is checked
+  against the stored `tree` so a stale spec fails loudly instead of silently
+  analysing the wrong data. Pickles drop from >1 GB to parameters + 2x parameters
+  per Adam snapshot.
+- **`shuffle_each_epoch` is a flag, default `False`.** The committed
+  `train_relu_mlp` shuffles; the user's uncommitted working-tree change replaces
+  that with a fixed identity permutation. The default matches the working tree.
+  With shuffling on, replay is still exact because the permutation generator's
+  state is snapshotted separately from the global RNG.
+- **Adam step size is reported as the per-coordinate effective LR**
+  `lr / (sqrt(v_hat) + eps)`, with the update split into the Adam part and the
+  decoupled weight-decay part, so the two can be compared against the population
+  gradient independently. Dead coordinates (zero second moment, e.g. dead ReLU
+  rows) give `lr/eps` and dominate the max column; this is real AdamW behaviour,
+  noted in the docstring.
+
+### Verified
+- Checkpoints and epoch losses from `run_single_relu_seed_replayable` are
+  **bitwise identical** to `run_single_relu_seed` for {adam, sgd} x {cpu, cuda}.
+- Regenerated `x_train/y_train/x_eval/y_eval` are exactly equal to the arrays the
+  legacy runner stored.
+- `replay_epoch_from_snapshot` reproduces the next snapshot with
+  `max|param diff| = 0.0` and `max|optimizer state diff| = 0.0` in all four
+  combinations, and also after a pickle round trip where the data is regenerated
+  rather than passed in. Same with `shuffle_each_epoch=True`.
+- Adam decomposition residual `|adam_update + wd_update - update|` ~ 3e-8
+  (float32 rounding); `sum(step updates) - (params_after - params_before)`
+  ~ 1e-10.
+- Full suite green (56 tests). The new notebook executes end to end
+  out-of-place at a tiny config (d=20, depth 3, 4k train, 20 epochs); the
+  in-repo copy has no outputs.
+
+### Current state / where to pick up
+- The tooling answers the question that prompted it: for a given snapshot epoch,
+  `epoch_replay_summary_table` shows `cos_grad_full_grad` (mini-batch vs
+  population gradient) and `cos_update_epoch_delta` (single step vs the epoch's
+  net parameter change) side by side, which is where the "gradient points in a
+  very different direction to the parameter difference" discrepancy should
+  resolve.
+- Next: run the real config and inspect an intermediate epoch. Expect the
+  population gradient and the epoch delta to disagree mostly through the Adam
+  preconditioner rather than through mini-batch noise; the step-size columns are
+  there to test that.
+
+### Open questions
+- Whether the per-coordinate Adam step size should be summarised per *parameter
+  tensor* (or per first-layer neuron) rather than globally — the current
+  min/median/max over all coordinates is coarse, and the dead-coordinate max is
+  not informative.
+- No tests were added for the new helpers (the user scoped the change to the
+  notebook and `relu_analysis`). The parity and exact-replay checks currently
+  live only in a scratchpad script, not in `tests/`.
+
+---
+
+## 2026-09-23 13:38 IST — "sgd_adam" hybrid optimizer: SGD on early layers, AdamW on later ones
+
+### Goal
+Test whether Adam's per-coordinate rescaling is actually useful in the *first* layer.
+The first layer's targets are the ODT's random orthogonal normals, which are generic
+with respect to the coordinate basis, so a coordinatewise preconditioner has no
+reason to help there. Later layers are different: ReLU acts coordinatewise, so the
+axis directions are genuinely special. Add an optimizer that splits on exactly that
+boundary.
+
+### User prompts (verbatim)
+- "At epoch 0 (from random init) with decay of 0, shouldn't cos_update_grad be -1 at the first update?"
+- "I am unable to make sense of why Adam with its co-ordinate rescaling alone is useful in this setting. The \"correct\" hyperparameters for the first layer are random orthogonal vectors, and damping co-ordinate directions is unlikely to induce the parameters to go there faster. For the later layers however, the axis directions are special because of ReLU. \n\nI want to test a variant of optiminsation, let's callit sgd-adam where the first layers are trained by sgd (with momentum) and later layers are trained by adam. \n\nCan you change the relu_training.py and also the new replay training notebook to take in such an option and the hybrid training code?"
+
+### Changes
+- `src/layer_lenses/relu_training.py`:
+  - `ReLUTrainConfig` gains `sgd_adam_split_layer` (default 1), `sgd_lr`, and
+    `sgd_weight_decay` (both `None` = reuse `lr` / `weight_decay`).
+    `optimizer` now accepts `"sgd_adam"` alongside `"adamw"` and `"sgd"`.
+  - New: `normalized_optimizer_name`, `split_named_parameters_sgd_adam`,
+    `optimizer_group_names`, `primary_optimizer_index`, `build_relu_optimizers`,
+    `optimizer_parameter_names`, `build_relu_schedulers`, `relu_training_step`,
+    `suggest_sgd_lr_for_adam_parity`.
+  - `train_relu_mlp` refactored onto those helpers and now also returns
+    `lr_history_by_group`.
+- `src/layer_lenses/relu_analysis.py`: the replay path is multi-optimizer.
+  `_build_relu_optimizer`, `_is_adam_config`, and the duplicated
+  `_relu_training_step` were **deleted** in favour of the `relu_training` versions,
+  closing the drift risk flagged in the previous entry. `optimizer_snapshots[e]` is
+  now a *list* of state dicts, with `_as_optimizer_state_list` accepting the old
+  single-dict form so pickles written yesterday still replay. `replay_epoch_from_snapshot`
+  returns `lr_by_group` and `parameter_groups`; the Adam decomposition is restricted
+  to AdamW-managed parameters. New `build_seed_model_and_data` exposes the untrained
+  model plus data for pre-run diagnostics, and `run_single_relu_seed_replayable` now
+  calls it. Both seed runners accept the three new hybrid kwargs.
+- `notebooks/ReLU_replayable_training.ipynb` (10 -> 13 cells, edited in place, user's
+  edits and outputs preserved): `OPTIMIZER` documented as `"adam" | "sgd" | "sgd_adam"`,
+  new `SGD_ADAM_SPLIT_LAYER` / `SGD_LR` / `SGD_WEIGHT_DECAY` knobs, a new cell that
+  measures a step-size-matched `SGD_LR` before the expensive run, per-group LR
+  reporting next to the loss plot, and a closing per-group replay comparison.
+- `tests/test_relu_training.py` (+6 tests) and `tests/test_relu_analysis.py` (+4 tests,
+  one parameterized over all three optimizers). These are the first tests covering the
+  replay machinery, which the previous entry listed as an open gap.
+
+### Decisions
+- **The split is by hidden-layer index, not by a hand-built parameter list.**
+  `sgd_adam_split_layer=k` puts hidden layers `[0, k)` on SGD and everything after,
+  including the output layer, on AdamW. `k` is restricted to `[1, len(hidden_dims)]`:
+  the degenerate ends are just `"adamw"` and `"sgd"` and must be asked for by name.
+- **Two optimizers and two schedulers, not one optimizer with two param groups.**
+  PyTorch cannot mix algorithms within one optimizer. Each gets its own
+  `CosineAnnealingLR` annealing from its own base LR, so the shape of the schedule is
+  shared but the scales are independent.
+- **`sgd_lr` defaults to `lr` and this is deliberately a bad default.** Per AGENTS.md
+  "do not silently guess": the honest default is the value the user already supplied.
+  But Adam's step is ~`lr` per coordinate regardless of gradient size while SGD's is
+  `sgd_lr * |g|`, so reusing `lr` would test "a tiny step instead of Adam" rather than
+  "SGD instead of Adam". `suggest_sgd_lr_for_adam_parity` measures `lr / median|g|`
+  over the SGD-managed parameters, and the notebook runs it before the expensive cell.
+  At the real config this came out around 100, not 1e-3.
+- **SGD weight decay is called out separately** because it is coupled, unlike AdamW's
+  decoupled decay. The per-step shrink factor is `1 - sgd_lr * sgd_weight_decay`, so a
+  step-matched `sgd_lr` near 100 with `weight_decay = 0.01` would shrink the SGD layers
+  by ~100% per step. The helper reports `decay_fraction_per_step` and the notebook
+  warns above 0.1.
+- **Snapshot format changed to a list**, with backward-compatible reads. Writing a
+  single dict for the non-hybrid case would have made the reader's job ambiguous.
+
+### Verified
+- **The refactor of `train_relu_mlp` is bitwise identical to the pre-change code.**
+  Captured epoch losses, LR history, and SHA-256 of every checkpoint tensor for
+  {adam, sgd} x {cpu, cuda} x {both seed runners} before touching anything, and
+  re-compared after each of the two refactoring passes. Identical both times.
+- Hybrid replay reproduces the next snapshot with `max|param diff| = 0.0` and
+  `max|optimizer state diff| = 0.0`, including after a pickle round trip.
+- Layer 0 under the hybrid follows plain SGD exactly: `max|update + sgd_lr * g|` was
+  1.5e-8, and `cos(update, -grad) = 1.0`. Layer 1 follows the AdamW `t=1` sign step
+  `-lr * g / (|g| + eps)` instead, to 1e-7.
+- SGD-managed parameters carry `momentum_buffer` and no `exp_avg`; AdamW-managed ones
+  carry `exp_avg` / `exp_avg_sq` / `step`. The Adam decomposition covers exactly the
+  AdamW group.
+- Full suite green, 68 tests. Notebook smoke-executed out-of-place at a tiny config in
+  both `"sgd_adam"` and `"adam"` modes, zero cell errors; the in-repo copy keeps the
+  user's own outputs.
+
+### Measured during setup (preliminary, not a result)
+- Tiny config (d=20, depth 3, 4k train, [8,8,8], batch 500), replaying epoch 10, mean
+  over the epoch's 8 steps of `cos_update_full_grad`, the cosine between the step
+  actually taken and the full-dataset gradient at that step:
+
+  | run | first layer | all AdamW layers |
+  |---|---|---|
+  | pure Adam | -0.61 | -0.61 |
+  | sgd_adam, `sgd_lr = 20` | -0.96 | -0.60 |
+
+  So the SGD-trained first layer tracks the population gradient far more closely than
+  the same layer under Adam, which is the intended contrast. This is a smoke-config
+  number on a 20-dimensional problem and says nothing yet about whether the hybrid
+  trains the real depth-5 task.
+
+### Current state / where to pick up
+- Next: run the real config with `OPTIMIZER = "sgd_adam"`. Use the new `SGD_LR` cell
+  first, set `SGD_WEIGHT_DECAY = 0.0`, and reconsider `MOMENTUM = 0.999`, which is very
+  high for an `sgd_lr` of order 100.
+- The interesting comparison is whether the hybrid trains at all, and if it does,
+  whether the first layer reaches the ODT normals faster or slower than under Adam.
+
+### Open questions
+- Whether Adam's benefit here is the *rotation* (coordinate rescaling) or merely the
+  *scale* (a gradient-magnitude-independent step). The hybrid at a step-matched
+  `sgd_lr` separates these: it keeps Adam's scale in the later layers while removing
+  the rescaling from the first. A pure-SGD run at the same matched LR would be the
+  third arm and is not yet set up.
+- Whether the split should sit at the first layer or after it. `sgd_adam_split_layer`
+  is configurable, but nothing has been run with `k > 1`.
+- Cosine annealing shares one schedule shape across both groups. If SGD and Adam want
+  different decay profiles, that is not currently expressible.
+
+---
+
+## 2026-09-25 07:10 IST — Analysis sessions: rattling, PGF emulation, and the level-4 second wave
+
+### Goal
+Read-only analysis over three days (Sep 24–25) of the replayable SGD and Adam runs, to
+answer whether the feature-learning phenomena are properties of population gradient
+flow, and why Adam outperforms SGD. Only repo change: the analysis scripts were copied
+into `notebooks/analysis_scripts/` at the user's request.
+
+### User prompts (verbatim)
+- "At epoch 0 (from random init) with decay of 0, shouldn't cos_update_grad be -1 at the first update?"
+- "Ok, with the right learning rate choice SGD with momentum is not a total failure and gets to within factor 2 of the final loss and a few percentage of test error when compared to Adam. While adam still has an advantage, the investigation of feature learning with SGD is sufficient for now. \n\nWe do seem to be needing mini-batches though. Population gradient seems to be struggling even at same number of updates. \n\nAs a case study I am analysing Neuron 37 in the first hidden layer (in the ReLU_replayable_training notebook) which is one of the first neurons to go towards an ODT vector (the root node u_0 here).  I am trying to analyse what makes this neuron go there in the thrid from last cell in the notebook. Epoch 140 is my epoch to analyse. \n\nIntriguingly, I find.\n\n<pasted_content id=\"6635\">\nCos between total_update and epoch_delta: tensor(1.0000)\ntotal_update norm: tensor(0.0269) epoch_delta norm: tensor(0.0269)\nCos between total_update and odt_wts[0]: tensor(-0.9569)\nCos between total_grads_over_steps and odt_wts[0]: tensor(0.9524)\nCos between total_pop_grads_over_steps and odt_wts[0]: tensor(0.9012)\n</pasted_content id=\"6635\">\n\nWhile the population gradient  at every one of the 100 steps align only very roughly with u_0, the total aligns quite strongly at a cosine of about 0.9. Why do you think this is the case? It cannot be just averaging over data points as the population gradient is computed over the entire trainset at each step and is hence average already. \n\nFeel free to run snippets from the notebook but do not change any file or write any code for now. Just discuss candidate hypotheses for now."
+- "I am slightly confused, I see no epoch where the cosine of neuron 37 with u_0 swings from -0.2 to -0.9. At epoch 75 it swings from -0.65 to -0.67 only."
+- "So, in your opinion the causes for rattling that happens in the later stages (around epoch 140) are  the following, right?:  \n\n1. finite data causing non-smoothness in the objective (the actual expected objective is quite smooth here even with the ReLU model and sharp label boundaries in the data)\n2. finite step-size \n\n\nSo, in a theoretical analysis of population gradient flow, these would be absent?"
+- "Ok, I want to isolate and study the effect of population gradient flow (from a random init). \n\nWould these interesting happenings that we see empirically (relu neurons capturing ODT vectors, and low loss/error) happen even there? i.e Is it fair to say mini-batch SGD with momentum (or Adam) simply are ways to emulate the running of population gradient flow with finite data and compute time? I can see that there exists inits that would completely stop PGF in a way that would not stop mini-batch SGDM, but such inits are rare and unlikely to happen at a random init, right?"
+- "Actually, I was wrong before. I don't know why I felt the previous runs with full batch SGD failed. I did another run now, and it does ok. You can check current config in ReLU_replayable_training notebook and  the most recent picklefiles.\n\nIt does perform a bit worse in both train loss and test error when compared to mini-batch SGD, but it might just be due to insufficient epochs."
+- "Yes, I also observed the lack of deepest-level nodes in the gradient descent runs. Adam does capture a few of them though, and I speculate that to be one of the reasons for Adam to outperform SGD. Did another run with full-batch replayable run in the most recent version of the notebook. Both train loss and test error are much lower."
+- "I have a meta question. Where do I find this scratchpad of your that you use for running these smaller experiments? While what you are saying is believable, I am still not used to trusting AI."
+- "Yes, copy the scripts into notebooks/analysis_scripts/"
+
+### Changes
+- New `notebooks/analysis_scripts/` (16 scripts + `README.md` index). Copied verbatim
+  from the agent's scratchpad; every number below was printed by one of them. They
+  are evidence, not reusable code (hard-coded paths, run from `notebooks/`).
+
+### Findings (all on seed 5178, d=100, depth 5, 1M train, [40,40,40])
+Runs referenced: MB-SGD (batch 10k, lr 0.02, mom 0.9, 10k epochs), FB-SGD (batch 1M,
+same lr/mom, 100k epochs), FB-Adam (batch 1M, lr 0.02, 100k epochs), MB-Adam (batch
+10k, lr 0.002, wd 0.01, 10k epochs). Pickles in `notebooks/results/cache/`.
+
+1. **Adam's first step is a sign step**, `-lr * g/(|g|+eps)`, so `cos_update_grad`
+   is `-||g||_1/(sqrt(n)||g||_2)`, measured -0.68, never -1. Plain SGD at wd 0 gives
+   exactly -1 (float32 differencing of small updates shows -0.99995).
+2. **Epoch-140 rattling of neuron 37** (MB-SGD, after it has aligned to u_0 at
+   cos -0.994): the per-step population gradient is 3:1 a restoring force on the
+   neuron's own orientation (cos +0.91 with its displacement from the epoch mean),
+   with wobble period ~54 steps, matching heavy-ball theory at the measured curvature
+   (48). Driven by white mini-batch noise 3.5x the restoring force; the epoch sum
+   cancels it and keeps the radial drift, hence the 0.90 cosine with u_0 in the sum.
+   Causes: mini-batch noise x step size (amplitude ~ lr*sigma^2/curvature reproduces
+   the 0.02 wobble), momentum for the periodic character. Not finite-data
+   non-smoothness. At epoch 75, mid-arrival, the population gradient is constant to
+   ~1% across the epoch: no wobble.
+3. **Arrival of neuron 37 at u_0 (epochs 55–100)** is not a straight rotation: the
+   largest per-epoch update component is out of the (w, u_0) plane, first shedding
+   the init, then pointing at a diffuse mix of deepest-level normals.
+4. **Plateau escape is population gradient flow.** Median over 40 neurons of
+   cos(displacement from init, -population gradient at init) is 0.999 at epoch 5,
+   0.993 at 20, 0.93 at 60; the first mini-batch gradient has cos 0.17. The
+   population gradient at init lies 89% in the span of the 16 level-4 normals
+   (consistent with labels = sign of the last split), so u_0 is invisible to the
+   linearized flow and is captured later via the nonlinear dynamics (pop-grad cos
+   0.65 with -u_0 at epoch 70). Neuron 37 had one of the smallest initial gradients.
+5. **FB-SGD vs MB-SGD at matched flow time** (lr summed over steps / (1-mom)): the
+   same init, identical to 4 decimals for every neuron through flow time ~3200 (past
+   u_0 capture and the first loss drop); first neuron diverges ~3600; by the end
+   ~15 neurons differ but node coverage is identical (levels 0–3 complete, level 4
+   empty). At equal flow time FB-SGD is *ahead* (0.169/0.050 vs 0.227/0.091); the
+   user's earlier "full-batch struggles" was a 10x flow-time deficit. MB-SGD needs
+   ~2x the flow time to match, at ~1% of the compute.
+6. **Level-4 capture is an Adam-vs-SGD difference, not a noise difference.** FB-Adam
+   (no noise) reaches 0.0038/0.0046, equal to MB-Adam, 10x better than MB-SGD.
+   Dedicated level-4 neurons: SGD 0/16 in both runs, FB-Adam 8/16, MB-Adam 16/16.
+   All four first layers lie inside the 31-dim ODT span (energy outside = 0.000).
+   SGD's row space contains all level-4 directions but at 2–3% of the root's
+   response strength; Adam 18–50%.
+7. **Three phases of first-layer level-4 energy**: rise along the init gradient (all
+   runs), suppression while coarse features are built and purified (all runs; SGD
+   ends *below* its init level-4 energy and still falling at 100k steps), then a
+   second rise under Adam only (FB-Adam share 0.025 -> 0.11 from epoch 10k, MB-Adam
+   0.027 -> 0.41), coinciding with the loss falling from ~0.1 to <0.01. A replayed
+   step at epochs 20k/60k shows Adam's update carries 3.8x/6x the level-4 share of
+   its gradient with positive growth; SGD's update has the gradient's composition
+   and shrinks level 4.
+8. Test error binned by nearest on-path split level: every run has ~3x its overall
+   error near level-4 hyperplanes; the SGD/Adam error ratio is roughly uniform across
+   levels. So Adam refines the whole function; level-4 capture is the visible
+   signature, not a level-specific fix.
+
+### Decisions
+- Scripts were copied, not cleaned up, so they remain exactly the code that produced
+  the logged numbers. The README says so.
+
+### Current state / where to pick up
+- Open experiments suggested: (a) `sgd_adam` hybrid with the first layer on SGD, to
+  test whether the level-4 second wave needs the preconditioner in the first layer
+  or arrives through the residue from downstream Adam layers; (b) a much longer
+  FB-SGD run watching only level-4 energy, to see whether gradient flow ever starts
+  phase three.
+
+### Open questions
+- Whether population gradient flow reaches level 4 on any timescale, or is
+  permanently confined to levels 0–3 from this init.
+- Whether the "purification" that suppresses level 4 in phase two is the same
+  mechanism as neuron 37 shedding its init component (measured, not proven).
