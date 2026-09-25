@@ -7,6 +7,8 @@ interpretation while preserving the reusable mechanics in importable code.
 from __future__ import annotations
 
 import copy
+import pickle
+from pathlib import Path
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
@@ -23,8 +25,17 @@ from layer_lenses.odt import (
 from layer_lenses.relu_mlp import ReLUMLP
 from layer_lenses.relu_training import (
     ReLUTrainConfig,
+    _first_layer_projection_vector,
+    _labels_pm1_to_binary,
+    _parameter_update_masks,
+    build_relu_optimizers,
+    build_relu_schedulers,
     checkpoint_model_from_state,
     evaluate_relu_mlp,
+    optimizer_group_names,
+    optimizer_parameter_names,
+    primary_optimizer_index,
+    relu_training_step,
     train_relu_mlp,
 )
 from layer_lenses.training import set_seed
@@ -117,6 +128,9 @@ def run_single_relu_seed(
     lr_scheduler_eta_min_ratio: float = 0.05,
     optimizer: str = "adamw",
     momentum: float = 0.0,
+    sgd_adam_split_layer: int = 1,
+    sgd_lr: float | None = None,
+    sgd_weight_decay: float | None = None,
     project_first_layer_grad_orthogonal: int | None = None,
 ) -> dict[str, Any]:
     """Generate COB-ODT data, train one ReLU MLP seed, and return notebook-friendly state.
@@ -212,6 +226,9 @@ def run_single_relu_seed(
             lr_scheduler_eta_min_ratio=lr_scheduler_eta_min_ratio,
             optimizer=optimizer,
             momentum=momentum,
+            sgd_adam_split_layer=sgd_adam_split_layer,
+            sgd_lr=sgd_lr,
+            sgd_weight_decay=sgd_weight_decay,
             first_layer_grad_orthogonal_to=first_layer_projection_vector,
             parameter_update_mask=parameter_update_mask,
         ),
@@ -1380,3 +1397,840 @@ def neuron_leaf_activity_dict(
             mapping[key] = vec
 
     return mapping, leaf_order
+
+
+# ---------------------------------------------------------------------------
+# Replayable training: optimizer-state snapshots and one-epoch replays.
+#
+# The functions below exist to separate the *optimizer* (Adam / mini-batches)
+# from the *population gradient* in the learning-dynamics analysis. A
+# "replayable" seed result stores, at each snapshot epoch, everything needed to
+# reproduce the epoch that follows it bit-for-bit: the model state, the
+# optimizer state (Adam moments and step counters, or SGD momentum buffers),
+# the current learning rate, and the state of the generator that produces the
+# mini-batch permutation. It does *not* store the data; the data is regenerated
+# from its seed on demand (``regenerate_seed_result_data``).
+# ---------------------------------------------------------------------------
+
+def _as_optimizer_state_list(snapshot: Any) -> list[dict[str, Any]]:
+    """Normalize a stored optimizer snapshot to a list of optimizer state dicts.
+
+    Snapshots taken before the ``"sgd_adam"`` hybrid stored one state dict; hybrid
+    runs store one per optimizer. Both shapes load.
+    """
+    if isinstance(snapshot, dict) and "param_groups" in snapshot:
+        return [snapshot]
+    if isinstance(snapshot, list):
+        return list(snapshot)
+    raise TypeError(f"Unrecognized optimizer snapshot of type {type(snapshot).__name__}.")
+
+
+def _state_dict_to_cpu(state: Any) -> Any:
+    """Recursively detach, clone, and move every tensor in a (nested) state dict to CPU."""
+    if isinstance(state, torch.Tensor):
+        return state.detach().cpu().clone()
+    if isinstance(state, dict):
+        return {k: _state_dict_to_cpu(v) for k, v in state.items()}
+    if isinstance(state, list):
+        return [_state_dict_to_cpu(v) for v in state]
+    if isinstance(state, tuple):
+        return tuple(_state_dict_to_cpu(v) for v in state)
+    return copy.deepcopy(state)
+
+
+def _named_parameter_tensors(model: ReLUMLP) -> dict[str, torch.Tensor]:
+    return {name: p.detach().cpu().clone() for name, p in model.named_parameters()}
+
+
+def _named_parameter_gradients(model: ReLUMLP) -> dict[str, torch.Tensor]:
+    grads: dict[str, torch.Tensor] = {}
+    for name, p in model.named_parameters():
+        if p.grad is None:
+            raise RuntimeError(f"No gradient computed for parameter {name!r}.")
+        grads[name] = p.grad.detach().cpu().clone()
+    return grads
+
+
+def _named_optimizer_state(
+    model: ReLUMLP,
+    optimizers: list[torch.optim.Optimizer],
+) -> dict[str, dict[str, torch.Tensor | float | int]]:
+    """Return optimizer state keyed by parameter *name*, with tensors on CPU.
+
+    Searches every optimizer, so a hybrid run yields Adam moments for the AdamW
+    parameters and momentum buffers for the SGD parameters in one flat dict.
+    """
+    out: dict[str, dict[str, torch.Tensor | float | int]] = {}
+    for name, p in model.named_parameters():
+        state: dict[str, Any] = {}
+        for optimizer in optimizers:
+            if p in optimizer.state:
+                state = optimizer.state[p]
+                break
+        out[name] = {k: _state_dict_to_cpu(v) for k, v in state.items()}
+    return out
+
+
+def _epoch_permutation(
+    *,
+    num_samples: int,
+    shuffle_each_epoch: bool,
+    permutation_generator: torch.Generator | None,
+    device: torch.device,
+) -> torch.Tensor:
+    if not shuffle_each_epoch:
+        return torch.arange(num_samples, device=device)
+    if permutation_generator is None:
+        raise ValueError("permutation_generator is required when shuffle_each_epoch=True.")
+    return torch.randperm(num_samples, generator=permutation_generator).to(device)
+
+
+def train_relu_mlp_with_optimizer_snapshots(
+    *,
+    model: ReLUMLP,
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    config: ReLUTrainConfig,
+    shuffle_each_epoch: bool = False,
+) -> dict[str, object]:
+    """Train like ``train_relu_mlp`` but also snapshot optimizer / LR / RNG state.
+
+    At every epoch ``e`` in ``config.snapshot_epochs`` (taken *before* the
+    epoch's mini-batch steps, exactly like ``checkpoint_snapshots``) this records:
+
+    - ``checkpoint_snapshots[e]``: model ``state_dict`` (same as ``train_relu_mlp``),
+    - ``optimizer_snapshots[e]``: ``optimizer.state_dict()`` on CPU (Adam moments
+      and step counts, or SGD momentum buffers, plus the current ``lr``),
+    - ``permutation_generator_snapshots[e]``: state of the CPU generator that
+      draws the mini-batch permutation (only when ``shuffle_each_epoch``).
+
+    With ``shuffle_each_epoch=False`` (the default, matching the current
+    ``train_relu_mlp``) the permutation is the identity in every epoch.
+    Together these make ``replay_epoch_from_snapshot`` reproduce epoch ``e``
+    step-for-step. Snapshots are small (parameters + 2x parameters for Adam),
+    so dense snapshot schedules remain cheap.
+    """
+    set_seed(config.seed)
+    device = torch.device(config.device)
+    model = model.to(device)
+    first_layer_projection_vector = _first_layer_projection_vector(
+        model=model, config=config, device=device
+    )
+    parameter_update_masks = _parameter_update_masks(model=model, config=config, device=device)
+
+    x = torch.from_numpy(x_train).float().to(device)
+    y_pm1 = torch.from_numpy(y_train).float().to(device)
+    y_bin = _labels_pm1_to_binary(y_pm1)
+
+    criterion = torch.nn.BCEWithLogitsLoss()
+    optimizers = build_relu_optimizers(model, config)
+    schedulers = build_relu_schedulers(optimizers, config)
+    group_names = optimizer_group_names(config)
+    primary_index = primary_optimizer_index(config)
+
+    permutation_generator: torch.Generator | None = None
+    if shuffle_each_epoch:
+        permutation_generator = torch.Generator(device="cpu")
+        permutation_generator.manual_seed(config.seed)
+
+    num_samples = x.shape[0]
+    losses: list[float] = []
+    lr_history: list[float] = []
+    lr_history_by_group: dict[str, list[float]] = {name: [] for name in group_names}
+    checkpoint_snapshots: dict[int, dict[str, torch.Tensor]] = {}
+    optimizer_snapshots: dict[int, list[dict[str, Any]]] = {}
+    permutation_generator_snapshots: dict[int, torch.Tensor] = {}
+
+    epoch_iter = range(config.epochs + 1)
+    if config.show_progress:
+        from tqdm.auto import tqdm
+
+        epoch_iter = tqdm(epoch_iter, desc="Training ReLU MLP (replayable)", leave=False)
+
+    for epoch in epoch_iter:
+        if epoch in config.snapshot_epochs:
+            checkpoint_snapshots[epoch] = {
+                k: v.detach().cpu().clone() for k, v in model.state_dict().items()
+            }
+            optimizer_snapshots[epoch] = [
+                _state_dict_to_cpu(optimizer.state_dict()) for optimizer in optimizers
+            ]
+            if permutation_generator is not None:
+                permutation_generator_snapshots[epoch] = permutation_generator.get_state().clone()
+
+        if epoch == config.epochs:
+            break
+
+        permutation = _epoch_permutation(
+            num_samples=num_samples,
+            shuffle_each_epoch=shuffle_each_epoch,
+            permutation_generator=permutation_generator,
+            device=device,
+        )
+
+        running_loss = 0.0
+        seen = 0
+        for start in range(0, num_samples, config.batch_size):
+            end = min(start + config.batch_size, num_samples)
+            idx = permutation[start:end]
+            loss = relu_training_step(
+                model=model,
+                optimizers=optimizers,
+                criterion=criterion,
+                x_batch=x[idx],
+                y_batch_bin=y_bin[idx],
+                first_layer_projection_vector=first_layer_projection_vector,
+                parameter_update_masks=parameter_update_masks,
+            )
+            batch_n = end - start
+            running_loss += float(loss.cpu()) * batch_n
+            seen += batch_n
+
+        losses.append(running_loss / max(1, seen))
+        lr_history.append(float(optimizers[primary_index].param_groups[0]["lr"]))
+        for name, optimizer in zip(group_names, optimizers):
+            lr_history_by_group[name].append(float(optimizer.param_groups[0]["lr"]))
+        for scheduler in schedulers:
+            scheduler.step()
+        if config.show_progress:
+            epoch_iter.set_postfix(loss=f"{losses[-1]:.4f}")
+
+    return {
+        "model": model,
+        "epoch_losses": losses,
+        "lr_history": lr_history,
+        "lr_history_by_group": lr_history_by_group,
+        "checkpoint_snapshots": checkpoint_snapshots,
+        "optimizer_snapshots": optimizer_snapshots,
+        "optimizer_group_names": group_names,
+        "optimizer_parameter_names": optimizer_parameter_names(model, config),
+        "permutation_generator_snapshots": permutation_generator_snapshots,
+        "shuffle_each_epoch": shuffle_each_epoch,
+    }
+
+
+def _generate_cob_odt_split(
+    *,
+    dim: int,
+    depth: int,
+    n_train: int,
+    data_seed: int,
+    threshold: float,
+    odt_hyperplanes: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, COBODTTree, dict[str, int | float]]:
+    """Generate the train/eval split exactly as ``run_single_relu_seed`` does."""
+    if odt_hyperplanes == "random_orthogonal":
+        generation_tree = None
+    elif odt_hyperplanes == "coordinate_axes":
+        generation_tree = build_axis_aligned_cob_odt_tree(dim=dim, depth=depth)
+    else:
+        raise ValueError(
+            "odt_hyperplanes must be 'random_orthogonal' or 'coordinate_axes', "
+            f"got {odt_hyperplanes!r}."
+        )
+    x, y, tree, meta = generate_cob_odt_data(
+        num_data=2 * n_train,
+        dim=dim,
+        depth=depth,
+        seed=data_seed,
+        threshold=threshold,
+        tree=generation_tree,
+    )
+    return x[:n_train], y[:n_train], x[n_train:], y[n_train:], tree, meta
+
+
+def build_seed_model_and_data(
+    master_seed: int,
+    *,
+    dim: int,
+    depth: int,
+    n_train: int,
+    hidden_dims: list[int],
+    bias: bool = False,
+    activation: str = "relu",
+    odt_hyperplanes: Literal["random_orthogonal", "coordinate_axes"] = "random_orthogonal",
+    threshold: float = 0.0,
+) -> dict[str, Any]:
+    """Build the data split and the model at initialization for a seed, without training.
+
+    Uses the same seed convention as `run_single_relu_seed_replayable`
+    (``data_seed = master_seed``, ``init_seed = master_seed + 1000``,
+    ``train_seed = master_seed + 2000``) and is what that function calls, so the
+    returned model and data are exactly the ones a run would start from. Useful for
+    pre-run diagnostics such as `suggest_sgd_lr_for_adam_parity`.
+    """
+    data_seed = master_seed
+    init_seed = master_seed + 1000
+    train_seed = master_seed + 2000
+
+    x_train, y_train, x_eval, y_eval, tree, meta = _generate_cob_odt_split(
+        dim=dim,
+        depth=depth,
+        n_train=n_train,
+        data_seed=data_seed,
+        threshold=threshold,
+        odt_hyperplanes=odt_hyperplanes,
+    )
+    set_seed(init_seed)
+    model = ReLUMLP(
+        input_dim=dim,
+        hidden_dims=hidden_dims,
+        bias=bias,
+        activation=activation,
+    )
+    return {
+        "model": model,
+        "data": {"x_train": x_train, "y_train": y_train, "x_eval": x_eval, "y_eval": y_eval},
+        "tree": tree,
+        "meta": meta,
+        "seeds": {"data_seed": data_seed, "init_seed": init_seed, "train_seed": train_seed},
+    }
+
+
+def run_single_relu_seed_replayable(
+    master_seed: int,
+    *,
+    dim: int,
+    depth: int,
+    n_train: int,
+    hidden_dims: list[int],
+    total_epochs: int,
+    lr: float,
+    batch_size: int,
+    weight_decay: float,
+    snapshot_epochs,
+    bias: bool = False,
+    activation: str = "relu",
+    odt_hyperplanes: Literal["random_orthogonal", "coordinate_axes"] = "random_orthogonal",
+    parameter_update_mask: dict[str, np.ndarray | torch.Tensor] | None = None,
+    threshold: float = 0.0,
+    device: str = "cpu",
+    show_progress: bool = True,
+    lr_scheduler_eta_min_ratio: float = 0.05,
+    optimizer: str = "adamw",
+    momentum: float = 0.0,
+    sgd_adam_split_layer: int = 1,
+    sgd_lr: float | None = None,
+    sgd_weight_decay: float | None = None,
+    project_first_layer_grad_orthogonal: int | None = None,
+    shuffle_each_epoch: bool = False,
+) -> dict[str, Any]:
+    """Like ``run_single_relu_seed`` but stores optimizer snapshots and *no data arrays*.
+
+    Seeds follow the same convention (``data_seed = master_seed``,
+    ``init_seed = master_seed + 1000``, ``train_seed = master_seed + 2000``), so
+    the data and initial model are identical to a ``run_single_relu_seed`` call
+    with the same arguments.
+
+    The returned dict has no ``"data"`` entry. Instead ``"data_spec"`` holds the
+    arguments needed to regenerate the split; call
+    ``regenerate_seed_result_data(seed_result)`` when the arrays are needed.
+    ``"train_config"`` holds the ``ReLUTrainConfig`` used, and ``"out"`` has the
+    extra keys documented in ``train_relu_mlp_with_optimizer_snapshots``.
+    ``out["checkpoint_snapshots"]`` keeps the same layout as before, so the
+    existing checkpoint-based analysis helpers work unchanged.
+    """
+    bundle = build_seed_model_and_data(
+        master_seed,
+        dim=dim,
+        depth=depth,
+        n_train=n_train,
+        hidden_dims=hidden_dims,
+        bias=bias,
+        activation=activation,
+        odt_hyperplanes=odt_hyperplanes,
+        threshold=threshold,
+    )
+    data_seed = bundle["seeds"]["data_seed"]
+    init_seed = bundle["seeds"]["init_seed"]
+    train_seed = bundle["seeds"]["train_seed"]
+    tree, meta = bundle["tree"], bundle["meta"]
+    x_train = bundle["data"]["x_train"]
+    y_train = bundle["data"]["y_train"]
+    model = bundle["model"]
+
+    if project_first_layer_grad_orthogonal is None:
+        first_layer_projection_vector = None
+    elif isinstance(project_first_layer_grad_orthogonal, bool) or not isinstance(
+        project_first_layer_grad_orthogonal, int
+    ):
+        raise TypeError(
+            "project_first_layer_grad_orthogonal must be an ODT internal node id "
+            f"integer or None, got {project_first_layer_grad_orthogonal!r}."
+        )
+    elif not 0 <= project_first_layer_grad_orthogonal < tree.w_list.shape[0]:
+        raise ValueError(
+            "project_first_layer_grad_orthogonal must reference an ODT internal node. "
+            f"Expected an integer in [0, {tree.w_list.shape[0] - 1}], "
+            f"got {project_first_layer_grad_orthogonal}."
+        )
+    else:
+        first_layer_projection_vector = tree.w_list[project_first_layer_grad_orthogonal]
+
+    train_config = ReLUTrainConfig(
+        epochs=total_epochs,
+        lr=lr,
+        batch_size=batch_size,
+        seed=train_seed,
+        snapshot_epochs=tuple(snapshot_epochs),
+        weight_decay=weight_decay,
+        device=device,
+        show_progress=show_progress,
+        lr_scheduler_eta_min_ratio=lr_scheduler_eta_min_ratio,
+        optimizer=optimizer,
+        momentum=momentum,
+        sgd_adam_split_layer=sgd_adam_split_layer,
+        sgd_lr=sgd_lr,
+        sgd_weight_decay=sgd_weight_decay,
+        first_layer_grad_orthogonal_to=first_layer_projection_vector,
+        parameter_update_mask=parameter_update_mask,
+    )
+    out = train_relu_mlp_with_optimizer_snapshots(
+        model=model,
+        x_train=x_train,
+        y_train=y_train,
+        config=train_config,
+        shuffle_each_epoch=shuffle_each_epoch,
+    )
+
+    return {
+        "master_seed": master_seed,
+        "seeds": {"data_seed": data_seed, "init_seed": init_seed, "train_seed": train_seed},
+        "tree": tree,
+        "meta": meta,
+        "data_spec": {
+            "dim": dim,
+            "depth": depth,
+            "n_train": n_train,
+            "data_seed": data_seed,
+            "threshold": threshold,
+            "odt_hyperplanes": odt_hyperplanes,
+        },
+        "model_spec": {
+            "input_dim": dim,
+            "hidden_dims": list(hidden_dims),
+            "bias": bias,
+            "activation": activation,
+        },
+        "train_config": train_config,
+        "out": out,
+    }
+
+
+def regenerate_seed_result_data(seed_result: dict[str, Any]) -> dict[str, np.ndarray]:
+    """Regenerate ``x_train, y_train, x_eval, y_eval`` for a replayable seed result.
+
+    Uses ``seed_result["data_spec"]`` and checks that the regenerated ODT matches
+    the stored ``seed_result["tree"]``. If the result still carries a ``"data"``
+    entry (legacy ``run_single_relu_seed`` output), that is returned directly.
+    """
+    if "data" in seed_result and seed_result["data"] is not None:
+        return dict(seed_result["data"])
+    if "data_spec" not in seed_result:
+        raise KeyError("seed_result has neither 'data' nor 'data_spec'.")
+
+    spec = seed_result["data_spec"]
+    x_train, y_train, x_eval, y_eval, tree, _ = _generate_cob_odt_split(
+        dim=int(spec["dim"]),
+        depth=int(spec["depth"]),
+        n_train=int(spec["n_train"]),
+        data_seed=int(spec["data_seed"]),
+        threshold=float(spec["threshold"]),
+        odt_hyperplanes=str(spec["odt_hyperplanes"]),
+    )
+    stored_tree = seed_result.get("tree")
+    if stored_tree is not None and not (
+        np.allclose(stored_tree.w_list, tree.w_list)
+        and np.allclose(stored_tree.b_list, tree.b_list)
+        and np.array_equal(stored_tree.leaf_labels, tree.leaf_labels)
+    ):
+        raise RuntimeError(
+            "Regenerated ODT does not match the stored tree; data_spec is inconsistent."
+        )
+    return {"x_train": x_train, "y_train": y_train, "x_eval": x_eval, "y_eval": y_eval}
+
+
+def save_seed_result_pickle(seed_result: dict[str, Any], path: str | Path) -> Path:
+    """Pickle a seed result (creating parent directories)."""
+    out_path = Path(path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("wb") as f:
+        pickle.dump(seed_result, f, protocol=pickle.HIGHEST_PROTOCOL)
+    return out_path
+
+
+def load_seed_result_pickle(path: str | Path) -> dict[str, Any]:
+    """Load a pickled seed result."""
+    with Path(path).open("rb") as f:
+        obj = pickle.load(f)
+    if not isinstance(obj, dict):
+        raise TypeError(f"Expected dict from pickle, got {type(obj).__name__}")
+    return obj
+
+
+def _adam_step_decomposition(
+    *,
+    optimizer_state_after: dict[str, dict[str, Any]],
+    lr: float,
+    betas: tuple[float, float],
+    eps: float,
+    weight_decay: float,
+    params_before: dict[str, torch.Tensor],
+    parameter_names: set[str] | None = None,
+) -> dict[str, dict[str, torch.Tensor]]:
+    """Decompose one AdamW update into per-coordinate step size, direction, and decay.
+
+    torch's AdamW performs::
+
+        theta <- theta * (1 - lr * wd)
+        theta <- theta - (lr / bc1) * m / (sqrt(v) / sqrt(bc2) + eps)
+
+    with ``bc1 = 1 - beta1**t``, ``bc2 = 1 - beta2**t`` and ``m, v`` the moments
+    *after* incorporating the current gradient. This returns, per parameter:
+
+    - ``adam_step_size``: ``lr / (sqrt(v) / sqrt(bc2) + eps)`` (per coordinate),
+    - ``adam_direction``: ``m / bc1`` (bias-corrected first moment),
+    - ``adam_update``: ``-adam_step_size * adam_direction``,
+    - ``weight_decay_update``: ``-lr * wd * theta_before``,
+
+    so that ``adam_update + weight_decay_update`` equals the recorded ``update``
+    up to floating point.
+    """
+    beta1, beta2 = betas
+    out: dict[str, dict[str, torch.Tensor]] = {
+        "adam_step_size": {},
+        "adam_direction": {},
+        "adam_update": {},
+        "weight_decay_update": {},
+    }
+    for name, st in optimizer_state_after.items():
+        # Skip empty state and SGD-managed parameters (which carry momentum_buffer,
+        # not exp_avg) so a hybrid run decomposes only its AdamW part.
+        if not st or "exp_avg" not in st:
+            continue
+        if parameter_names is not None and name not in parameter_names:
+            continue
+        step = st["step"]
+        t = float(step.item()) if isinstance(step, torch.Tensor) else float(step)
+        bc1 = 1.0 - beta1**t
+        bc2 = 1.0 - beta2**t
+        m = st["exp_avg"]
+        v = st["exp_avg_sq"]
+        denom = v.sqrt() / (bc2**0.5) + eps
+        step_size = lr / denom
+        direction = m / bc1
+        out["adam_step_size"][name] = step_size
+        out["adam_direction"][name] = direction
+        out["adam_update"][name] = -step_size * direction
+        out["weight_decay_update"][name] = -lr * weight_decay * params_before[name]
+    return out
+
+
+def replay_epoch_from_snapshot(
+    seed_result: dict[str, Any],
+    epoch: int,
+    *,
+    data: dict[str, np.ndarray] | None = None,
+    device: str | None = None,
+    record_optimizer_state: bool = True,
+    record_full_data_gradient: bool = False,
+    verify_against_next_snapshot: bool = True,
+) -> dict[str, Any]:
+    """Re-run one training epoch from a snapshot and record every mini-batch step.
+
+    ``epoch`` must be in ``out["optimizer_snapshots"]`` of a result produced by
+    ``run_single_relu_seed_replayable``. The model and optimizer are restored to
+    their state at the *start* of that epoch, the same mini-batch order is used,
+    and each step is recorded. The seed result itself is not modified.
+
+    Returns a dict with:
+
+    - ``"epoch"``, ``"lr"`` (the LR in force during this epoch), ``"optimizer"``,
+      ``"betas"``, ``"eps"``, ``"weight_decay"``, ``"num_steps"``,
+    - ``"params_before"`` / ``"params_after"``: parameter dicts at epoch start / end,
+    - ``"steps"``: a list, one entry per mini-batch, each with
+        ``"step"``, ``"batch_start"``, ``"batch_end"``, ``"batch_loss"``,
+        ``"grad"`` (the mini-batch gradient the optimizer consumed, after any
+        projection / mask), ``"update"`` (``theta_after - theta_before`` for the
+        step), ``"params_before"``, and, when ``record_optimizer_state``,
+        ``"optimizer_state_after"`` keyed by parameter name (Adam: ``step``,
+        ``exp_avg``, ``exp_avg_sq``; SGD with momentum: ``momentum_buffer``).
+        For Adam the decomposition from ``_adam_step_decomposition`` is added
+        (``adam_step_size``, ``adam_direction``, ``adam_update``,
+        ``weight_decay_update``). When ``record_full_data_gradient`` the
+        *population* gradient over the whole training set at the step's starting
+        parameters is stored under ``"full_grad"``.
+    - ``"verification"``: if ``epoch + 1`` is also a snapshot and
+      ``verify_against_next_snapshot``, the max abs difference between the
+      replayed end-of-epoch parameters (and Adam moments) and that stored snapshot.
+      Zero (or ~1e-7) means the replay is faithful.
+
+    All recorded tensors are on CPU. Memory per step is roughly
+    ``(2 + 2 * is_adam + 4 * is_adam + record_full_data_gradient) * n_params`` floats.
+    """
+    out = seed_result["out"]
+    if "optimizer_snapshots" not in out:
+        raise KeyError(
+            "seed_result has no optimizer snapshots; produce it with "
+            "run_single_relu_seed_replayable."
+        )
+    if epoch not in out["optimizer_snapshots"]:
+        available = sorted(out["optimizer_snapshots"].keys())
+        raise KeyError(f"epoch {epoch} not in optimizer snapshots; available: {available}")
+    config: ReLUTrainConfig = seed_result["train_config"]
+    if epoch >= config.epochs:
+        raise ValueError(f"epoch {epoch} is the final snapshot; no epoch follows it to replay.")
+
+    dev = torch.device(device if device is not None else config.device)
+    if data is None:
+        data = regenerate_seed_result_data(seed_result)
+    x = torch.from_numpy(data["x_train"]).float().to(dev)
+    y_bin = _labels_pm1_to_binary(torch.from_numpy(data["y_train"]).float().to(dev))
+    num_samples = x.shape[0]
+
+    model = checkpoint_model_from_state(out["model"], out["checkpoint_snapshots"][epoch]).to(dev)
+    model.train()
+    optimizers = build_relu_optimizers(model, config)
+    group_names = optimizer_group_names(config)
+    stored_snapshots = _as_optimizer_state_list(out["optimizer_snapshots"][epoch])
+    if len(stored_snapshots) != len(optimizers):
+        raise ValueError(
+            f"snapshot at epoch {epoch} holds {len(stored_snapshots)} optimizer state(s) "
+            f"but the config builds {len(optimizers)} ({group_names}); the stored "
+            "train_config and the snapshot disagree."
+        )
+    for optimizer, stored in zip(optimizers, stored_snapshots):
+        optimizer.load_state_dict(copy.deepcopy(stored))
+
+    parameter_groups = {
+        name: list(names)
+        for name, names in zip(group_names, optimizer_parameter_names(model, config))
+    }
+    lr_by_group = {
+        name: float(optimizer.param_groups[0]["lr"])
+        for name, optimizer in zip(group_names, optimizers)
+    }
+    adam_index = group_names.index("adamw") if "adamw" in group_names else None
+    adam_group = optimizers[adam_index].param_groups[0] if adam_index is not None else None
+    adam_parameter_names = (
+        set(parameter_groups[group_names[adam_index]]) if adam_index is not None else set()
+    )
+    lr = lr_by_group[group_names[primary_optimizer_index(config)]]
+
+    first_layer_projection_vector = _first_layer_projection_vector(model=model, config=config, device=dev)
+    parameter_update_masks = _parameter_update_masks(model=model, config=config, device=dev)
+    criterion = torch.nn.BCEWithLogitsLoss()
+
+    permutation_generator: torch.Generator | None = None
+    shuffle_each_epoch = bool(out.get("shuffle_each_epoch", False))
+    if shuffle_each_epoch:
+        permutation_generator = torch.Generator(device="cpu")
+        permutation_generator.set_state(out["permutation_generator_snapshots"][epoch].clone())
+    permutation = _epoch_permutation(
+        num_samples=num_samples,
+        shuffle_each_epoch=shuffle_each_epoch,
+        permutation_generator=permutation_generator,
+        device=dev,
+    )
+
+    params_before_epoch = _named_parameter_tensors(model)
+    steps: list[dict[str, Any]] = []
+    for step_idx, start in enumerate(range(0, num_samples, config.batch_size)):
+        end = min(start + config.batch_size, num_samples)
+        idx = permutation[start:end]
+        params_before = _named_parameter_tensors(model)
+
+        record: dict[str, Any] = {
+            "step": step_idx,
+            "batch_start": int(start),
+            "batch_end": int(end),
+            "params_before": params_before,
+        }
+        if record_full_data_gradient:
+            record["full_grad"] = log_loss_gradients(
+                model=model, x=data["x_train"], y=data["y_train"], device=str(dev)
+            )
+            model.train()
+
+        loss = relu_training_step(
+            model=model,
+            optimizers=optimizers,
+            criterion=criterion,
+            x_batch=x[idx],
+            y_batch_bin=y_bin[idx],
+            first_layer_projection_vector=first_layer_projection_vector,
+            parameter_update_masks=parameter_update_masks,
+        )
+        record["batch_loss"] = float(loss.cpu())
+        record["grad"] = _named_parameter_gradients(model)
+        params_after = _named_parameter_tensors(model)
+        record["update"] = {n: params_after[n] - params_before[n] for n in params_after}
+
+        if record_optimizer_state:
+            state_after = _named_optimizer_state(model, optimizers)
+            record["optimizer_state_after"] = state_after
+            if adam_group is not None:
+                record.update(
+                    _adam_step_decomposition(
+                        optimizer_state_after=state_after,
+                        lr=float(adam_group["lr"]),
+                        betas=tuple(adam_group["betas"]),
+                        eps=float(adam_group["eps"]),
+                        weight_decay=float(adam_group["weight_decay"]),
+                        params_before=params_before,
+                        parameter_names=adam_parameter_names,
+                    )
+                )
+        steps.append(record)
+
+    params_after_epoch = _named_parameter_tensors(model)
+
+    verification: dict[str, Any] | None = None
+    next_epoch = epoch + 1
+    if verify_against_next_snapshot and next_epoch in out["checkpoint_snapshots"]:
+        next_state = out["checkpoint_snapshots"][next_epoch]
+        param_diff = {
+            n: float((params_after_epoch[n] - next_state[n].float()).abs().max())
+            for n in params_after_epoch
+        }
+        verification = {
+            "next_epoch": next_epoch,
+            "max_abs_param_diff": param_diff,
+            "max_abs_param_diff_overall": max(param_diff.values()),
+        }
+        if next_epoch in out["optimizer_snapshots"]:
+            moment_diff = 0.0
+            next_snapshots = _as_optimizer_state_list(out["optimizer_snapshots"][next_epoch])
+            for optimizer, stored in zip(optimizers, next_snapshots):
+                replayed = _state_dict_to_cpu(optimizer.state_dict())["state"]
+                for k, st in stored["state"].items():
+                    for key, val in st.items():
+                        if isinstance(val, torch.Tensor) and val.dtype.is_floating_point:
+                            moment_diff = max(
+                                moment_diff,
+                                float((replayed[k][key].float() - val.float()).abs().max()),
+                            )
+            verification["max_abs_optimizer_state_diff"] = moment_diff
+
+    return {
+        "epoch": epoch,
+        "lr": lr,
+        "lr_by_group": lr_by_group,
+        "optimizer": config.optimizer,
+        "optimizer_group_names": group_names,
+        "parameter_groups": parameter_groups,
+        "betas": tuple(adam_group["betas"]) if adam_group is not None else None,
+        "eps": float(adam_group["eps"]) if adam_group is not None else None,
+        "weight_decay": float(adam_group["weight_decay"])
+        if adam_group is not None
+        else float(optimizers[0].param_groups[0]["weight_decay"]),
+        "momentum": float(optimizers[0].param_groups[0].get("momentum", 0.0))
+        if "sgd" in group_names
+        else None,
+        "shuffle_each_epoch": shuffle_each_epoch,
+        "num_steps": len(steps),
+        "params_before": params_before_epoch,
+        "params_after": params_after_epoch,
+        "steps": steps,
+        "verification": verification,
+    }
+
+
+def flatten_named_tensors(
+    named: dict[str, torch.Tensor],
+    names: list[str] | None = None,
+) -> torch.Tensor:
+    """Concatenate a name-keyed tensor dict into one 1D float64 CPU vector.
+
+    ``names`` fixes the order (default: sorted keys) so vectors from different
+    dicts are comparable coordinate by coordinate.
+    """
+    keys = sorted(named.keys()) if names is None else names
+    return torch.cat([named[k].detach().cpu().double().reshape(-1) for k in keys])
+
+
+def _cosine(a: torch.Tensor, b: torch.Tensor) -> float:
+    denom = float(a.norm() * b.norm())
+    return float(a @ b) / denom if denom > 0 else float("nan")
+
+
+def epoch_replay_summary_table(
+    replay: dict[str, Any],
+    *,
+    parameter_names: list[str] | None = None,
+) -> pd.DataFrame:
+    """One row per mini-batch step of a replay, with norms and alignment cosines.
+
+    ``parameter_names`` restricts the vectors to a subset of parameters (e.g.
+    ``["hidden_layers.0.weight"]``); default is all parameters.
+
+    Columns: ``step``, ``batch_loss``, ``lr``, ``grad_norm``, ``update_norm``,
+    ``cos_update_grad`` (update vs the mini-batch gradient that produced it; for
+    plain GD this is exactly -1), ``cos_update_epoch_delta`` (this step's update
+    vs the whole epoch's parameter change), ``cos_grad_epoch_delta``,
+    ``cum_update_norm`` (norm of the running sum of updates) and, when the replay
+    recorded population gradients, ``full_grad_norm``, ``cos_grad_full_grad``,
+    ``cos_update_full_grad``. For a hybrid ``"sgd_adam"`` replay the Adam columns
+    below cover only the AdamW-managed parameters; pass ``parameter_names`` (e.g.
+    ``replay["parameter_groups"]["sgd"]``) to restrict every column to one group.
+    For Adam replays: ``adam_step_size_min / median /
+    max`` (per-coordinate effective learning rate; coordinates with a zero
+    second moment, e.g. dead ReLU rows, give ``lr / eps`` and dominate the max) and
+    ``weight_decay_fraction`` (``||wd update|| / ||update||``).
+    """
+    steps = replay["steps"]
+    if not steps:
+        return pd.DataFrame()
+    names = parameter_names if parameter_names is not None else sorted(steps[0]["grad"].keys())
+    epoch_delta = flatten_named_tensors(replay["params_after"], names) - flatten_named_tensors(
+        replay["params_before"], names
+    )
+    cumulative = torch.zeros_like(epoch_delta)
+    rows: list[dict[str, float | int]] = []
+    for rec in steps:
+        g = flatten_named_tensors(rec["grad"], names)
+        u = flatten_named_tensors(rec["update"], names)
+        cumulative = cumulative + u
+        row: dict[str, float | int] = {
+            "step": int(rec["step"]),
+            "batch_loss": float(rec["batch_loss"]),
+            "lr": float(replay["lr"]),
+            "grad_norm": float(g.norm()),
+            "update_norm": float(u.norm()),
+            "cos_update_grad": _cosine(u, g),
+            "cos_update_epoch_delta": _cosine(u, epoch_delta),
+            "cos_grad_epoch_delta": _cosine(g, epoch_delta),
+            "cum_update_norm": float(cumulative.norm()),
+        }
+        if "full_grad" in rec:
+            fg = flatten_named_tensors(rec["full_grad"], names)
+            row["full_grad_norm"] = float(fg.norm())
+            row["cos_grad_full_grad"] = _cosine(g, fg)
+            row["cos_update_full_grad"] = _cosine(u, fg)
+        adam_names = [n for n in names if n in rec.get("adam_step_size", {})]
+        if adam_names:
+            ss = flatten_named_tensors(rec["adam_step_size"], adam_names)
+            wd = flatten_named_tensors(rec["weight_decay_update"], adam_names)
+            u_adam = flatten_named_tensors(rec["update"], adam_names)
+            row["adam_step_size_min"] = float(ss.min())
+            row["adam_step_size_median"] = float(ss.median())
+            row["adam_step_size_max"] = float(ss.max())
+            row["weight_decay_fraction"] = (
+                float(wd.norm() / u_adam.norm()) if float(u_adam.norm()) > 0 else float("nan")
+            )
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def epoch_replay_parameter_series(
+    replay: dict[str, Any],
+    key: str,
+    parameter_name: str,
+) -> torch.Tensor:
+    """Stack one recorded quantity for one parameter across steps.
+
+    ``key`` is a per-step entry such as ``"grad"``, ``"update"``,
+    ``"adam_step_size"``, ``"adam_direction"``, ``"full_grad"`` or
+    ``"params_before"``. Returns a tensor of shape ``(num_steps, *param_shape)``.
+    """
+    return torch.stack([rec[key][parameter_name] for rec in replay["steps"]])

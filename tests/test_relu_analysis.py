@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import torch
 from matplotlib import pyplot as plt
 
@@ -11,8 +12,13 @@ from layer_lenses.relu_analysis import (
     log_loss_gradients,
     masked_relu_logits,
     neuron_leaf_responsibility_from_ablation,
+    epoch_replay_summary_table,
+    flatten_named_tensors,
     plot_layered_relu_graph,
+    regenerate_seed_result_data,
+    replay_epoch_from_snapshot,
     run_single_relu_seed,
+    run_single_relu_seed_replayable,
     summarize_neuron_leaf_activity,
 )
 from layer_lenses.relu_mlp import ReLUMLP
@@ -349,3 +355,108 @@ def test_run_single_relu_seed_rejects_invalid_projection_node() -> None:
         assert "ODT internal node" in str(exc)
     else:
         raise AssertionError("Expected invalid projection node to raise ValueError.")
+
+
+@pytest.mark.parametrize(
+    ("optimizer", "extra"),
+    [
+        ("adam", {}),
+        ("sgd", {"momentum": 0.9}),
+        ("sgd_adam", {"momentum": 0.9, "sgd_adam_split_layer": 1, "sgd_lr": 0.5}),
+    ],
+)
+def test_replay_epoch_reproduces_the_next_snapshot(optimizer, extra) -> None:
+    seed_result = run_single_relu_seed_replayable(
+        5,
+        dim=6,
+        depth=2,
+        n_train=200,
+        hidden_dims=[4, 4],
+        total_epochs=3,
+        lr=2e-3,
+        batch_size=50,
+        weight_decay=0.01,
+        snapshot_epochs=[0, 1, 2, 3],
+        show_progress=False,
+        optimizer=optimizer,
+        **extra,
+    )
+    assert "data" not in seed_result
+
+    replay = replay_epoch_from_snapshot(seed_result, 1)
+    # Replaying the epoch must land exactly on the stored next checkpoint, including
+    # the optimizer's own state (Adam moments / SGD momentum buffers).
+    assert replay["verification"]["max_abs_param_diff_overall"] == 0.0
+    assert replay["verification"]["max_abs_optimizer_state_diff"] == 0.0
+    assert replay["num_steps"] == 4
+
+    # The per-step updates must sum to the epoch's net parameter change.
+    total = sum(flatten_named_tensors(s["update"]) for s in replay["steps"])
+    delta = flatten_named_tensors(replay["params_after"]) - flatten_named_tensors(
+        replay["params_before"]
+    )
+    assert float((total - delta).abs().max()) < 1e-9
+
+    summary = epoch_replay_summary_table(replay)
+    assert len(summary) == replay["num_steps"]
+    assert {"grad_norm", "update_norm", "cos_update_grad"} <= set(summary.columns)
+
+
+def test_replay_final_snapshot_is_rejected() -> None:
+    seed_result = run_single_relu_seed_replayable(
+        5, dim=6, depth=2, n_train=200, hidden_dims=[4], total_epochs=2, lr=2e-3,
+        batch_size=100, weight_decay=0.0, snapshot_epochs=[0, 1, 2], show_progress=False,
+    )
+    with pytest.raises(ValueError):
+        replay_epoch_from_snapshot(seed_result, 2)
+    with pytest.raises(KeyError):
+        replay_epoch_from_snapshot(seed_result, 99)
+
+
+def test_regenerate_seed_result_data_matches_the_training_data() -> None:
+    kwargs = dict(
+        dim=6, depth=2, n_train=200, hidden_dims=[4, 4], total_epochs=2, lr=2e-3,
+        batch_size=50, weight_decay=0.0, snapshot_epochs=[0, 1, 2], show_progress=False,
+    )
+    legacy = run_single_relu_seed(5, **kwargs)
+    replayable = run_single_relu_seed_replayable(5, **kwargs)
+
+    data = regenerate_seed_result_data(replayable)
+    for key, value in legacy["data"].items():
+        assert np.array_equal(data[key], value)
+
+    # The two runners must agree bit for bit on the trained weights.
+    for epoch, state in legacy["out"]["checkpoint_snapshots"].items():
+        for name, tensor in state.items():
+            assert torch.equal(tensor, replayable["out"]["checkpoint_snapshots"][epoch][name])
+
+
+def test_hybrid_replay_separates_sgd_and_adam_parameters() -> None:
+    seed_result = run_single_relu_seed_replayable(
+        5, dim=6, depth=2, n_train=200, hidden_dims=[4, 4], total_epochs=2, lr=2e-3,
+        batch_size=50, weight_decay=0.0, sgd_weight_decay=0.0, snapshot_epochs=[0, 1, 2],
+        show_progress=False, optimizer="sgd_adam", sgd_adam_split_layer=1, sgd_lr=0.5,
+        momentum=0.0,
+    )
+    replay = replay_epoch_from_snapshot(seed_result, 0)
+    assert replay["parameter_groups"]["sgd"] == ["hidden_layers.0.weight"]
+    assert "output_layer.weight" in replay["parameter_groups"]["adamw"]
+    assert replay["lr_by_group"]["sgd"] == pytest.approx(0.5)
+    assert replay["lr_by_group"]["adamw"] == pytest.approx(2e-3)
+
+    # The Adam decomposition must cover the AdamW parameters and only those.
+    step = replay["steps"][0]
+    assert set(step["adam_step_size"]) == set(replay["parameter_groups"]["adamw"])
+
+    # Layer 0 follows plain SGD exactly; the Adam layers do not.
+    grad0 = step["grad"]["hidden_layers.0.weight"]
+    update0 = step["update"]["hidden_layers.0.weight"]
+    assert torch.allclose(update0, -0.5 * grad0, atol=1e-7)
+
+    # Restricting the summary table to one group must work and change the numbers.
+    sgd_table = epoch_replay_summary_table(replay, parameter_names=replay["parameter_groups"]["sgd"])
+    adam_table = epoch_replay_summary_table(replay, parameter_names=replay["parameter_groups"]["adamw"])
+    assert sgd_table["cos_update_grad"].iloc[0] == pytest.approx(-1.0, abs=1e-4)
+    assert adam_table["cos_update_grad"].iloc[0] > -0.99
+    assert "adam_step_size_median" not in sgd_table.columns
+    assert "adam_step_size_median" in adam_table.columns
