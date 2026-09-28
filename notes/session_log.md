@@ -3392,3 +3392,84 @@ low-order local quantity at theta_0; it is the outcome of the amplification phas
 - Whether the winner's identity is fixed at the linear-to-exponential switch
   (~epoch 25-30 in the studied run) or only during the exponential phase. The
   rates-over-time table suggests the latter, but a spectral test would settle it.
+
+---
+
+## 2026-09-28 17:30 IST — Designed init: steering a probe neuron to u_0, and what stops it
+
+### Goal
+The reverse of the init-sweep question: construct a small-perturbation-of-zero init in
+which a chosen first-layer neuron (the probe) moves toward u_0 under population gradient
+flow, then vary it by flipping signs of groups.
+
+### User prompts (verbatim)
+- "Ok, considering this analysis is not likely to be straightforward. I want to try the reverse first. \"Can we construct initializations that are minor perturbations of 0, such that (say) first neuron of the first hidden layer moves towards u_0?\" \n\nConsider the below init scheme.\n\nneuron 1 : initialised to a small random perturbation that is orthogonal to all the ODT hyperplanes. We want to make this neuron go towards u_0 under population gradient flow.\n\nneurons 2 to 33: initialised to a small scalar factor of -u_15, +u_15, -u_16, +u_16 ,..., -u_30,+u_30.\n\nneurons 34 to 40 : random vectors. All neurons normalised to have same norm\n\nSecond hidden layer: Each neuron has an incoming weight vector in {-1,0,+1}^40. Have 10 of these neurons connect to neuron 1 of hidden layer 1 with weight +1, and some subset of neurons in the previous layer corresponding to -u_15 to -u_22 with weight +1, and zero elsewhere. \n\nHave another 10 of these neurons connect to neuron 1 of hidden layer 1 with weight +1, and some subset of neurons in the previous layer corresponding to +u_23 to +u_30 with weight +1, and zero elsewhere. \n\nHave another 10 of these neurons connect to neuron 1 of hidden layer 1 with weight -1, and some subset of neurons in the previous layer corresponding to -u_23 to -u_30 with weight +1, and zero elsewhere. \n\nHave another 10 of these neurons connect to neuron 1 of hidden layer 1 with weight -1, and some subset of neurons in the previous layer corresponding to +u_15 to +u_22 with weight +1, and zero elsewhere. \n\nThird hidden layer: Each neuron is given a random vector in {0,1}^40.\n\nOutput layer : 40 dimensional all ones vector. \n\nWe can then try variations of the above init by systematically flipping signs of groups of neurons."
+
+### Changes
+- New `src/layer_lenses/designed_init.py`: `DesignedInitSpec`, `build_designed_weights` /
+  `build_designed_model` (the construction above, exactly; `group_sign` sets the probe's
+  weight into groups A-D, fractional values allowed; `subset_mode` random or all),
+  `logit_scale`, `odt_coordinates`, `probe_gradient_report` (ODT decomposition of the
+  probe's negative gradient, per group by zeroing the other groups), `run_designed_flow`
+  (full-batch constant-LR GD via `train_relu_mlp`), `neuron_trajectory_table`,
+  `sign_flip_variants`.
+- New `tests/test_designed_init.py` (4 tests). Suite: 83 passing.
+- New `notebooks/designed_init_u0.ipynb`, executed in place. Flow sweep script and
+  outputs under `results/designed_init/` (gitignored), summaries and trajectories
+  copied to `notebooks/results/designed_init/`.
+
+### Correction
+An earlier message in this session said the label is *minus* the sign of the last
+split. It is *plus*: leaf offsets (not leaf indices) alternate by parity, so ``y = +1``
+iff the on-path level-4 split is positive. The 2026-09-25 and morning 2026-09-28 log
+entries say "the sign of the last split", which is fine; nothing in the code was wrong.
+
+### Decisions
+- **eps = 1e-3.** Layers 2-4 are O(1) as specified, so the logit RMS is ~1400 * eps;
+  eps 1e-3 gives RMS 0.14 and a residue near 1/2. eps 1e-2 starts at loss 0.91.
+- **Full-batch GD, lr 3e-4, no momentum, 1500 steps** (60 ms per step). The probe's
+  trajectory is settled by step ~200; a 12000-step base run confirms the endpoint is a
+  fixed point. lr 1e-4 and 3e-4 give the same endpoint.
+- **Random subsets, seed 0** for the group wiring and layer 3.
+
+### Results
+**Init gradient (t = 0), 16 sign patterns.** A group whose probe weight is +1 is
+structurally inert: a unit receiving +ReLU(probe) is on whenever the probe is on, so it
+cannot carry information about the probe's input. Groups with -1 gate the level-4
+features relative to the probe and are informative. Group A gates on left-subtree
+negative-side neurons, B on right-subtree positive-side, C on right-subtree negative-side,
+D on left-subtree positive-side. When informative, A and B push the probe toward -u_0 and
+C and D toward +u_0. The measured cos(-g, u_0) at init
+matches this rule in sign for all 16 patterns: base (C,D informative) +0.293, A+B
+informative -0.215, all four -0.020 (cancel), none +0.017; a single informative
+left-subtree group gives only -0.02.
+
+**Under the flow.** Every pattern with at least one inert (+1) group stalls at
+|cos(probe, u_0)| = 0.36-0.52 with ~0.8 of the probe's direction on level-4 normals,
+within ~100 steps. The three patterns with no inert group reach |cos| 0.88-0.93 with
+level-4 energy 0.13-0.21 and norm growth x33 (vs x8): all-(-1) -> -0.932, (0,0,-1,-1)
+-> +0.887, (-1,-1,0,0) -> -0.879. The endpoint sign matches the init-gradient sign in
+all 10 patterns with |init cos| > 0.05; the balanced patterns go either way.
+
+**Knob.** Shrinking the inert groups' probe weight w with C, D fixed at -1:
+w = 1.0 -> final cos 0.43; 0.3 -> 0.48; 0.1 -> 0.89; 0.03 -> 0.90; 0 -> 0.89. Note the
+init cos *falls* along this knob (0.29 -> 0.13) while the endpoint jumps.
+
+**Lesson.** What decides whether the probe reaches u_0 is not the size of the u_0
+push at init but the absence of a constant component in its lens. A constant lens pulls
+the probe toward E[y x], which lies on level 4, and that pull wins the competition.
+Only the input-dependent part of the lens, units gated by other features relative to
+the probe, pulls toward a coarse direction. This is the lens theorem's content in the
+ReLU setting, and the designed init makes it a knob.
+
+### Current state / where to pick up
+- With no inert groups and balanced left/right informative groups, the pole is decided
+  by second-order effects, which makes that configuration the natural testbed for a
+  lens-theorem-style statement about which perturbation decides the pole.
+- Untested variations: `subset_mode="all"`, other seeds for subsets and layer 3,
+  and whether the same design works with a random (non-level-4) second neuron set.
+
+### Open questions
+- The mechanism by which even the all-inert pattern reaches cos 0.52: the probe first
+  acquires level-4 content, after which its own gate correlates with level-4 signs and
+  its own blinder can supply the root-side modulation. Plausible, not measured.

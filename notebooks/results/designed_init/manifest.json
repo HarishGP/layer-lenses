@@ -1,0 +1,8 @@
+{
+  "eps": 0.001,
+  "lr": 0.0003,
+  "tree_seed": 5178,
+  "data_seed": 5178,
+  "n_train": 1000000,
+  "momentum": 0.0
+}
