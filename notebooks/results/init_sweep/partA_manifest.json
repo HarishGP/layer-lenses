@@ -1,0 +1,44 @@
+{
+  "part": "part-a",
+  "args": {
+    "part": "part-a",
+    "out": "results/init_sweep/partA",
+    "tree_seed": 5178,
+    "dim": 100,
+    "depth": 5,
+    "n_train": 1000000,
+    "hidden_dims": [
+      40,
+      40,
+      40
+    ],
+    "lr": 0.02,
+    "momentum": 0.9,
+    "weight_decay": 0.0,
+    "optimizer": "sgd",
+    "stop_loss": 0.3,
+    "max_steps": 60000,
+    "snapshot_every_steps": 100,
+    "device": "cuda",
+    "no_skip_existing": false,
+    "init_seeds": [
+      6178,
+      6201,
+      6202,
+      6203,
+      6204,
+      6205
+    ],
+    "data_seeds": [
+      5178,
+      5279,
+      5380
+    ],
+    "batch_sizes": [
+      10000,
+      1000
+    ]
+  },
+  "num_runs": 36,
+  "started": "2026-09-28 05:33:30"
+}

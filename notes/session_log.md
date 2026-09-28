@@ -3194,3 +3194,124 @@ same lr/mom, 100k epochs), FB-Adam (batch 1M, lr 0.02, 100k epochs), MB-Adam (ba
   permanently confined to levels 0–3 from this init.
 - Whether the "purification" that suppresses level 4 in phase two is the same
   mechanism as neuron 37 shedding its init component (measured, not proven).
+
+---
+
+## 2026-09-28 13:39 IST — Init sweep: the u_0 winner is an init property, decided during the plateau
+
+### Goal
+Set up and run the two-part experiment Harish designed: (A) establish that which
+first-layer neuron captures u_0 depends only on the init for a fixed optimizer, and
+(B) generate many inits with full parameter trajectories to analyse what makes the
+winner win. Budget: one afternoon of GPU, about a quarter on A.
+
+### User prompts (verbatim)
+- "Ok. I can see that Adam does something extra, but even a lens level understanding of why PGF works in multilayer networks is still open. I  will push the analysis of the extra oomph that Adam gives for later and settle for analysing PGF for now."
+- "Ok, now back to the problem at hand.\n\nI want to derive the set of conditions on the neural network under which a particular neuron, after moving along the population gradient an infintesimal amount will be more aligned to u_0 than before.\n\nOr an equally good result in the style of the lens theorem of the DLGN. Give some set of conditions on an init, and an infinitesimal change to it. After this infintesimal change the population gradient of a neuron is more aligned to u_0 than before. \n\nI would like a computational backbone to generate such ideas for inits and changes. How do you suggest we go about this?"
+- "Before we do that, let's build the experimental setup. I am thinking of the following steps:\n\n\n1. Get 10 random inits for the network.\n2. For each random init do some SGD momentum runs till the log loss hits 0.3. Each of these runs will be different in the following way: different samples for x (same ODT though), different batch sizes. Let's say two different batch sizes, and 3 different data seeds for a total of 6 runs per init seed.\n3. Each of these runs look at the neurons that have hit cosine sim > 0.95 with u_0. I am guessing we will have such a node in every run. Ideally, we will find the same neuron would have aligned with u_0 in all 6 runs.\n4. Then we can analyse what properties of the init made that neuron go towards u_0.\n\n\nHow do you propose we do this? start a separate notebook? Any other suggestions/modifications?"
+- "All your points sound good. Go ahead and implement it. Use about one fourth the compute to verify the hypothesis that \"which neuron goes towards u_0 is purely a property of the init (for a given optimisation algo). \n\nAnd the rest of the compute for generating inits and the eventual u_0 node analysis.  Assume a total compute time of one afternoon ( say 4 hours).\n\nKeep these two separate. If we believe the hypothesis, the former set of experiments is just for assuaging the reader and needlessly detailed. The latter can be lighter and less rigorous with random seed testing as we would have established in the former that other randomness is irrelevent for a given init.  \n\nBut do keep the entire parameter trajectory (second, third and output layer weights too) for the latter set of experiments. We will need it for lens analyses."
+
+(Three meta questions about `/usage`, where the scratch scripts run, and what the
+agent can delete were answered in the same session and are not research content.)
+
+### Changes
+- New `src/layer_lenses/init_sweep.py` (committed `2ecf0dc`, extended after):
+  `SweepRunSpec` with independent tree / data / init / train seeds (the ODT is built
+  once from `tree_seed` and passed to the generator, which `run_single_relu_seed`
+  cannot do); `train_sweep_run` with constant LR, snapshots every k optimizer steps,
+  early stop on trailing one-epoch loss <= `stop_loss`, first-layer-only or
+  all-layer storage; `.npz` persistence and a resumable `run_specs` driver; CLI
+  `python -m layer_lenses.init_sweep part-a|part-b`; analysis helpers
+  `capture_summary`, tie-aware `leading_set`, `first_layer_agreement`,
+  `part_a_invariance_table`, `init_neuron_features`, `winner_rank_table`,
+  `winner_prediction_cv` (leave-one-init-out conditional logit).
+- New `tests/test_init_sweep.py`, 10 tests on a tiny CPU config. Suite: 78 passing.
+- New `notebooks/init_sweep_analysis.ipynb`, executed in place on the full sweep.
+- `notebooks/results/init_sweep/`: the two `summary.csv`, the per-neuron feature
+  table (8000 rows), manifests and the launcher `run_all.sh`. Raw trajectories (2 GB)
+  stay in the gitignored `results/init_sweep/`.
+
+### Decisions
+- **Constant LR, step-indexed snapshots.** So batch sizes 1k and 10k share flow time
+  per step and are compared at equal step counts. The earlier notebook runs used
+  cosine annealing, but by the capture step it had decayed by <1%, so the runs match.
+- **Batch sizes 1k and 10k, not full batch.** Full batch to loss 0.3 costs ~35k
+  million-point steps per run and was already shown to coincide with 10k through
+  the capture. A 10x batch contrast is a real noise contrast and costs 42 s a run.
+- **Leading set instead of a single winner.** In Part B, two neurons cross within
+  500 steps of each other in 130 of 200 inits, so ties are the normal case.
+  `capture_summary` keeps the first crosser; `leading_set` keeps everyone within
+  the window; both are reported.
+- **Budget reallocation.** Runs cost 42 s, so Part A got 6 inits x 3 data seeds x
+  2 batch sizes (36 runs, 25 min) and Part B 200 inits (2h20m), rather than 10 and
+  a handful.
+- The per-neuron "output weight" feature was replaced by the fan-out column norm
+  into the next layer: for three hidden layers a first-layer neuron has no output
+  weight, and indexing `output_layer.weight` by first-layer index was a bug caught
+  by the tests on unequal widths.
+
+### Results
+**Part A (invariance).** In 35 of 36 runs the first neuron to reach |cos| >= 0.95
+with u_0 is the same as in the init's reference run. The exception is init 6204,
+where neurons 5 and 9 race in every run and swap order once by 400 steps. Every
+run's leading set meets the reference's (36/36). The *second* capture is not
+init-determined: for init 6203 the runner-up differs in four of six runs and
+arrives 4000-19000 steps later. Batch size barely perturbs the trajectory (worst
+row-wise cosine vs reference at the capture step 0.98-0.99 with the same data
+sample); a different data sample perturbs it visibly (33-39 of 40 neurons below
+0.99 by the capture step, worst 0.66), consistent with a small persistent
+difference in the empirical objective being amplified in the sub-dominant modes
+during the exponential escape while the dominant one, the winner, is unchanged.
+
+**Part B (200 inits).** All 200 reached loss 0.3 and all captured u_0. First
+crossing at step ~10k-13k; 1, 2 or 3 neurons in the leading set in 69, 130, 1
+inits; 2-5 neurons on u_0 by loss 0.3.
+
+Winner's percentile rank among its 39 siblings, pooled over inits (sign test):
+
+| feature | mean pct | frac above median | p |
+|---|---|---|---|
+| disp_norm_plateau | 0.84 | 0.945 | 5e-43 |
+| norm_ratio_plateau | 0.82 | 0.930 | 2e-39 |
+| abs_cos_u0_plateau | 0.77 | 0.845 | 3e-24 |
+| abs_cos_u0_init | 0.73 | 0.800 | 3e-18 |
+| lens_std_init / lens_abs_mean_init | 0.67 | 0.74 / 0.73 | 1e-11 |
+| grad_norm_init | 0.66 | 0.725 | 2e-10 |
+| norm_init, signed cos features, neg_grad_cos_u0_init | ~0.5 | ~0.5 | n.s. |
+
+Leave-one-init-out prediction of the winner (chance top-1 = 0.025):
+
+| features | top-1 | top-1 in leading set | median rank | top-3 |
+|---|---|---|---|---|
+| abs_cos_u0_init alone | 0.115 | 0.16 | | 0.26 |
+| all init features, linear | 0.15 | 0.24 | 7 | 0.30 |
+| plateau-end features | 0.37 | 0.58 | 3 | 0.57 |
+| init + plateau | 0.39 | 0.60 | 2 | 0.61 |
+
+Reading: the winner *is* a deterministic function of the init (Part A), but the
+static init features tried here recover only a small part of it. By the end of the
+plateau, ~50 epochs of deterministic flow later, the winner is largely visible: it
+is the neuron that has moved and grown the most. So the selection happens through
+the coupled plateau dynamics, not the initial geometry, which is exactly the
+lens-mediated second-order effect the derivation in the previous prompt targets.
+Also: the earlier single-neuron anecdote (neuron 37 having one of the smallest
+init gradients) does not generalise; winners tend to have *larger* init gradients
+and lens magnitudes, and a larger |cos| with u_0 at init.
+
+### Current state / where to pick up
+- Everything is in `results/init_sweep/{partA,partB}`; the notebook reproduces all
+  tables from the run files. Features are cached in
+  `partB/init_neuron_features.csv`.
+- Next, per the derivation plan: compute the autograd sensitivity of each neuron's
+  u_0 alignment rate at init, and test whether *that* predicts the winner where the
+  static features do not. If it does, the theorem is about the sign structure of
+  that sensitivity.
+- Alternative cheap predictor to try: the linearized flow. Run each init for
+  ~1000 full-batch steps (a few seconds) and use the resulting displacement ranks.
+
+### Open questions
+- Why the plateau-end winner is only 37% predictable from its own plateau-end
+  features: the remaining variance may be in the leading-set ties (top-1 in
+  leading set is 0.58) and in the second half of the escape.
+- Whether the data-sample sensitivity of non-winning neurons matters for lens
+  analyses that read the other neurons' orientations at the capture step.

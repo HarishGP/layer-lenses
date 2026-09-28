@@ -192,3 +192,21 @@ def test_init_features_and_rank_table_on_tiny_sweep(tmp_path) -> None:
     # invariance table degenerate case: one run per init, the reference is itself
     per_init, per_run = part_a_invariance_table(tmp_path, reference_data_seed=4, reference_batch_size=64)
     assert len(per_init) == 3 and (per_run["min_row_cos_vs_ref_end"] > 0.99999).all()
+
+
+def test_winner_prediction_cv_recovers_a_planted_rule() -> None:
+    from layer_lenses.init_sweep import winner_prediction_cv
+    rng = np.random.default_rng(0)
+    frames = []
+    for init in range(30):
+        f = pd.DataFrame({"init_seed": init, "neuron": np.arange(8),
+                          "signal": rng.normal(size=8), "noise": rng.normal(size=8)})
+        f["is_winner"] = (f.signal == f.signal.max()).astype(int)
+        f["in_leading_set"] = f["is_winner"]
+        frames.append(f)
+    feats = pd.concat(frames, ignore_index=True)
+    table, weights = winner_prediction_cv(feats, {"signal": ["signal"], "noise": ["noise"], "both": ["signal", "noise"]}, iters=500)
+    t = table.set_index("feature_set")
+    assert t.loc["signal", "top1"] == 1.0 and t.loc["both", "top1"] >= 0.9
+    assert t.loc["noise", "top1"] < 0.4 and t.loc["signal", "chance_top1"] == pytest.approx(1 / 8)
+    assert weights["both"]["signal"] > abs(weights["both"]["noise"])

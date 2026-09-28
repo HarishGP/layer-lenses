@@ -867,3 +867,80 @@ def winner_rank_table(
             }
         )
     return pd.DataFrame(rows).sort_values("p_sign_test").reset_index(drop=True)
+
+
+def _standardize_within_init(features: pd.DataFrame, cols: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return ``(X[N, K, p], winner[N], in_leading[N, K])`` with z-scores per init."""
+    X, W, L = [], [], []
+    for _, g in features.groupby("init_seed"):
+        if g["is_winner"].sum() != 1:
+            continue
+        g = g.sort_values("neuron")
+        x = g[cols].to_numpy(dtype=np.float64)
+        x = (x - x.mean(0)) / (x.std(0) + 1e-12)
+        X.append(x)
+        W.append(int(np.argmax(g["is_winner"].to_numpy())))
+        L.append(g["in_leading_set"].to_numpy().astype(bool))
+    return np.stack(X), np.asarray(W), np.stack(L)
+
+
+def _fit_conditional_logit(X: np.ndarray, W: np.ndarray, *, l2: float, iters: int, lr: float) -> np.ndarray:
+    """Maximize the mean log-softmax probability of the winner among its siblings."""
+    N, _, p = X.shape
+    beta = np.zeros(p)
+    idx = np.arange(N)
+    for _ in range(iters):
+        s = X @ beta
+        s = s - s.max(axis=1, keepdims=True)
+        P = np.exp(s)
+        P /= P.sum(axis=1, keepdims=True)
+        grad = (X[idx, W] - (P[:, :, None] * X).sum(axis=1)).mean(axis=0) - l2 * beta
+        beta = beta + lr * grad
+    return beta
+
+
+def winner_prediction_cv(
+    features: pd.DataFrame,
+    feature_sets: dict[str, list[str]],
+    *,
+    l2: float = 1e-2,
+    iters: int = 3000,
+    lr: float = 0.05,
+) -> tuple[pd.DataFrame, dict[str, dict[str, float]]]:
+    """Can a linear score over per-neuron features pick the winner out of its siblings?
+
+    For each named feature set, fits a conditional-logit model (softmax over the
+    neurons of one init) with leave-one-init-out cross-validation and reports the
+    held-out top-1 hit rate, the rate at which the top-scored neuron lies in the
+    leading set, the median rank of the true winner, and the top-3 hit rate.
+    Chance for top-1 is ``1 / width``. Also returns the weights fitted on all
+    inits, per feature set, for interpretation. Features are z-scored within each
+    init, so signed quantities should be passed as absolute values when the sign
+    is irrelevant.
+    """
+    rows = []
+    weights: dict[str, dict[str, float]] = {}
+    for name, cols in feature_sets.items():
+        X, W, L = _standardize_within_init(features, cols)
+        N = len(W)
+        top1 = in_lead = 0
+        ranks = []
+        for i in range(N):
+            m = np.arange(N) != i
+            beta = _fit_conditional_logit(X[m], W[m], l2=l2, iters=iters, lr=lr)
+            order = np.argsort(-(X[i] @ beta))
+            top1 += int(order[0] == W[i])
+            in_lead += int(L[i][order[0]])
+            ranks.append(int(np.nonzero(order == W[i])[0][0]) + 1)
+        ranks = np.asarray(ranks)
+        rows.append(
+            {
+                "feature_set": name, "n_inits": N, "n_features": len(cols),
+                "top1": top1 / N, "top1_in_leading_set": in_lead / N,
+                "median_winner_rank": float(np.median(ranks)), "top3": float((ranks <= 3).mean()),
+                "chance_top1": 1.0 / X.shape[1],
+            }
+        )
+        beta_all = _fit_conditional_logit(X, W, l2=l2, iters=iters, lr=lr)
+        weights[name] = {c: float(b) for c, b in zip(cols, beta_all)}
+    return pd.DataFrame(rows), weights
