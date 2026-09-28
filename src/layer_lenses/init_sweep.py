@@ -885,17 +885,43 @@ def _standardize_within_init(features: pd.DataFrame, cols: list[str]) -> tuple[n
 
 
 def _fit_conditional_logit(X: np.ndarray, W: np.ndarray, *, l2: float, iters: int, lr: float) -> np.ndarray:
-    """Maximize the mean log-softmax probability of the winner among its siblings."""
+    """Maximize the mean log-softmax probability of the winner among its siblings.
+
+    Damped Newton iterations on the L2-regularized conditional-logit objective,
+    which is smooth and strictly concave; ``iters`` bounds the iteration count and
+    ``lr`` is the initial step, halved on any decrease of the objective.
+    """
     N, _, p = X.shape
     beta = np.zeros(p)
     idx = np.arange(N)
-    for _ in range(iters):
-        s = X @ beta
+
+    def objective(b: np.ndarray) -> tuple[float, np.ndarray, np.ndarray]:
+        s = X @ b
         s = s - s.max(axis=1, keepdims=True)
         P = np.exp(s)
         P /= P.sum(axis=1, keepdims=True)
-        grad = (X[idx, W] - (P[:, :, None] * X).sum(axis=1)).mean(axis=0) - l2 * beta
-        beta = beta + lr * grad
+        ll = float(np.log(P[idx, W] + 1e-300).mean() - 0.5 * l2 * (b @ b))
+        mean_x = (P[:, :, None] * X).sum(axis=1)                     # (N, p)
+        grad = (X[idx, W] - mean_x).mean(axis=0) - l2 * b
+        cov = np.einsum("nk,nkp,nkq->pq", P, X, X) / N - (mean_x.T @ mean_x) / N
+        hess = -cov - l2 * np.eye(p)
+        return ll, grad, hess
+
+    ll, grad, hess = objective(beta)
+    step = lr if lr > 0 else 1.0
+    for _ in range(min(iters, 100)):
+        direction = np.linalg.solve(hess, -grad)
+        t = min(1.0, step)
+        while True:
+            cand = beta + t * direction
+            ll_new, grad_new, hess_new = objective(cand)
+            if ll_new >= ll - 1e-12 or t < 1e-6:
+                break
+            t *= 0.5
+        converged = abs(ll_new - ll) < 1e-10
+        beta, ll, grad, hess = cand, ll_new, grad_new, hess_new
+        if converged:
+            break
     return beta
 
 
@@ -944,3 +970,188 @@ def winner_prediction_cv(
         beta_all = _fit_conditional_logit(X, W, l2=l2, iters=iters, lr=lr)
         weights[name] = {c: float(b) for c, b in zip(cols, beta_all)}
     return pd.DataFrame(rows), weights
+
+
+# ---------------------------------------------------------------------------
+# Autograd sensitivity of the u_0 alignment rate along the population flow
+# ---------------------------------------------------------------------------
+
+
+def alignment_rate_sensitivity(
+    model: ReLUMLP,
+    x: np.ndarray,
+    y: np.ndarray,
+    direction: np.ndarray,
+    *,
+    device: str = "cpu",
+    chunk_size: int = 50_000,
+) -> pd.DataFrame:
+    """First and second time derivatives, at the current parameters, of each first-layer
+    neuron's alignment with ``direction`` and of its relative norm, under population
+    gradient flow on the sample ``(x, y)``.
+
+    For neuron k with weight ``w_k``, unit ``u`` = ``direction``, and population
+    gradient ``g_k`` (mean BCE-with-logits over the sample), define
+
+        A_k = d/dt |cos(w_k, u)|  = s_k * <-g_k, u - (w_hat_k.u) w_hat_k> / ||w_k||
+        B_k = d/dt log ||w_k||     = <-g_k, w_hat_k> / ||w_k||
+
+    with ``s_k`` the sign of ``w_k.u`` (alignment toward the nearer pole). Both are
+    functions of all parameters through ``g_k``. Their derivatives along the flow
+    ``theta_dot = -grad L`` are the second time derivatives of alignment and log-norm
+    at this point, ``A_dot_k`` and ``B_dot_k``. They are computed exactly by
+    forward-mode differentiation over the reverse-mode gradient (``torch.func.jvp``
+    over ``torch.func.grad``), with the tangent equal to minus the full-sample
+    gradient; the sample is processed in chunks, which is exact because every
+    quantity is linear in the per-sample loss.
+
+    Returns one row per first-layer neuron: ``sign``, ``A0``, ``A_dot``, ``B0``,
+    ``B_dot``, plus ``grad_norm`` (of ``g_k``) and the scalar ``flow_speed``
+    (norm of the full gradient). Requires an activation with forward-mode support
+    (the default ``"relu"`` is fine).
+    """
+    import copy
+
+    from torch.func import functional_call, grad, jvp
+
+    dev = torch.device(device)
+    m = copy.deepcopy(model).to(dev).eval()
+    params = {n: p.detach() for n, p in m.named_parameters()}
+    u = torch.as_tensor(np.asarray(direction, dtype=np.float64), dtype=torch.float32, device=dev)
+    u = u / u.norm()
+
+    x_t = torch.from_numpy(x).float().to(dev)
+    y_bin = _labels_pm1_to_binary(torch.from_numpy(y).float().to(dev))
+    N = x_t.shape[0]
+    chunks = [(s, min(s + chunk_size, N)) for s in range(0, N, chunk_size)]
+
+    def loss_fn(p: dict[str, torch.Tensor], xb: torch.Tensor, yb: torch.Tensor) -> torch.Tensor:
+        return torch.nn.functional.binary_cross_entropy_with_logits(functional_call(m, p, (xb,)), yb)
+
+    # full-sample gradient, then the flow direction v = -g
+    g = {n: torch.zeros_like(p) for n, p in params.items()}
+    for s, e in chunks:
+        gc = grad(loss_fn)(params, x_t[s:e], y_bin[s:e])
+        for n in g:
+            g[n] += gc[n] * ((e - s) / N)
+    v = {n: -g[n] for n in g}
+
+    w = params[FIRST_LAYER_KEY]
+    sign = torch.sign(w @ u)
+    sign[sign == 0] = 1.0
+
+    def rates(p: dict[str, torch.Tensor], xb: torch.Tensor, yb: torch.Tensor) -> torch.Tensor:
+        gk = grad(loss_fn)(p, xb, yb)[FIRST_LAYER_KEY]
+        wk = p[FIRST_LAYER_KEY]
+        nrm = wk.norm(dim=1, keepdim=True)
+        wh = wk / nrm
+        tau = (u[None, :] - (wh @ u)[:, None] * wh) / nrm
+        a = sign * (-(gk * tau).sum(1))
+        b = (-(gk * wh).sum(1)) / nrm[:, 0]
+        return torch.stack([a, b])          # (2, K)
+
+    val = torch.zeros(2, w.shape[0], device=dev)
+    dot = torch.zeros(2, w.shape[0], device=dev)
+    for s, e in chunks:
+        xb, yb = x_t[s:e], y_bin[s:e]
+        vc, dc = jvp(lambda p: rates(p, xb, yb), (params,), (v,))
+        val += vc * ((e - s) / N)
+        dot += dc * ((e - s) / N)
+
+    flow_speed = float(torch.sqrt(sum((t ** 2).sum() for t in g.values())))
+    return pd.DataFrame(
+        {
+            "neuron": np.arange(w.shape[0]),
+            "sign": sign.cpu().numpy(),
+            "A0": val[0].cpu().numpy(),
+            "A_dot": dot[0].cpu().numpy(),
+            "B0": val[1].cpu().numpy(),
+            "B_dot": dot[1].cpu().numpy(),
+            "grad_norm": g[FIRST_LAYER_KEY].norm(dim=1).cpu().numpy(),
+            "flow_speed": flow_speed,
+        }
+    )
+
+
+def alignment_rate_flow_difference(
+    model: ReLUMLP,
+    x: np.ndarray,
+    y: np.ndarray,
+    direction: np.ndarray,
+    *,
+    rel_step: float = 1e-3,
+    device: str = "cpu",
+    chunk_size: int = 50_000,
+) -> pd.DataFrame:
+    """Finite-difference version of `alignment_rate_sensitivity` along the flow.
+
+    Evaluates the rates ``A_k`` and ``B_k`` at the parameters displaced by
+    ``+-eps * v`` with ``v = -grad L`` and ``eps`` chosen so the displacement has
+    norm ``rel_step * ||theta||``, and returns the central difference. Unlike the
+    forward-mode derivative, which is exact on the current linear piece of the
+    ReLU network, a finite step crosses gate boundaries and therefore includes the
+    gate-flip part of the population Hessian. The two agree as ``rel_step -> 0`` on
+    a fixed sample; where they differ at the step sizes the flow actually takes,
+    the difference is the boundary contribution.
+
+    Columns: ``A0``, ``B0`` (at theta), ``A_dot_fd``, ``B_dot_fd``, ``displacement``.
+    Uses the model's parameter dtype, so pass a ``.double()`` model for a
+    high-precision small-step check.
+    """
+    import copy
+
+    from torch.func import functional_call, grad
+
+    dev = torch.device(device)
+    m = copy.deepcopy(model).to(dev).eval()
+    params = {n: p.detach() for n, p in m.named_parameters()}
+    dtype = next(iter(params.values())).dtype
+    u = torch.as_tensor(np.asarray(direction, dtype=np.float64), dtype=dtype, device=dev)
+    u = u / u.norm()
+    x_t = torch.from_numpy(x).to(dtype=dtype, device=dev)
+    y_bin = _labels_pm1_to_binary(torch.from_numpy(y).to(dtype=dtype, device=dev))
+    N = x_t.shape[0]
+    chunks = [(s, min(s + chunk_size, N)) for s in range(0, N, chunk_size)]
+
+    def loss_fn(p, xb, yb):
+        return torch.nn.functional.binary_cross_entropy_with_logits(functional_call(m, p, (xb,)), yb)
+
+    def full_grad(p):
+        g = {n: torch.zeros_like(t) for n, t in p.items()}
+        for s, e in chunks:
+            gc = grad(loss_fn)(p, x_t[s:e], y_bin[s:e])
+            for n in g:
+                g[n] += gc[n] * ((e - s) / N)
+        return g
+
+    w0 = params[FIRST_LAYER_KEY]
+    sign = torch.sign(w0 @ u)
+    sign[sign == 0] = 1.0
+
+    def rates(p, g):
+        gk = g[FIRST_LAYER_KEY]
+        wk = p[FIRST_LAYER_KEY]
+        nrm = wk.norm(dim=1, keepdim=True)
+        wh = wk / nrm
+        tau = (u[None, :] - (wh @ u)[:, None] * wh) / nrm
+        return sign * (-(gk * tau).sum(1)), (-(gk * wh).sum(1)) / nrm[:, 0]
+
+    g0 = full_grad(params)
+    a0, b0 = rates(params, g0)
+    gnorm = torch.sqrt(sum((t ** 2).sum() for t in g0.values()))
+    tnorm = torch.sqrt(sum((t ** 2).sum() for t in params.values()))
+    eps = float(rel_step * tnorm / gnorm)
+    plus = {n: params[n] - eps * g0[n] for n in params}     # theta + eps * v
+    minus = {n: params[n] + eps * g0[n] for n in params}    # theta - eps * v
+    ap, bp = rates(plus, full_grad(plus))
+    am, bm = rates(minus, full_grad(minus))
+    return pd.DataFrame(
+        {
+            "neuron": np.arange(w0.shape[0]),
+            "A0": a0.cpu().numpy(),
+            "B0": b0.cpu().numpy(),
+            "A_dot_fd": ((ap - am) / (2 * eps)).cpu().numpy(),
+            "B_dot_fd": ((bp - bm) / (2 * eps)).cpu().numpy(),
+            "displacement": float(eps * gnorm),
+        }
+    )

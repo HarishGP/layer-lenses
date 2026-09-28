@@ -210,3 +210,25 @@ def test_winner_prediction_cv_recovers_a_planted_rule() -> None:
     assert t.loc["signal", "top1"] == 1.0 and t.loc["both", "top1"] >= 0.9
     assert t.loc["noise", "top1"] < 0.4 and t.loc["signal", "chance_top1"] == pytest.approx(1 / 8)
     assert weights["both"]["signal"] > abs(weights["both"]["noise"])
+
+
+def test_alignment_rate_sensitivity_matches_small_step_difference() -> None:
+    from layer_lenses.init_sweep import alignment_rate_flow_difference, alignment_rate_sensitivity
+
+    spec = _tiny(dim=8, hidden_dims=(6, 5))
+    tree = build_tree(spec)
+    x, y = build_data(spec, tree)
+    model = build_init_model(spec)
+    u = tree.w_list[0]
+    jv = alignment_rate_sensitivity(model, x, y, u, device="cpu", chunk_size=200)
+    assert len(jv) == 6 and np.isfinite(jv[["A0", "A_dot", "B0", "B_dot"]].to_numpy()).all()
+
+    # A tiny step in float64 stays on the current linear piece of the ReLU net, so the
+    # central difference must reproduce the forward-mode derivative.
+    fd = alignment_rate_flow_difference(model.double(), x, y, u, rel_step=1e-7, device="cpu", chunk_size=200)
+    assert np.allclose(jv["A0"], fd["A0"], rtol=1e-4, atol=1e-9)
+    assert np.allclose(jv["B0"], fd["B0"], rtol=1e-4, atol=1e-9)
+    assert np.allclose(jv["A_dot"], fd["A_dot_fd"], rtol=1e-3, atol=1e-9)
+    assert np.allclose(jv["B_dot"], fd["B_dot_fd"], rtol=1e-3, atol=1e-9)
+    assert np.abs(fd["A_dot_fd"]).max() > 0 and np.abs(fd["B_dot_fd"]).max() > 0
+    assert fd["displacement"].iloc[0] == pytest.approx(1e-7 * np.sqrt(sum((p.detach().numpy() ** 2).sum() for p in model.parameters())), rel=1e-6)

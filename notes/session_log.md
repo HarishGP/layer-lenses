@@ -3315,3 +3315,80 @@ and lens magnitudes, and a larger |cos| with u_0 at init.
   leading set is 0.58) and in the second half of the escape.
 - Whether the data-sample sensitivity of non-winning neurons matters for lens
   analyses that read the other neurons' orientations at the capture step.
+
+---
+
+## 2026-09-28 15:40 IST — Autograd sensitivity of the u_0 alignment rate: weak at init, winner decided mid-escape
+
+### Goal
+Test whether the second-order sensitivity of each neuron's u_0 alignment rate at
+initialization predicts the winner where the static features could not.
+
+### User prompts (verbatim)
+- "What are the nine static init features? How are they combined to make one score for each neuron? What do you mean by \"leave-one-init-out\" prediction test?"
+- "How is the \"plateau\" defined? Exactly 50 epochs?"
+- "Compute the autograd sensitivity of each neuron's u_0 alignment rate at init and test whether it predicts the winner where the static features could not"
+
+### Changes
+- `init_sweep.py`: `alignment_rate_sensitivity` (forward-mode over reverse-mode via
+  `torch.func.jvp` over `torch.func.grad`, tangent = minus the full-sample gradient,
+  chunked exactly) returning per neuron `A0`, `A_dot` (first and second time
+  derivatives of |cos(w_k,u_0)| under the flow), `B0`, `B_dot` (same for log norm);
+  `alignment_rate_flow_difference` (central finite difference along the flow with
+  a displacement of `rel_step * ||theta||`).
+- `tests/test_init_sweep.py`: the derivative must match a float64 finite difference
+  with a 1e-7 relative step, which stays on one linear piece. Suite: 79 passing.
+- Notebook: two new sections (sensitivity at init with rank/prediction tables; rates
+  over time with a decision-time plot). `_fit_conditional_logit` switched from
+  gradient ascent to damped Newton (identical results, ~30x faster). CSVs `alignment_sensitivity.csv`,
+  `alignment_sensitivity_fd.csv`, `rates_over_time.csv` under `results/init_sweep/partB`.
+
+### Decisions
+- **The "plateau end" is a loss threshold**, first snapshot with trailing loss
+  <= 0.69, not a fixed epoch: median 43 epochs, range 25-64, about 43% of the way to
+  the winner's crossing. A dynamical landmark (the linear-to-exponential switch of
+  the layer displacement) would be earlier and cleaner; not implemented.
+- **Derivative vs finite difference.** A ReLU net's population Hessian has a
+  gate-boundary term that the piecewise-linear jvp cannot see. Small finite steps on
+  a 100k sample are dominated by kink-crossing noise (rank agreement with the jvp
+  0.23 at a 1e-4 relative step, magnitudes 5.7x); at a 1e-2 step, comparable to
+  what the flow does over the plateau, the FD agrees with the jvp at Spearman 0.85
+  with magnitudes 1.3x. So the boundary term is a ~30% correction here and the jvp
+  is the cleaner estimator. The float64 test uses a 1e-7 step for that reason.
+
+### Results (200 inits, winner = first crosser)
+Winner's mean percentile among 39 siblings at init: `B_dot` 0.77 (p 6e-25),
+`abs_cos_u0_init` 0.73, `A0` 0.65 (p 4e-6), `A_dot` 0.60 (p 1e-3). Raw argmax of
+`A_dot` is the winner 11.5% of the time, the same as `abs_cos_u0_init` alone.
+Leave-one-init-out top-1: dynamical four 0.19, static nine 0.15, both 0.275
+(top-3 0.455, median rank 4); plateau-end five 0.365; everything 0.385. (The
+finite-difference variant of the dynamical features gives 0.22 for "both".)
+
+Rates over time, raw argmax top-1 / in-leading-set of `A0` and of |cos| itself:
+
+| step | 0 | 2000 | 4000 | 5000 | 6000 | 7000 | 8000 |
+|---|---|---|---|---|---|---|---|
+| A0 | .12/.18 | .18/.29 | .20/.33 | .27/.44 | .37/.59 | .44/.62 | .36/.55 |
+| abs_cos_u0 | .12/.16 | .12/.16 | .13/.18 | .23/.33 | .41/.62 | .57/.79 | .78/.92 |
+| B_dot | .10/.16 | .12/.23 | .15/.26 | .18/.26 | .23/.36 | .17/.24 | .09/.14 |
+
+Reading: the second-order sensitivity at init carries real but weak information,
+comparable to the static angle to u_0, and does not close the gap. The winner
+becomes identifiable between steps 5000 and 8000, roughly a third to a half of
+the way to its crossing and after the loss-defined plateau end, i.e. during the
+exponential escape. The best *early* indicator is `B_dot`, the acceleration of
+norm growth, not the alignment rate. So the "condition on the init" is not a
+low-order local quantity at theta_0; it is the outcome of the amplification phase.
+
+### Current state / where to pick up
+- The right sensitivity is spectral, not a second derivative: the dominant growing
+  mode of the flow linearized around the mid-plateau state (Jacobian of the flow
+  field via jvp, power iteration), and which neuron's u_0-tangential coordinates it
+  loads on. Not implemented.
+- `A_dot` turns negative for the winner once its cosine saturates, so it is a bad
+  late indicator by construction; `A0` and |cos| are the late indicators.
+
+### Open questions
+- Whether the winner's identity is fixed at the linear-to-exponential switch
+  (~epoch 25-30 in the studied run) or only during the exponential phase. The
+  rates-over-time table suggests the latter, but a spectral test would settle it.
