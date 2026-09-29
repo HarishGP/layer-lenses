@@ -3626,3 +3626,82 @@ sizes to 2/4 made the root probes fragile and did not help.
 ### Open questions
 - Whether the stall cosine (0.52 for node probes) is set by the ratio of modulated to
   constant lens and can be predicted from the group wiring.
+
+---
+
+## 2026-09-29 16:23 IST — Full hierarchy design under SGD: 30 probes, 48 runs
+
+### Goal
+Two probes for every internal node 0..14, widths (80, 40, 40), relu vs linear cues,
+cue neurons frozen vs free, several designed inits, trained with small-batch SGD
+with momentum to loss 0.3 or a cap, all within two hours.
+
+### User prompts (verbatim)
+- "Can you explain what the ReLU and Linear cues are?"
+- "ok, so the linear cues/relu cues are just different initialization schemes for the second hidden layer?"
+- "Ok. lets just go all the way once and add two probes for each internal node, and try both relu and linear cues for second layer init strategy. Try both variants: neurons corresponding to ODT level 4 nodes held frozen at init and also updating like regular parameters. Have the number of hidden neurons in each layer be 80,40,40.  The last 18 neurons in hidden layer 1 are just random vectors at init.\n\nTry for several such inits. These inits will vary by an additional orthogonal component to all the first layer neurons, and the selected subsets chosen randomly in layer 2 and 3.\n\nTrain using SGD with momentum and small batch size till train loss goes lower than 0.3 or one run takes too much time. This way we can run more inits for a given time.\n\nTarget all the runs to be finished in 2 hours max."
+
+### Changes
+- `designed_init.py`: `HierarchyDesignSpec`, `hierarchy_unit_cues` (one balanced unit
+  per probe: both children's cue sets in the same unit, so ancestor pushes cancel
+  inside it), `build_hierarchy_weights` / `build_hierarchy_model`, `hierarchy_probe_table`,
+  `hierarchy_labels`, `HIERARCHY_TARGETS`, `NODE_LEVEL`.
+- `init_sweep.train_sweep_run` accepts a prebuilt `model` and `freeze_first_layer_rows`.
+- +2 tests (suite: 88). Notebook section 8. Sweep `results/designed_init/run_hierarchy.py`;
+  summaries, manifest, log and per-run JSON under `notebooks/results/designed_init/hierarchy/`;
+  the 48 run files (5 MB each, all layers every 1000 steps) stay in the gitignored
+  `results/designed_init/hierarchy/runs/`.
+
+### Decisions
+- **Second-layer allocation.** 40 units for 30 probes: one unit per probe with the union
+  of both children's cue sets, which is balanced by itself; units per probe by level
+  4 / 2 / 1 / 1 = 8 + 8 + 8 + 16 = 40 rows. Deeper probes get fewer units and a
+  smaller region, so their signal is weaker by construction.
+- **Scale.** Layers 2-4 keep the {-1,0,+1} / {0,1} / ones sign structure but are scaled
+  by 1/3, 1/sqrt(20), 1/sqrt(40) so rows have order-one norms and the standard SGD
+  settings (batch 1000, lr 0.02, momentum 0.9) are stable; eps = 0.01 gives a logit RMS
+  of 0.006-0.011 at init. Without this rescaling the first layer would need a learning
+  rate 100x smaller than the rest.
+- **Inits vary** by the probes' off-span directions, a 0.2-relative off-span component
+  added to every cue, the 18 random neurons, the random cue subsets per unit (at least
+  one per child), and the random 0/1 third layer; one data sample for all.
+- **Budget.** Pilot: 900 steps/s, loss 0.42 at 60k steps and flattening, so the 0.3
+  target is not reachable within the budget; cap 100k steps (~110 s), 12 seeds x 4
+  conditions = 48 runs, wall-clock guard 110 min. Actual: 100 min, no run reached 0.3.
+
+### Results (means over 12 seeds; "on target" = the probe's top ODT node is its target)
+
+| condition | loss at cap | L0 on target | L1 | L2 | L3 | cues rotated to coarse nodes | random neurons coarse-aligned |
+|---|---|---|---|---|---|---|---|
+| linear, cues free | 0.402 | 0.96 | 0.38 | 0.24 | 0.12 | 24 / 32 | 5.8 / 18 |
+| linear, cues frozen | 0.425 | 1.00 | 1.00 | 0.93 | 0.38 | 0 | 14.4 / 18 |
+| relu, cues free | 0.404 | 0.71 | 0.19 | 0.27 | 0.14 | 20 / 32 | 7.4 / 18 |
+| relu, cues frozen | 0.426 | 1.00 | 1.00 | 0.96 | 0.30 | 0 | 14.7 / 18 |
+
+Mean cosine with the signed target, frozen cues: 0.999 / 0.998 / 0.93-0.95 / 0.37-0.41
+by level, with zero spread across seeds at levels 0-1. Alignment at 10k steps is already
+at its final value for levels 0-2.
+
+Reading: (1) With the cue neurons frozen the design works down to level 2 under real
+SGD, in both cue modes, and the relu/linear distinction stops mattering, unlike in the
+full-batch flow where frozen cues stalled at cosine 0.5. The difference is that here
+layers 2-4 are at order-one scale and adapt at the standard rate, so the lens is not
+fixed even though the cues are. (2) With the cues free, 20-24 of the 32 cue neurons
+rotate to coarse nodes within the run and the node probes mostly lose their targets;
+linear cues help at level 1 (0.38 vs 0.19). (3) Level-3 probes, one unit with two cues
+and a 1/8 region each, mostly fail in every condition. (4) The frozen runs reach a
+slightly higher loss (0.425 vs 0.402): 32 fixed level-4 neurons cost capacity, and
+14 of the 18 random neurons take over coarse roles in those runs. (5) No run reached
+loss 0.3 in 100k steps; the random-init runs at the same settings did so in 35-47k.
+
+### Current state / where to pick up
+- The strongest design so far: frozen cues, either cue mode, levels 0-2 captured by
+  construction under SGD. Level 3 needs more units or more cues per unit.
+- Next questions: unfreeze the cues after the probes commit (say at 10k steps) and see
+  whether the targets survive; give level-3 probes 2 units each at the expense of the
+  root; and whether the frozen-cue networks, trained longer, reach the loss of the
+  random-init runs.
+
+### Open questions
+- Why free cues rotate to coarse nodes so quickly under SGD (20-24 of 32 by 100k
+  steps) and whether that is the same drift seen in the flow experiments.

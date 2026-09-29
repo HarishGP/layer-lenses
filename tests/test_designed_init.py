@@ -176,3 +176,53 @@ def test_flow_runner_can_freeze_cue_rows() -> None:
     W0 = out["checkpoint_snapshots"][0]["hidden_layers.0.weight"]; W4 = out["checkpoint_snapshots"][4]["hidden_layers.0.weight"]
     assert torch.equal(W0[rows], W4[rows])
     assert not torch.equal(W0[:2], W4[:2])
+
+
+def test_hierarchy_design_structure() -> None:
+    from layer_lenses.designed_init import (
+        HIERARCHY_TARGETS, HierarchyDesignSpec, build_hierarchy_model, build_hierarchy_weights,
+        hierarchy_cue_index, hierarchy_probe_table, hierarchy_unit_cues,
+    )
+    tree = _tree()
+    assert len(HIERARCHY_TARGETS) == 30 and HIERARCHY_TARGETS[0] == (0, 1) and HIERARCHY_TARGETS[-1] == (14, -1)
+    left, right = hierarchy_unit_cues(0, +1)
+    assert left == tuple((+1, n) for n in range(15, 23)) and right == tuple((-1, n) for n in range(23, 31))
+    assert hierarchy_unit_cues(7, -1) == (((-1, 15),), ((+1, 16),))
+    spec = HierarchyDesignSpec(eps=0.01, seed=3, cue_mode="linear", subset_mode="random")
+    W, meta = build_hierarchy_weights(spec, tree)
+    W1, W2, W3, Wo = (W[k] for k in ("hidden_layers.0.weight", "hidden_layers.1.weight", "hidden_layers.2.weight", "output_layer.weight"))
+    assert W1.shape == (80, 100) and W2.shape == (40, 80) and W3.shape == (40, 40) and Wo.shape == (1, 40)
+    assert np.allclose(np.linalg.norm(W1, axis=1), 0.01)
+    assert np.abs(tree.w_list @ W1[:30].T).max() < 1e-12                 # probes off the ODT span
+    c = tree.w_list @ W1[30:62].T / 0.01                                    # cues: ODT part plus a 0.2 off-span component
+    assert np.allclose(np.abs(c).max(axis=0), 1 / np.sqrt(1 + 0.2**2), atol=1e-6)
+    assert spec.n_random == 18 and meta["cue_rows"] == list(range(30, 62))
+    # every unit reads exactly one probe with -1 * layer2_scale; counts 4/2/1/1 by level
+    probe_cols = W2[:, :30]
+    assert ((probe_cols != 0).sum(axis=1) == 1).all() and np.allclose(probe_cols[probe_cols != 0], -spec.layer2_scale)
+    counts = np.bincount(meta["unit_probe"], minlength=30)
+    assert list(counts[:2]) == [4, 4] and list(counts[2:6]) == [2] * 4 and list(counts[6:]) == [1] * 24
+    # a level-3 unit in linear mode reads its two cues and their twins: +1 on (-1,15), -1 on (+1,15), +1 on (+1,16), -1 on (-1,16)
+    u = int(np.nonzero(meta["unit_probe"] == 14 + 1)[0][0])               # probe 15 -> (7, -1)
+    assert W2[u, hierarchy_cue_index(15, -1, spec)] > 0 and W2[u, hierarchy_cue_index(15, +1, spec)] < 0
+    assert W2[u, hierarchy_cue_index(16, +1, spec)] > 0 and W2[u, hierarchy_cue_index(16, -1, spec)] < 0
+    assert set(np.unique(np.round(W3 / spec.layer3_scale, 9))) <= {0.0, 1.0}
+    model, _ = build_hierarchy_model(spec, tree)
+    t = hierarchy_probe_table(model.hidden_layers[0].weight.detach().numpy(), tree)
+    assert len(t) == 30 and (t.cos_target.abs() < 1e-6).all() and (t.norm - 0.01).abs().max() < 1e-6
+    with pytest.raises(ValueError):
+        build_hierarchy_weights(HierarchyDesignSpec(units_per_level=(8, 8, 8, 8)), tree)
+
+
+def test_train_sweep_run_accepts_a_model_and_freezes_rows() -> None:
+    from layer_lenses.designed_init import HierarchyDesignSpec, build_hierarchy_model
+    from layer_lenses.init_sweep import train_sweep_run
+    tree = _tree()
+    x, y = build_data(SweepRunSpec(tree_seed=5178, data_seed=11, init_seed=0, batch_size=1, n_train=1024), tree)
+    model, meta = build_hierarchy_model(HierarchyDesignSpec(eps=0.01, seed=0), tree)
+    sp = SweepRunSpec(tree_seed=5178, data_seed=11, init_seed=0, batch_size=256, n_train=1024, hidden_dims=(80, 40, 40),
+                      lr=1e-3, momentum=0.9, device="cpu", snapshot_every_steps=4, max_steps=8, stop_loss=0.0, store_all_layers=True)
+    out = train_sweep_run(sp, tree=tree, x_train=x, y_train=y, model=model, freeze_first_layer_rows=meta["cue_rows"])
+    W0, W8 = out["weights"]["hidden_layers.0.weight"][0], out["weights"]["hidden_layers.0.weight"][-1]
+    assert out["final_step"] == 8 and np.array_equal(W0[30:62], W8[30:62]) and not np.array_equal(W0[:30], W8[:30])
+    assert out["weights"]["hidden_layers.1.weight"].shape[1:] == (40, 80)

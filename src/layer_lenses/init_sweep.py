@@ -128,8 +128,13 @@ def train_sweep_run(
     x_train: np.ndarray,
     y_train: np.ndarray,
     log: Callable[[str], None] | None = None,
+    model: ReLUMLP | None = None,
+    freeze_first_layer_rows: list[int] | None = None,
 ) -> dict[str, Any]:
     """Train one run to ``stop_loss`` or ``max_steps``, snapshotting every k steps.
+
+    ``model`` overrides the init built from ``spec.init_seed`` (e.g. a designed init);
+    ``freeze_first_layer_rows`` keeps those first-layer neurons fixed.
 
     Returns a dict with ``spec``, ``snapshot_steps``, ``snapshot_loss`` (trailing
     one-epoch mean training loss at each snapshot, NaN before one epoch has
@@ -140,9 +145,13 @@ def train_sweep_run(
     """
     t0 = time.time()
     device = torch.device(spec.device)
-    model = build_init_model(spec).to(device)
+    model = (build_init_model(spec) if model is None else model).to(device)
     stored = _stored_parameter_names(model, spec.store_all_layers)
 
+    mask = None
+    if freeze_first_layer_rows:
+        mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}
+        mask[FIRST_LAYER_KEY][list(freeze_first_layer_rows)] = 0.0
     set_seed(spec.train_seed)
     config = ReLUTrainConfig(
         epochs=1,
@@ -154,8 +163,11 @@ def train_sweep_run(
         lr_scheduler_eta_min_ratio=1.0,
         optimizer=spec.optimizer,
         momentum=spec.momentum,
+        parameter_update_mask=mask,
     )
     optimizers = build_relu_optimizers(model, config)  # constant LR, no scheduler
+    from layer_lenses.relu_training import _parameter_update_masks
+    update_masks = _parameter_update_masks(model=model, config=config, device=device)
     criterion = torch.nn.BCEWithLogitsLoss()
 
     x = torch.from_numpy(x_train).float().to(device)
@@ -196,7 +208,7 @@ def train_sweep_run(
                 x_batch=x[start:end],
                 y_batch_bin=y_bin[start:end],
                 first_layer_projection_vector=None,
-                parameter_update_masks={},
+                parameter_update_masks=update_masks,
             )
             step += 1
             trailing.append((float(loss.cpu()) * (end - start), end - start))

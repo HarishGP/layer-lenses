@@ -540,3 +540,168 @@ def probe_target_report(
 def cue_rows(spec: MultiProbeSpec) -> list[int]:
     """First-layer row indices of the 32 level-4 cue neurons in a multi-probe design."""
     return list(range(spec.n_probes, spec.n_probes + 2 * NUM_LEVEL4))
+
+
+# ---------------------------------------------------------------------------
+# Full hierarchy design: two probes per internal node 0..14
+# ---------------------------------------------------------------------------
+
+HIERARCHY_TARGETS: tuple[tuple[int, int], ...] = tuple((node, pole) for node in range(15) for pole in (+1, -1))
+NODE_LEVEL = np.array([0] + [1] * 2 + [2] * 4 + [3] * 8 + [4] * 16)
+
+
+@dataclass(frozen=True)
+class HierarchyDesignSpec:
+    """Two probes per internal node, 32 cues, random fill; widths (80, 40, 40) by default.
+
+    ``units_per_level`` gives the number of second-layer units per probe by the
+    target node's level (root .. level 3). ``subset_mode="random"`` lets every unit
+    draw a random subset of its candidate cues with at least one per child;
+    ``"all"`` uses every candidate. ``cue_offspan_ratio`` adds a random component
+    orthogonal to every ODT normal to each cue neuron (relative to the ODT part).
+    Layers 2-4 keep their {-1,0,+1} / {0,1} / ones sign structure, scaled by
+    ``layer2_scale``, ``layer3_scale``, ``output_scale`` so their rows have order-one
+    norms; ``eps`` is the common norm of every first-layer row.
+    """
+
+    eps: float = 0.01
+    seed: int = 0
+    cue_mode: str = "relu"
+    subset_mode: str = "random"
+    cue_offspan_ratio: float = 0.2
+    units_per_level: tuple[int, int, int, int] = (4, 2, 1, 1)
+    width1: int = 80
+    width2: int = 40
+    width3: int = 40
+    layer2_scale: float = 1 / 3
+    layer3_density: float = 0.5
+    layer3_scale: float = 1 / np.sqrt(20)
+    output_scale: float = 1 / np.sqrt(40)
+    dim: int = 100
+    depth: int = 5
+
+    @property
+    def n_probes(self) -> int:
+        return len(HIERARCHY_TARGETS)
+
+    @property
+    def cue_first_row(self) -> int:
+        return self.n_probes
+
+    @property
+    def n_random(self) -> int:
+        return self.width1 - self.n_probes - 2 * NUM_LEVEL4
+
+
+def hierarchy_cue_index(node: int, sign: int, spec: HierarchyDesignSpec) -> int:
+    return spec.cue_first_row + 2 * (node - LEVEL4_FIRST) + (1 if sign > 0 else 0)
+
+
+def hierarchy_unit_cues(node: int, pole: int) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
+    """Cue candidates for a single balanced unit: ``(left-child set, right-child set)``.
+
+    Same rule as `node_probe_groups` (push sign ``-s * side``), with both children's
+    sets in one unit so the ancestor pushes cancel inside the unit.
+    """
+    left, right = 2 * node + 1, 2 * node + 2
+    if pole > 0:
+        return tuple((+1, n) for n in level4_descendants(left)), tuple((-1, n) for n in level4_descendants(right))
+    return tuple((-1, n) for n in level4_descendants(left)), tuple((+1, n) for n in level4_descendants(right))
+
+
+def hierarchy_labels(spec: HierarchyDesignSpec) -> list[str]:
+    labels = [f"probe{p}:{'+' if pole > 0 else '-'}u{node}" for p, (node, pole) in enumerate(HIERARCHY_TARGETS)]
+    for node in range(LEVEL4_FIRST, LEVEL4_FIRST + NUM_LEVEL4):
+        labels += [f"-u{node}", f"+u{node}"]
+    labels += [f"rand{i}" for i in range(spec.n_random)]
+    return labels
+
+
+def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Weights of the full hierarchy design plus metadata (unit -> probe map, row labels)."""
+    if tree.w_list.shape != (31, spec.dim):
+        raise ValueError("the design assumes a depth-5 ODT with 31 internal nodes")
+    if spec.n_random < 0:
+        raise ValueError("width1 too small for 30 probes and 32 cues")
+    n_units = sum(spec.units_per_level[NODE_LEVEL[node]] for node, _ in HIERARCHY_TARGETS)
+    if n_units > spec.width2:
+        raise ValueError(f"units_per_level needs {n_units} second-layer rows, width2 is {spec.width2}")
+    rng = np.random.default_rng(spec.seed)
+    U = tree.w_list.astype(np.float64)
+
+    def offspan(v: np.ndarray) -> np.ndarray:
+        v = v - U.T @ (U @ v)
+        v = v - U.T @ (U @ v)
+        return v
+
+    W1 = np.zeros((spec.width1, spec.dim))
+    for p in range(spec.n_probes):
+        v = offspan(rng.normal(size=spec.dim))
+        W1[p] = v / np.linalg.norm(v)
+    for node in range(LEVEL4_FIRST, LEVEL4_FIRST + NUM_LEVEL4):
+        for sign in (-1, +1):
+            r = offspan(rng.normal(size=spec.dim)); r /= np.linalg.norm(r)
+            v = sign * U[node] + spec.cue_offspan_ratio * r
+            W1[hierarchy_cue_index(node, sign, spec)] = v / np.linalg.norm(v)
+    for i in range(spec.n_random):
+        r = rng.normal(size=spec.dim)
+        W1[spec.cue_first_row + 2 * NUM_LEVEL4 + i] = r / np.linalg.norm(r)
+    W1 *= spec.eps
+
+    W2 = np.zeros((spec.width2, spec.width1))
+    unit_probe = np.full(spec.width2, -1, dtype=int)
+    row = 0
+    for p, (node, pole) in enumerate(HIERARCHY_TARGETS):
+        left_set, right_set = hierarchy_unit_cues(node, pole)
+        for _ in range(spec.units_per_level[NODE_LEVEL[node]]):
+            W2[row, p] = -1.0
+            for cand in (left_set, right_set):
+                if spec.subset_mode == "all":
+                    chosen = list(cand)
+                elif spec.subset_mode == "random":
+                    mask = rng.random(len(cand)) < 0.5
+                    if not mask.any():
+                        mask[rng.integers(len(cand))] = True
+                    chosen = [c for c, m in zip(cand, mask) if m]
+                else:
+                    raise ValueError(f"subset_mode must be 'random' or 'all', got {spec.subset_mode!r}")
+                for s, n in chosen:
+                    W2[row, hierarchy_cue_index(n, s, spec)] += 1.0
+                    if spec.cue_mode == "linear":
+                        W2[row, hierarchy_cue_index(n, -s, spec)] -= 1.0
+                    elif spec.cue_mode != "relu":
+                        raise ValueError(f"cue_mode must be 'relu' or 'linear', got {spec.cue_mode!r}")
+            unit_probe[row] = p
+            row += 1
+    W2 *= spec.layer2_scale
+    W3 = (rng.random((spec.width3, spec.width2)) < spec.layer3_density).astype(np.float64) * spec.layer3_scale
+    Wout = np.full((1, spec.width3), spec.output_scale)
+    weights = {
+        "hidden_layers.0.weight": W1,
+        "hidden_layers.1.weight": W2,
+        "hidden_layers.2.weight": W3,
+        "output_layer.weight": Wout,
+    }
+    meta = {"unit_probe": unit_probe, "labels": hierarchy_labels(spec), "targets": HIERARCHY_TARGETS,
+            "cue_rows": list(range(spec.cue_first_row, spec.cue_first_row + 2 * NUM_LEVEL4))}
+    return weights, meta
+
+
+def build_hierarchy_model(spec: HierarchyDesignSpec, tree: COBODTTree) -> tuple[ReLUMLP, dict[str, Any]]:
+    weights, meta = build_hierarchy_weights(spec, tree)
+    model = ReLUMLP(input_dim=spec.dim, hidden_dims=[spec.width1, spec.width2, spec.width3], bias=False)
+    model.load_state_dict({k: torch.from_numpy(v).float() for k, v in weights.items()})
+    return model, meta
+
+
+def hierarchy_probe_table(W1: np.ndarray, tree: COBODTTree) -> pd.DataFrame:
+    """Per probe (rows 0..29 of a first layer): signed cosine with its target, the top ODT node,
+    the level-4 energy, and the norm."""
+    U = tree.w_list.astype(np.float64)
+    rows = []
+    for p, (node, pole) in enumerate(HIERARCHY_TARGETS):
+        w = W1[p].astype(np.float64); n = np.linalg.norm(w); c = U @ w / max(n, 1e-30)
+        rows.append({"probe": p, "node": node, "pole": pole, "target": f"{'+' if pole > 0 else '-'}u{node}", "level": int(NODE_LEVEL[node]),
+                     "cos_target": float(pole * c[node]), "top_node": int(np.abs(c).argmax()), "top_abs_cos": float(np.abs(c).max()),
+                     "level4_energy": float((c[15:] ** 2).sum()), "norm": float(n)})
+    return pd.DataFrame(rows)
