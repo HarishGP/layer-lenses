@@ -1,0 +1,21 @@
+{
+  "scale": 0.5,
+  "row_norm": 0.7071067811865476,
+  "max_steps": 600000,
+  "stop_loss": 0.05,
+  "batch": 1000,
+  "lr": 0.02,
+  "momentum": 0.9,
+  "unfreeze_at_step": 10000,
+  "seeds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "cues": [
+    "free",
+    "unfreeze10k"
+  ],
+  "cue_mode": "linear"
+}

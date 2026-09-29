@@ -3782,3 +3782,59 @@ One seed only.
   0.3 faster than random inits, and whether the default-scale early capture of level 3
   can be kept (e.g. by releasing later, or a learning-rate drop at 10k).
 - Open: why deep probes drift off at default scale after capturing early.
+
+---
+
+## 2026-09-29 20:28 IST — Kaiming scale halved, four seeds, trained toward loss 0.05
+
+### Goal
+Rerun the Kaiming-scale hierarchy design for more seeds with every layer scaled down by
+2, training until the loss reaches 0.1-0.05 if feasible, within two hours.
+
+### User prompts (verbatim)
+- "Run the Kaiming scale experiments for a few more seeds. Scale the init weights down by a factor 2 in every layer. Run till loss reaches even lower values of around 0.1 to 0.05 (if at all it happens in a reasonable time frame).\n\nTotal runtime budget of 2 hours max."
+
+### Changes
+- Sweep `results/designed_init/run_hierarchy_kaiming_half.py` (row norm 0.707 in every
+  layer, linear cues, seeds 0-3, cues free vs frozen-then-released at 10k, batch 1000,
+  lr 0.02, momentum 0.9 constant, stop at trailing loss 0.05 or 600k steps, 110-min
+  guard). Notebook section 11. Summaries and per-run wiring under
+  `notebooks/results/designed_init/hierarchy_kaiming_half/`. No code changes.
+
+### Results (8 runs, 77 min)
+No run reached 0.3, let alone 0.05: every run hit the 600k-step cap with the loss at
+0.373-0.384 and still the minimum at the cap (free 0.376, released 0.383 on average).
+This is below the ~0.40 of the eps = 0.01 and default-scale runs at 100k steps but far
+above the full-Kaiming runs, which reached 0.3 by 34-46k steps. Row norm 0.707 gives a
+logit RMS of about 0.15 at init (four layers, so 1/16 of Kaiming's 2.4), i.e. it sits
+in the small-logit regime with the default scale, and trains like it.
+
+Hierarchy capture, on-target fraction by level (means over seeds):
+
+| when | free | released at 10k |
+|---|---|---|
+| 10k steps | 1.00 / 1.00 / 0.88 / 0.94 | 1.00 / 1.00 / 0.69 / 0.70 |
+| 100k | 1.00 / 0.56 / 0.28 / 0.17 | 1.00 / 0.62 / 0.22 / 0.06 |
+| 600k | 1.00 / 0.56 / 0.25 / 0.14 | 1.00 / 0.62 / 0.25 / 0.03 |
+
+The early capture at 10k with free cues is the best seen, all four levels, but by 100k
+the level-2 and level-3 probes have drifted off and stay off; 20 of 32 cues end on
+coarse nodes in both treatments. Releasing at 10k does not help here, unlike at
+eps = 0.01.
+
+### Reading
+- Scale controls two things in opposite directions. Small logits at init (default,
+  half-Kaiming, eps 0.01) give the cleanest early capture of the designed hierarchy and
+  a loss that plateaus near 0.38-0.42 on a constant learning rate; the full Kaiming
+  scale starts with a logit RMS of 2.4, captures the deep levels less cleanly early,
+  and trains to 0.3 quickly. With constant LR 0.02 none of the designed inits reached
+  0.1; the random-init baseline that reached 0.047 used cosine annealing over 1M steps.
+- The deep-probe drift after early capture is now seen at three scales; it is a
+  property of the training dynamics at this learning rate, not of the init scale.
+
+### Current state / where to pick up
+- To test whether the plateau is a constant-LR noise floor rather than a property of
+  the init, rerun one half-Kaiming and one full-Kaiming run with cosine annealing (the
+  replayable trainer supports it; `train_sweep_run` is constant-LR by design).
+- To keep the early capture, try a learning-rate drop at 10k rather than releasing
+  cues, or freezing the probes' own rows after capture.
