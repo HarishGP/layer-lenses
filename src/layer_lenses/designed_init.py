@@ -218,13 +218,19 @@ def run_designed_flow(
     snapshot_every: int = 10,
     device: str = "cpu",
     show_progress: bool = False,
+    freeze_first_layer_rows: list[int] | None = None,
 ) -> dict[str, Any]:
     """Full-batch gradient descent (constant LR, optional heavy-ball) from ``model``.
 
     Wraps `train_relu_mlp` with ``batch_size = len(x)`` so each epoch is one step,
     and a constant learning rate. Snapshots every ``snapshot_every`` steps hold
-    all layers.
+    all layers. ``freeze_first_layer_rows`` keeps those first-layer neurons fixed
+    (e.g. the cue neurons) via the trainer's parameter update mask.
     """
+    mask = None
+    if freeze_first_layer_rows:
+        mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}
+        mask["hidden_layers.0.weight"][list(freeze_first_layer_rows)] = 0.0
     config = ReLUTrainConfig(
         epochs=steps,
         lr=lr,
@@ -236,6 +242,7 @@ def run_designed_flow(
         optimizer="sgd",
         momentum=momentum,
         show_progress=show_progress,
+        parameter_update_mask=mask,
     )
     return train_relu_mlp(model=model, x_train=x, y_train=y, config=config)
 
@@ -429,3 +436,107 @@ def multiprobe_gradient_report(
             rec[f"group{gi}_cos_u0"] = probe_cos(m, p)["cos_u0"]
         rows.append(rec)
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# Probes for arbitrary internal nodes
+# ---------------------------------------------------------------------------
+
+
+def level4_descendants(node: int, depth: int = 5) -> list[int]:
+    """Level-4 internal nodes in the subtree of ``node`` (``node`` itself if at level 4)."""
+    last_level_first = 2 ** (depth - 1) - 1  # 15 for depth 5
+    frontier = [node]
+    while frontier[0] < last_level_first:
+        frontier = [c for n in frontier for c in (2 * n + 1, 2 * n + 2)]
+    return frontier
+
+
+def node_probe_groups(
+    probe: int,
+    node: int,
+    pole: int,
+    *,
+    cue_mode: str = "relu",
+    size: int = 10,
+    probe_weight: float = -1.0,
+) -> tuple[CueGroup, CueGroup]:
+    """The balanced pair of informative groups that sends ``probe`` toward ``pole * u_node``.
+
+    For a unit gated on a level-4 cue of sign ``s`` under a child of ``node`` on side
+    ``side`` (-1 left, +1 right), the push on the probe toward ``u_node`` has sign
+    ``-s * side`` (with a -1 probe weight). So ``pole = +1`` pairs negative-side cues
+    under the right child with positive-side cues under the left child, and
+    ``pole = -1`` the reverse. Both children lie on the same side of every ancestor,
+    so the pair's pushes toward ancestors cancel; using every cue under each child
+    cancels the pushes toward descendants as well. At the root this reproduces the
+    C/D (pole +1) and A/B (pole -1) groups.
+    """
+    if pole not in (-1, 1):
+        raise ValueError("pole must be +1 or -1")
+    if node >= LEVEL4_FIRST:
+        raise ValueError("probes target internal nodes above level 4")
+    left, right = 2 * node + 1, 2 * node + 2
+    if pole > 0:
+        first = tuple((-1, n) for n in level4_descendants(right))
+        second = tuple((+1, n) for n in level4_descendants(left))
+    else:
+        first = tuple((-1, n) for n in level4_descendants(left))
+        second = tuple((+1, n) for n in level4_descendants(right))
+    return (
+        CueGroup(probe=probe, probe_weight=probe_weight, cues=first, cue_mode=cue_mode, size=size),
+        CueGroup(probe=probe, probe_weight=probe_weight, cues=second, cue_mode=cue_mode, size=size),
+    )
+
+
+SIX_PROBE_TARGETS: tuple[tuple[int, int], ...] = ((0, +1), (0, -1), (1, +1), (1, -1), (2, +1), (2, -1))
+
+
+def six_probe_spec(
+    *,
+    cue_mode: str = "relu",
+    root_size: int = 4,
+    child_size: int = 3,
+    **kw: Any,
+) -> MultiProbeSpec:
+    """Six probes: +-u_0 (groups of ``root_size``), +-u_1 and +-u_2 (groups of ``child_size``).
+
+    With the defaults the twelve groups fill the 40 second-layer rows exactly; the
+    first layer is 6 probes, 32 cues and 2 random neurons.
+    """
+    groups: list[CueGroup] = []
+    for p, (node, pole) in enumerate(SIX_PROBE_TARGETS):
+        groups += node_probe_groups(p, node, pole, cue_mode=cue_mode, size=root_size if node == 0 else child_size)
+    return MultiProbeSpec(groups=tuple(groups), n_probes=len(SIX_PROBE_TARGETS), **kw)
+
+
+def probe_target_report(
+    model: ReLUMLP,
+    spec: MultiProbeSpec,
+    targets: tuple[tuple[int, int], ...],
+    x: np.ndarray,
+    y: np.ndarray,
+    tree: COBODTTree,
+    *,
+    device: str = "cpu",
+) -> pd.DataFrame:
+    """Per probe: cosine of its negative gradient with its signed target, with u_0, u_1, u_2,
+    the level-4 energy, and the ODT node of largest |coordinate|."""
+    from layer_lenses.relu_analysis import log_loss_gradients
+
+    G = -log_loss_gradients(model=model, x=x, y=y, device=device)["hidden_layers.0.weight"].numpy()
+    rows = []
+    for p, (node, pole) in enumerate(targets):
+        g = G[p] / np.linalg.norm(G[p])
+        c, off = odt_coordinates(g[None], tree)
+        c = c[0]
+        rows.append({"probe": p, "target": f"{'+' if pole > 0 else '-'}u{node}", "cos_target": float(pole * c[node]),
+                     "cos_u0": float(c[0]), "cos_u1": float(c[1]), "cos_u2": float(c[2]),
+                     "level4_energy": float((c[15:] ** 2).sum()), "off_span": float(off[0] ** 2),
+                     "argmax_node": int(np.abs(c).argmax()), "grad_norm": float(np.linalg.norm(G[p]))})
+    return pd.DataFrame(rows)
+
+
+def cue_rows(spec: MultiProbeSpec) -> list[int]:
+    """First-layer row indices of the 32 level-4 cue neurons in a multi-probe design."""
+    return list(range(spec.n_probes, spec.n_probes + 2 * NUM_LEVEL4))

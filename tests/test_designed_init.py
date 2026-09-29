@@ -124,3 +124,55 @@ def test_two_probe_design_structure_and_linear_cues() -> None:
         build_multiprobe_weights(MultiProbeSpec(groups=(CueGroup(probe=2, probe_weight=-1, cues=LEFT_NEG),), n_probes=2), tree)
     with pytest.raises(ValueError):
         build_multiprobe_weights(MultiProbeSpec(groups=(CueGroup(probe=0, probe_weight=-1, cues=RIGHT_NEG, size=41),), n_probes=2), tree)
+
+
+def test_level4_descendants_and_node_probe_groups() -> None:
+    from layer_lenses.designed_init import (
+        LEFT_NEG, LEFT_POS, RIGHT_NEG, RIGHT_POS, SIX_PROBE_TARGETS, level4_descendants,
+        node_probe_groups, six_probe_spec, build_multiprobe_weights, cue_index,
+    )
+    assert level4_descendants(0) == list(range(15, 31))
+    assert level4_descendants(1) == list(range(15, 23)) and level4_descendants(2) == list(range(23, 31))
+    assert level4_descendants(3) == [15, 16, 17, 18] and level4_descendants(6) == [27, 28, 29, 30]
+    assert level4_descendants(20) == [20]
+    # root reproduces the C/D and A/B pairs
+    plus = node_probe_groups(0, 0, +1); minus = node_probe_groups(0, 0, -1)
+    assert plus[0].cues == RIGHT_NEG and plus[1].cues == LEFT_POS
+    assert minus[0].cues == LEFT_NEG and minus[1].cues == RIGHT_POS
+    # node 1, pole +1: negative-side cues under node 4 (19-22), positive-side under node 3 (15-18)
+    g = node_probe_groups(2, 1, +1)
+    assert g[0].cues == tuple((-1, n) for n in (19, 20, 21, 22)) and g[1].cues == tuple((+1, n) for n in (15, 16, 17, 18))
+    assert all(gg.probe == 2 and gg.probe_weight == -1.0 for gg in g)
+    with pytest.raises(ValueError):
+        node_probe_groups(0, 15, +1)
+
+    tree = _tree()
+    spec = six_probe_spec(eps=1e-3, seed=1)
+    assert spec.n_probes == 6 and sum(gr.size for gr in spec.groups) == 40
+    W = build_multiprobe_weights(spec, tree)
+    W1, W2 = W["hidden_layers.0.weight"], W["hidden_layers.1.weight"]
+    assert np.abs(tree.w_list @ W1[:6].T).max() < 1e-12          # six probes orthogonal to every ODT normal
+    assert np.allclose(np.linalg.norm(W1, axis=1), 1e-3) and W1.shape[0] == 6 + 32 + 2
+    # each row of layer 2 reads exactly one probe with -1; rows for probe p only read probe p
+    probe_cols = W2[:, :6]
+    assert ((probe_cols == -1).sum(axis=1) == 1).all() and (probe_cols[probe_cols != -1] == 0).all()
+    owner = np.argmax(probe_cols == -1, axis=1)
+    assert list(np.bincount(owner)) == [8, 8, 6, 6, 6, 6]
+    # the +u_1 probe (index 2) never reads a cue outside node 1's subtree
+    rows2 = W2[owner == 2]
+    outside = [cue_index(n, s, 6) for n in range(23, 31) for s in (-1, 1)]
+    assert (rows2[:, outside] == 0).all() and rows2[:, cue_index(19, -1, 6)].max() == 1
+
+
+def test_flow_runner_can_freeze_cue_rows() -> None:
+    from layer_lenses.designed_init import build_multiprobe_model, cue_rows, two_probe_spec
+    tree = _tree()
+    x, y = build_data(SweepRunSpec(tree_seed=5178, data_seed=11, init_seed=0, batch_size=1, n_train=2000), tree)
+    spec = two_probe_spec(eps=1e-3, seed=0)
+    rows = cue_rows(spec)
+    assert rows == list(range(2, 34))
+    out = run_designed_flow(build_multiprobe_model(spec, tree), x, y, lr=1e-3, steps=4, snapshot_every=4, device="cpu",
+                            freeze_first_layer_rows=rows)
+    W0 = out["checkpoint_snapshots"][0]["hidden_layers.0.weight"]; W4 = out["checkpoint_snapshots"][4]["hidden_layers.0.weight"]
+    assert torch.equal(W0[rows], W4[rows])
+    assert not torch.equal(W0[:2], W4[:2])

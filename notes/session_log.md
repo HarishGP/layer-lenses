@@ -3557,3 +3557,72 @@ Linear cues give an eight-times stronger first-order push and a lower loss.
   cue sets under j's children.
 - Open: why the balanced-sign output kills the probe; whether linear cues also cancel
   ancestor pushes at depth.
+
+---
+
+## 2026-09-29 11:05 IST — Six probes: +-u_0, +-u_1, +-u_2
+
+### Goal
+Extend the two-probe design with four probes for nodes 1 and 2, with smaller cue sets.
+
+### User prompts (verbatim)
+- "Ok, great can you now add 4 more probes corresponding to -u_1,+u_2,-u_2,+u_2? These will have similar connection structure but with different (smaller) sets of A and B for ODT nodes 1 and 2. \n\nNumber of neurons split up: probes : 6, cues : 32, random: 2"
+
+(Read as -u_1, +u_1, -u_2, +u_2.)
+
+### Changes
+- `designed_init.py`: `level4_descendants`, `node_probe_groups(probe, node, pole)`
+  (the balanced pair for any internal node; reproduces the root A/B and C/D pairs),
+  `SIX_PROBE_TARGETS`, `six_probe_spec` (root groups of 4, node groups of 3, 40 rows
+  exactly), `probe_target_report`, `cue_rows`, and a `freeze_first_layer_rows`
+  option on `run_designed_flow` (trainer parameter update mask). +2 tests. Suite: 86.
+- Notebook section 7; sweep `results/designed_init/run_six_probe.py`, summaries and
+  trajectories copied under `notebooks/results/designed_init/`.
+
+### Decisions
+- **Generalized pole rule.** For a unit gated on a level-4 cue of sign s under a child
+  of node a on side `side`, the push on a -1-weighted probe toward u_a has sign
+  `-s * side`. Pole +1 pairs negative-side cues under the right child with
+  positive-side cues under the left child; pole -1 the reverse. Ancestor pushes cancel
+  because both children sit on the same side of every ancestor; descendant pushes
+  cancel by using every cue under each child.
+
+### Results
+**t = 0 (both cue modes).** Every probe's gradient points at its signed target
+(relu 0.15-0.16 for node probes, 0.05-0.08 root; linear 0.35 node, 0.42 root) with
+|cos u_0| < 0.02 for the node probes: the ancestor cancellation is exact.
+
+**Under the flow** (identity layer 3, output 20, eps 1e-3, lr 3e-4), final cosine
+with the signed target:
+
+| run | +u0 | -u0 | +u1 | -u1 | +u2 | -u2 | node-probe cos u_0 | cues with coarse top node |
+|---|---|---|---|---|---|---|---|---|
+| relu, cues free, 1500 | 0.89 | 0.87 | 0.04 | 0.19 | 0.55 | 0.01 | up to 0.75 | 18/32 |
+| linear, cues free, 1500 | 0.87 | 0.78 | 0.60 | 0.56 | 0.62 | 0.59 | 0.21-0.27 | 0/32 |
+| linear, cues free, 6000 | 0.93 | 0.91 | 0.54 | 0.54 | 0.47 | 0.60 | 0.35-0.47 | 14/32 |
+| relu, cues frozen, 1500 | 0.33 | 0.34 | 0.31 | 0.35 | 0.36 | 0.33 | < 0.05 | 0 |
+| linear, cues frozen, 6000 | 0.64 | 0.66 | 0.52 | 0.52 | 0.52 | 0.54 | < 0.07 | 0 |
+
+Reading: (1) relu cues fail for the node probes once the flow runs; the network-wide
+u_0 signal captures them and rotates 18 cue neurons toward coarse nodes. (2) Linear
+cues make every probe end with its target as the top node. (3) With frozen cues the
+design is clean, no leakage, but every probe converges to a fixed point at cosine
+~0.52 (node) / 0.65 (root): the level-4 stall, since a fixed lens has a fixed constant
+part. (4) Freeing the cues lets the root probes escape the stall to 0.93 but injects a
+u_0 component into the node probes that grows with time (equal for both poles of a
+node, so second order), via the cues drifting toward coarse nodes. Rebalancing group
+sizes to 2/4 made the root probes fragile and did not help.
+
+### Current state / where to pick up
+- The six-probe design is correct at first order and under the flow with frozen
+  cues, up to the level-4 stall. The stall is the thing to attack: the constant part
+  of each probe's lens. Candidates: a second-layer structure whose units are *off*
+  by default (e.g. a small negative bias-like cue, or pairing each unit with an
+  antagonist) so the constant lens vanishes; or unfreezing the cues only after the
+  probes have committed.
+- The u_0 leakage into node probes with free cues is a second-order effect worth a
+  probe of its own: it is equal for +u_1 and -u_1, so it is not about the pole.
+
+### Open questions
+- Whether the stall cosine (0.52 for node probes) is set by the ratio of modulated to
+  constant lens and can be predicted from the group wiring.
