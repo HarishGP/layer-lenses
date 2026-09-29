@@ -577,6 +577,10 @@ class HierarchyDesignSpec:
     layer3_density: float = 0.5
     layer3_scale: float = 1 / np.sqrt(20)
     output_scale: float = 1 / np.sqrt(40)
+    # If set, every row of every layer is rescaled to these norms (layers 1..4),
+    # overriding eps and the layer scales, so the init has the row norms of a standard
+    # scheme while keeping the sign structure. See `standard_row_norms`.
+    row_norms: tuple[float, float, float, float] | None = None
     dim: int = 100
     depth: int = 5
 
@@ -682,6 +686,11 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
         "hidden_layers.2.weight": W3,
         "output_layer.weight": Wout,
     }
+    if spec.row_norms is not None:
+        for key, target in zip(weights, spec.row_norms):
+            M = weights[key]
+            norms = np.linalg.norm(M, axis=1, keepdims=True)
+            weights[key] = np.where(norms > 0, M / np.maximum(norms, 1e-30) * target, 0.0)
     meta = {"unit_probe": unit_probe, "labels": hierarchy_labels(spec), "targets": HIERARCHY_TARGETS,
             "cue_rows": list(range(spec.cue_first_row, spec.cue_first_row + 2 * NUM_LEVEL4))}
     return weights, meta
@@ -705,3 +714,27 @@ def hierarchy_probe_table(W1: np.ndarray, tree: COBODTTree) -> pd.DataFrame:
                      "cos_target": float(pole * c[node]), "top_node": int(np.abs(c).argmax()), "top_abs_cos": float(np.abs(c).max()),
                      "level4_energy": float((c[15:] ** 2).sum()), "norm": float(n)})
     return pd.DataFrame(rows)
+
+
+def standard_row_norms(scheme: str, spec: HierarchyDesignSpec) -> tuple[float, float, float, float]:
+    """Row norms (layers 1..4) that a standard random init would give this architecture.
+
+    ``"default"``: the model's own `ReLUMLP.reset_parameters`, std ``1/sqrt(3 fan_in)``,
+    so every row has norm ``1/sqrt(3)``. ``"kaiming"``: std ``sqrt(2/fan_in)``, row norm
+    ``sqrt(2)``. ``"xavier"``: std ``sqrt(2/(fan_in+fan_out))``, row norm
+    ``sqrt(2 fan_in/(fan_in+fan_out))``.
+    """
+    fans = [(spec.dim, spec.width1), (spec.width1, spec.width2), (spec.width2, spec.width3), (spec.width3, 1)]
+    if scheme == "default":
+        return tuple(1 / np.sqrt(3) for _ in fans)
+    if scheme == "kaiming":
+        return tuple(np.sqrt(2.0) for _ in fans)
+    if scheme == "xavier":
+        return tuple(np.sqrt(2.0 * fi / (fi + fo)) for fi, fo in fans)
+    raise ValueError(f"scheme must be 'default', 'kaiming' or 'xavier', got {scheme!r}")
+
+
+def standard_scale_spec(scheme: str, **kw: Any) -> HierarchyDesignSpec:
+    """A `HierarchyDesignSpec` whose rows have the norms of a standard init scheme."""
+    base = HierarchyDesignSpec(**kw)
+    return HierarchyDesignSpec(**{**base.__dict__, "row_norms": standard_row_norms(scheme, base)})

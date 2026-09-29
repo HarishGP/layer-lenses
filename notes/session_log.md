@@ -3705,3 +3705,80 @@ loss 0.3 in 100k steps; the random-init runs at the same settings did so in 35-4
 ### Open questions
 - Why free cues rotate to coarse nodes so quickly under SGD (20-24 of 32 by 100k
   steps) and whether that is the same drift seen in the flow experiments.
+
+---
+
+## 2026-09-29 18:29 IST — Releasing cues at 10k, a wider second layer, and standard-scale versions
+
+### Goal
+Three follow-ups to the hierarchy sweep: rerun the frozen conditions with the cue rows
+released at 10k steps; test whether one second-layer unit per probe limits the loss by
+widening to 120 units; and rescale the whole design to standard-init row norms.
+
+### User prompts (verbatim)
+- "Unfreeze the cues at 10k steps and rerun the frozen conditions. \n\nAlso, do you think one neuron in the second hidden layer per (most of the) probe(s) is affecting the ability to reduce loss further ? If so, run a separate set of experiments where you increase the number of neurons in the second hidden layer to 120. Just do one random init seed for now."
+- "Ok, once the sweep is done, also try some limited experiments with the same init scheme but scale all layers appropriately, so that the init looks feasible from a standard initialization scheme like the Kaiming He init or Xavier-Glorot init."
+
+### Changes
+- `init_sweep.train_sweep_run`: `unfreeze_at_step` (drops the update mask at that step).
+- `designed_init.py`: `HierarchyDesignSpec.row_norms` (per-row rescaling of every layer,
+  sign structure kept), `standard_row_norms(scheme, spec)` for "default" (the model's
+  own init, row norm 1/sqrt(3)), "kaiming" (sqrt(2)) and "xavier", and
+  `standard_scale_spec`. +2 tests. Suite: 90 passing.
+- Sweeps `run_hierarchy2.py` (24 released-cue runs, width 40, 12 seeds x 2 cue modes;
+  6 width-120 runs, seed 0) and `run_hierarchy_scale.py` (6 runs: default / kaiming
+  x free / frozen / released, linear cues, seed 0). Notebook sections 9-10.
+
+### Results
+**Released at 10k, width 40, means over 12 seeds** (on-target fraction by level):
+
+| cues | loss at cap | L0 | L1 | L2 | L3 | cues rotated to coarse nodes |
+|---|---|---|---|---|---|---|
+| free | 0.402 / 0.404 | 0.96 / 0.71 | 0.38 / 0.19 | 0.24 / 0.27 | 0.12 / 0.14 | 24 / 20 |
+| frozen | 0.425 / 0.426 | 1.00 | 1.00 | 0.93 / 0.96 | 0.38 / 0.30 | 0 |
+| released at 10k | 0.399 / 0.403 | 1.00 | 1.00 | 0.97 / 0.99 | 0.61 / 0.43 | 15 / 11 |
+
+(linear / relu). Releasing keeps levels 0-2 on target in every seed (zero spread at
+levels 0-1), recovers the loss of the free condition, and raises level-3 capture
+from 0.35 at release to 0.61 at the end for linear cues. The cues drift after release
+(11-15 of 32) without taking the probes with them.
+
+**Width 120, seed 0** (12/6/3/3 units per probe): loss 0.419 / 0.434 / 0.392 for
+free / frozen / released with linear cues, against 0.403 / 0.419 / 0.401 at width 40.
+Levels 0-2 perfect when frozen or released; level 3 0.375-0.5. Width does not lower the
+loss; the free condition even loses one root probe. So one unit per probe is not what
+limits the loss.
+
+**Standard scale, seed 0, linear cues:**
+
+| scheme | row norm | logit RMS at init | steps to loss 0.3 | loss at end | on target at 10k, L0-L3 | on target at end |
+|---|---|---|---|---|---|---|
+| eps = 0.01 (previous) | 0.01 | 0.006 | not reached | 0.40-0.42 | 1 / 1 / 1 / 0.19 | 1 / 1 / 1 / 0.56 (released) |
+| default, free | 0.577 | 0.067 | not reached | 0.422 | 1 / 1 / 0.88 / 0.88 | 1 / 1 / 0.25 / 0.06 |
+| default, frozen | 0.577 | 0.067 | not reached | 0.430 | 1 / 1 / 1 / 0.94 | 1 / 0.5 / 0.38 / 0.31 |
+| default, released | 0.577 | 0.067 | not reached | 0.414 | 1 / 1 / 1 / 0.94 | 1 / 0.5 / 0 / 0.06 |
+| kaiming, free | 1.41 | 2.40 | 34k | 0.297 | 1 / 0.5 / 0.75 / 0.5 | 1 / 0.75 / 0.62 / 0.19 |
+| kaiming, frozen | 1.41 | 2.40 | 37k | 0.288 | 1 / 0.25 / 0.5 / 0.44 | 1 / 0.5 / 0.88 / 0.62 |
+| kaiming, released | 1.41 | 2.40 | 46k | 0.299 | 1 / 0.25 / 0.5 / 0.44 | 1 / 0.5 / 0.5 / 0.38 |
+
+Reading: (1) the loss floor near 0.4 in every earlier hierarchy run was a scale effect:
+at Kaiming scale the same wiring reaches 0.3 in 34-46k steps, the range of random
+inits at these settings, whatever the cue treatment. (2) At the default scale the
+design captures all four levels by 10k steps, including 88-94% of level-3 probes,
+the best early capture seen, but the level-2/3 probes drift off later while the loss
+keeps falling slowly. (3) At Kaiming scale the early capture is weaker (the large
+logit, 2.4 at init, means the residue is far from 1/2) and the end state depends on
+the cue treatment; frozen cues give the best final hierarchy (1 / 0.5 / 0.88 / 0.62).
+One seed only.
+
+### Decisions
+- Standard-scale means per-row normalization to the scheme's row norm with all signs
+  kept; "default" = the model's `reset_parameters` (std 1/sqrt(3 fan_in)), which is
+  what the random-init baselines used.
+
+### Current state / where to pick up
+- Best protocol for the hierarchy at small scale: freeze the 32 cues, release at 10k.
+- The scale finding needs seeds: whether Kaiming-scale designed inits reliably reach
+  0.3 faster than random inits, and whether the default-scale early capture of level 3
+  can be kept (e.g. by releasing later, or a learning-rate drop at 10k).
+- Open: why deep probes drift off at default scale after capturing early.

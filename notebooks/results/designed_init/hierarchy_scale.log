@@ -1,0 +1,7 @@
+linear_free_default_seed0      max_steps step 100000 loss 0.422  logit@init 0.067  on-target end [1.0, 1.0, 0.25, 0.06]  cues coarse 23  (100s)
+linear_frozen_default_seed0    max_steps step 100000 loss 0.430  logit@init 0.067  on-target end [1.0, 0.5, 0.38, 0.31]  cues coarse 0  (132s)
+linear_unfreeze10k_default_seed0 max_steps step 100000 loss 0.414  logit@init 0.067  on-target end [1.0, 0.5, 0.0, 0.06]  cues coarse 21  (97s)
+linear_free_kaiming_seed0      stop_loss step  34000 loss 0.297  logit@init 2.397  on-target end [1.0, 0.75, 0.62, 0.19]  cues coarse 23  (32s)
+linear_frozen_kaiming_seed0    stop_loss step  37000 loss 0.288  logit@init 2.397  on-target end [1.0, 0.5, 0.88, 0.62]  cues coarse 0  (59s)
+linear_unfreeze10k_kaiming_seed0 stop_loss step  46000 loss 0.299  logit@init 2.397  on-target end [1.0, 0.5, 0.5, 0.38]  cues coarse 15  (57s)
+ALL DONE

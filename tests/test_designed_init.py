@@ -226,3 +226,39 @@ def test_train_sweep_run_accepts_a_model_and_freezes_rows() -> None:
     W0, W8 = out["weights"]["hidden_layers.0.weight"][0], out["weights"]["hidden_layers.0.weight"][-1]
     assert out["final_step"] == 8 and np.array_equal(W0[30:62], W8[30:62]) and not np.array_equal(W0[:30], W8[:30])
     assert out["weights"]["hidden_layers.1.weight"].shape[1:] == (40, 80)
+
+
+def test_train_sweep_run_unfreezes_rows_at_a_step() -> None:
+    from layer_lenses.designed_init import HierarchyDesignSpec, build_hierarchy_model
+    from layer_lenses.init_sweep import train_sweep_run
+    tree = _tree()
+    x, y = build_data(SweepRunSpec(tree_seed=5178, data_seed=11, init_seed=0, batch_size=1, n_train=1024), tree)
+    model, meta = build_hierarchy_model(HierarchyDesignSpec(eps=0.01, seed=0), tree)
+    sp = SweepRunSpec(tree_seed=5178, data_seed=11, init_seed=0, batch_size=256, n_train=1024, hidden_dims=(80, 40, 40),
+                      lr=1e-3, momentum=0.9, device="cpu", snapshot_every_steps=4, max_steps=12, stop_loss=0.0, store_all_layers=True)
+    out = train_sweep_run(sp, tree=tree, x_train=x, y_train=y, model=model, freeze_first_layer_rows=meta["cue_rows"], unfreeze_at_step=8)
+    W = out["weights"]["hidden_layers.0.weight"]; steps = list(out["snapshot_steps"])
+    i0, i8, i12 = steps.index(0), steps.index(8), steps.index(12)
+    assert np.array_equal(W[i0][30:62], W[i8][30:62])          # frozen through step 8
+    assert not np.array_equal(W[i8][30:62], W[i12][30:62])     # moving afterwards
+    assert not np.array_equal(W[i0][:30], W[i8][:30])
+
+
+def test_standard_scale_spec_normalizes_rows_and_keeps_signs() -> None:
+    from layer_lenses.designed_init import HierarchyDesignSpec, build_hierarchy_weights, standard_row_norms, standard_scale_spec
+    tree = _tree()
+    base = HierarchyDesignSpec(seed=2, cue_mode="linear")
+    assert np.allclose(standard_row_norms("default", base), 1 / np.sqrt(3))
+    assert np.allclose(standard_row_norms("kaiming", base), np.sqrt(2))
+    xa = standard_row_norms("xavier", base)
+    assert xa[0] == pytest.approx(np.sqrt(200 / 180)) and xa[3] == pytest.approx(np.sqrt(80 / 41))
+    with pytest.raises(ValueError):
+        standard_row_norms("lecun", base)
+    Wb, _ = build_hierarchy_weights(base, tree)
+    spec = standard_scale_spec("default", seed=2, cue_mode="linear")
+    Ws, _ = build_hierarchy_weights(spec, tree)
+    for k in Wb:
+        norms = np.linalg.norm(Ws[k], axis=1)
+        assert np.allclose(norms[norms > 0], 1 / np.sqrt(3))
+        assert np.array_equal(np.sign(Ws[k]), np.sign(Wb[k]))        # sign structure untouched
+    assert np.abs(tree.w_list @ Ws["hidden_layers.0.weight"][:30].T).max() < 1e-9

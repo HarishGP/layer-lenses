@@ -130,11 +130,13 @@ def train_sweep_run(
     log: Callable[[str], None] | None = None,
     model: ReLUMLP | None = None,
     freeze_first_layer_rows: list[int] | None = None,
+    unfreeze_at_step: int | None = None,
 ) -> dict[str, Any]:
     """Train one run to ``stop_loss`` or ``max_steps``, snapshotting every k steps.
 
     ``model`` overrides the init built from ``spec.init_seed`` (e.g. a designed init);
-    ``freeze_first_layer_rows`` keeps those first-layer neurons fixed.
+    ``freeze_first_layer_rows`` keeps those first-layer neurons fixed, until
+    ``unfreeze_at_step`` if given, after which every parameter trains.
 
     Returns a dict with ``spec``, ``snapshot_steps``, ``snapshot_loss`` (trailing
     one-epoch mean training loss at each snapshot, NaN before one epoch has
@@ -211,6 +213,10 @@ def train_sweep_run(
                 parameter_update_masks=update_masks,
             )
             step += 1
+            if unfreeze_at_step is not None and step == unfreeze_at_step and update_masks:
+                update_masks = {}
+                if log is not None:
+                    log(f"  step {step}: frozen rows released")
             trailing.append((float(loss.cpu()) * (end - start), end - start))
             if step % spec.snapshot_every_steps == 0:
                 value = take_snapshot(step)

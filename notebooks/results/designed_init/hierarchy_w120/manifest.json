@@ -1,0 +1,15 @@
+{
+  "unfreeze_at_step": 10000,
+  "max_steps": 100000,
+  "stop_loss": 0.3,
+  "batch": 1000,
+  "lr": 0.02,
+  "momentum": 0.9,
+  "w120_units_per_level": [
+    12,
+    6,
+    3,
+    3
+  ],
+  "w120_layer3_scale": 0.12909944487358055
+}
