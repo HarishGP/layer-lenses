@@ -91,3 +91,36 @@ def test_flow_runner_snapshots_and_trajectory_table() -> None:
     t = neuron_trajectory_table(out, tree)
     assert list(t.step) == [0, 3, 6] and t.loc[0, "off_span_fraction"] == pytest.approx(1.0, abs=1e-9)
     assert abs(t.loc[0, "cos_u0"]) < 1e-6 and t.loc[0, "norm"] == pytest.approx(1e-3, rel=1e-4)
+
+
+def test_two_probe_design_structure_and_linear_cues() -> None:
+    from layer_lenses.designed_init import (
+        CueGroup, MultiProbeSpec, build_multiprobe_model, build_multiprobe_weights, cue_index,
+        multiprobe_labels, two_probe_spec, LEFT_NEG, RIGHT_NEG,
+    )
+    tree = _tree()
+    spec = two_probe_spec(cue_mode="relu", eps=0.01, seed=4, layer3="identity", output_scale=20.0)
+    W = build_multiprobe_weights(spec, tree)
+    W1, W2, W3, Wo = (W[k] for k in ("hidden_layers.0.weight", "hidden_layers.1.weight", "hidden_layers.2.weight", "output_layer.weight"))
+    assert W1.shape == (40, 100) and np.allclose(np.linalg.norm(W1, axis=1), 0.01)
+    assert np.abs(tree.w_list @ W1[0]).max() < 1e-12 and np.abs(tree.w_list @ W1[1]).max() < 1e-12
+    assert abs(W1[0] @ W1[1]) / (np.linalg.norm(W1[0]) * np.linalg.norm(W1[1])) < 0.4  # independent random probes
+    assert np.allclose(W1[cue_index(15, -1, 2)], -0.01 * tree.w_list[15]) and np.allclose(W1[cue_index(30, 1, 2)], 0.01 * tree.w_list[30])
+    labels = multiprobe_labels(spec)
+    assert labels[:2] == ["probe0", "probe1"] and labels[2] == "-u15" and labels[-1] == "rand5" and len(labels) == 40
+    # groups: rows 0-19 belong to probe 0, 20-39 to probe 1, all probe weights -1, no cross-wiring
+    assert (W2[0:20, 0] == -1).all() and (W2[0:20, 1] == 0).all()
+    assert (W2[20:40, 1] == -1).all() and (W2[20:40, 0] == 0).all()
+    assert set(np.unique(W2)) <= {-1.0, 0.0, 1.0}
+    c_rows = W2[0:10]; assert (c_rows[:, [cue_index(n, -1, 2) for n in range(23, 31)]] == 1).all()
+    assert np.allclose(W3, np.eye(40)) and (Wo == 20.0).all()
+    # linear cue mode puts -1 on the opposite-sign twin
+    lin = build_multiprobe_weights(two_probe_spec(cue_mode="linear", seed=4), tree)["hidden_layers.1.weight"]
+    assert (lin[0:10, [cue_index(n, -1, 2) for n in range(23, 31)]] == 1).all()
+    assert (lin[0:10, [cue_index(n, +1, 2) for n in range(23, 31)]] == -1).all()
+    model = build_multiprobe_model(spec, tree)
+    assert all(np.allclose(v.numpy(), W[k], atol=1e-7) for k, v in model.state_dict().items())
+    with pytest.raises(ValueError):
+        build_multiprobe_weights(MultiProbeSpec(groups=(CueGroup(probe=2, probe_weight=-1, cues=LEFT_NEG),), n_probes=2), tree)
+    with pytest.raises(ValueError):
+        build_multiprobe_weights(MultiProbeSpec(groups=(CueGroup(probe=0, probe_weight=-1, cues=RIGHT_NEG, size=41),), n_probes=2), tree)

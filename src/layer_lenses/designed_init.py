@@ -257,3 +257,175 @@ def neuron_trajectory_table(out: dict[str, Any], tree: COBODTTree, neuron: int =
 def sign_flip_variants() -> list[tuple[int, int, int, int]]:
     """All 16 sign patterns for the probe's weight into groups A, B, C, D."""
     return [(a, b, c, d) for a in (1, -1) for b in (1, -1) for c in (1, -1) for d in (1, -1)]
+
+
+# ---------------------------------------------------------------------------
+# Multi-probe designs
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CueGroup:
+    """One block of identical second-layer units.
+
+    Each unit gets ``probe_weight`` from probe ``probe`` and reads the level-4 cue
+    neurons ``cues`` (pairs ``(sign, node)``). ``cue_mode="relu"`` puts +1 on the
+    listed cue neuron; ``"linear"`` puts +1 on it and -1 on its opposite-sign twin,
+    so the unit sees ``sign * (u_node . x)`` rather than ``ReLU(sign * u_node . x)``.
+    """
+
+    probe: int
+    probe_weight: float
+    cues: tuple[tuple[int, int], ...]
+    cue_mode: str = "relu"
+    size: int = 10
+
+
+@dataclass(frozen=True)
+class MultiProbeSpec:
+    """A first layer of ``n_probes`` probes, the 32 level-4 cue neurons, and random fill."""
+
+    groups: tuple[CueGroup, ...]
+    n_probes: int = 2
+    eps: float = 1e-3
+    seed: int = 0
+    layer3: str = "identity"  # "identity" or "random01"
+    output_scale: float = 20.0
+    layer3_density: float = 0.5
+    width: int = WIDTH
+    dim: int = 100
+    depth: int = 5
+
+
+def cue_index(node: int, sign: int, n_probes: int) -> int:
+    """First-layer row of the cue neuron ``sign * u_node`` when ``n_probes`` probes come first."""
+    return first_layer_index(node, sign) - 1 + n_probes
+
+
+def multiprobe_labels(spec: MultiProbeSpec) -> list[str]:
+    labels = [f"probe{i}" for i in range(spec.n_probes)]
+    for node in range(LEVEL4_FIRST, LEVEL4_FIRST + NUM_LEVEL4):
+        labels += [f"-u{node}", f"+u{node}"]
+    labels += [f"rand{i}" for i in range(spec.width - len(labels))]
+    return labels
+
+
+def build_multiprobe_weights(spec: MultiProbeSpec, tree: COBODTTree) -> dict[str, np.ndarray]:
+    """Weights of a multi-probe design; see `CueGroup` and `MultiProbeSpec`."""
+    if tree.w_list.shape != (31, spec.dim):
+        raise ValueError("the design assumes a depth-5 ODT with 31 internal nodes")
+    n_fill = spec.width - spec.n_probes - 2 * NUM_LEVEL4
+    if n_fill < 0:
+        raise ValueError(f"width {spec.width} too small for {spec.n_probes} probes and 32 cue neurons")
+    if sum(g.size for g in spec.groups) > spec.width:
+        raise ValueError("group sizes exceed the second-layer width")
+    rng = np.random.default_rng(spec.seed)
+    U = tree.w_list.astype(np.float64)
+
+    W1 = np.zeros((spec.width, spec.dim))
+    for p in range(spec.n_probes):
+        v = rng.normal(size=spec.dim)
+        v -= U.T @ (U @ v)
+        v -= U.T @ (U @ v)
+        W1[p] = v / np.linalg.norm(v)
+    for node in range(LEVEL4_FIRST, LEVEL4_FIRST + NUM_LEVEL4):
+        W1[cue_index(node, -1, spec.n_probes)] = -U[node]
+        W1[cue_index(node, +1, spec.n_probes)] = +U[node]
+    for i in range(n_fill):
+        r = rng.normal(size=spec.dim)
+        W1[spec.n_probes + 2 * NUM_LEVEL4 + i] = r / np.linalg.norm(r)
+    W1 *= spec.eps
+
+    W2 = np.zeros((spec.width, spec.width))
+    row = 0
+    for g in spec.groups:
+        if not 0 <= g.probe < spec.n_probes:
+            raise ValueError(f"group refers to probe {g.probe} but n_probes={spec.n_probes}")
+        for _ in range(g.size):
+            W2[row, g.probe] = g.probe_weight
+            for s, n in g.cues:
+                W2[row, cue_index(n, s, spec.n_probes)] += 1.0
+                if g.cue_mode == "linear":
+                    W2[row, cue_index(n, -s, spec.n_probes)] -= 1.0
+                elif g.cue_mode != "relu":
+                    raise ValueError(f"cue_mode must be 'relu' or 'linear', got {g.cue_mode!r}")
+            row += 1
+
+    if spec.layer3 == "identity":
+        W3 = np.eye(spec.width)
+    elif spec.layer3 == "random01":
+        W3 = (rng.random((spec.width, spec.width)) < spec.layer3_density).astype(np.float64)
+    else:
+        raise ValueError(f"layer3 must be 'identity' or 'random01', got {spec.layer3!r}")
+    Wout = np.full((1, spec.width), spec.output_scale)
+    return {
+        "hidden_layers.0.weight": W1,
+        "hidden_layers.1.weight": W2,
+        "hidden_layers.2.weight": W3,
+        "output_layer.weight": Wout,
+    }
+
+
+def build_multiprobe_model(spec: MultiProbeSpec, tree: COBODTTree) -> ReLUMLP:
+    weights = build_multiprobe_weights(spec, tree)
+    model = ReLUMLP(input_dim=spec.dim, hidden_dims=[spec.width] * 3, bias=False)
+    model.load_state_dict({k: torch.from_numpy(v).float() for k, v in weights.items()})
+    return model
+
+
+LEFT_NEG = tuple((-1, n) for n in range(15, 23))   # A-type: left subtree, negative side  -> pushes -u_0
+RIGHT_POS = tuple((+1, n) for n in range(23, 31))  # B-type: right subtree, positive side -> pushes -u_0
+RIGHT_NEG = tuple((-1, n) for n in range(23, 31))  # C-type: right subtree, negative side -> pushes +u_0
+LEFT_POS = tuple((+1, n) for n in range(15, 23))   # D-type: left subtree, positive side  -> pushes +u_0
+
+
+def two_probe_spec(*, cue_mode: str = "relu", size: int = 10, **kw: Any) -> MultiProbeSpec:
+    """Probe 0 should run to +u_0 (C- and D-type groups), probe 1 to -u_0 (A- and B-type).
+
+    All probe weights are -1 (informative), no group is shared between probes.
+    """
+    groups = (
+        CueGroup(probe=0, probe_weight=-1.0, cues=RIGHT_NEG, cue_mode=cue_mode, size=size),
+        CueGroup(probe=0, probe_weight=-1.0, cues=LEFT_POS, cue_mode=cue_mode, size=size),
+        CueGroup(probe=1, probe_weight=-1.0, cues=LEFT_NEG, cue_mode=cue_mode, size=size),
+        CueGroup(probe=1, probe_weight=-1.0, cues=RIGHT_POS, cue_mode=cue_mode, size=size),
+    )
+    return MultiProbeSpec(groups=groups, n_probes=2, **kw)
+
+
+def multiprobe_gradient_report(
+    model: ReLUMLP,
+    spec: MultiProbeSpec,
+    x: np.ndarray,
+    y: np.ndarray,
+    tree: COBODTTree,
+    *,
+    device: str = "cpu",
+) -> pd.DataFrame:
+    """Per probe: cosine of its negative population gradient with u_0, energy split, and the
+    same cosine with each group alone (other groups' rows zeroed; approximate)."""
+    from layer_lenses.relu_analysis import log_loss_gradients
+
+    def probe_cos(m: ReLUMLP, p: int) -> dict[str, float]:
+        g = -log_loss_gradients(model=m, x=x, y=y, device=device)["hidden_layers.0.weight"][p].numpy()
+        c, off = odt_coordinates(g[None] / np.linalg.norm(g), tree)
+        return {"cos_u0": float(c[0, 0]), "grad_norm": float(np.linalg.norm(g)),
+                "level4_energy": float((c[0, 15:] ** 2).sum()), "off_span": float(off[0] ** 2)}
+
+    base = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+    bounds, row = [], 0
+    for g in spec.groups:
+        bounds.append((row, row + g.size)); row += g.size
+    rows = []
+    for p in range(spec.n_probes):
+        rec = {"probe": p, **probe_cos(model, p)}
+        for gi, ((a, b), g) in enumerate(zip(bounds, spec.groups)):
+            if g.probe != p:
+                continue
+            sd = {k: v.clone() for k, v in base.items()}
+            mask = torch.zeros(spec.width, 1); mask[a:b] = 1.0
+            sd["hidden_layers.1.weight"] = sd["hidden_layers.1.weight"] * mask
+            m = ReLUMLP(input_dim=spec.dim, hidden_dims=[spec.width] * 3, bias=False); m.load_state_dict(sd)
+            rec[f"group{gi}_cos_u0"] = probe_cos(m, p)["cos_u0"]
+        rows.append(rec)
+    return pd.DataFrame(rows)

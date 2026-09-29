@@ -3473,3 +3473,87 @@ ReLU setting, and the designed init makes it a knob.
 - The mechanism by which even the all-inert pattern reaches cos 0.52: the probe first
   acquires level-4 content, after which its own gate correlates with level-4 signs and
   its own blinder can supply the root-side modulation. Plausible, not measured.
+
+---
+
+## 2026-09-29 10:40 IST — Layers 3-4, learned wiring statistics, and the two-probe design
+
+### Goal
+Answer whether layers 3 and 4 of the designed init have a better strategy, mine the
+learned checkpoints for wiring inspiration, and change the design goal to two probes,
+one racing to +u_0 and one to -u_0.
+
+### User prompts (verbatim)
+- "In all these runs does the loss actually get minimised to a value below 0.1? Is probe the only first layer neuron that goes to u_0? how much does the norm of the probe neuron grow by from about 10^{-3} at init?"
+- "Ok, I am thinking of an even more elaborate init, where similar probes are constructed for every internal node from 0 to 14 (two for each), and not just zero. The probes for these internal nodes would also start at a random vector orthogonal to all ODTs, but the second layer would be for appropriately designed so that these 28 probes would go running off to -u_j or +u_j for some internal node j. Total number of first layer hidden neurons would by 62 -- one pair for each ODT vector.\n\nKey thing that makes this init not just \"we choose an init close to solution, and gradient takes us to solution\" is that no first layer neuron has any component along u_0 to u_14. So the network has to pick up cues for it entirely from level four nodes at the init. We will have to later somehow argue that it is reasonable to expect even a totally random init to get components along level 4 ODT directions, as these have a (small) global edge.\n\nAny comments on this design strategy?"
+- "Layer 3 weights are being set to {0,1} and layer 4 weights being set to all-ones. Is there a better strategy than this?"
+- "Also, in the current init design the incoming weights for the second hidden layer from A,B,C,D groups first layer neurons are always +1 or 0 -- only weights from probe can be negative.  Similarly for layer 3 also, all non-negative weights only are studied. \n\nCan we take inspiration from any of the learned parameters from already stored checkpoints to craft a better scheme? \n\nI did notice that in the learned networks, the outgoing weights from the eventual u_0 aligned vectors are largely negative. So I agree with your scheme of using mostly negative values for the probe outgoing weights. \n\nFor now modify the goal of the init design to have two probes with one of them racing towards +u_0 and another racing towards -u_0."
+
+### Changes
+- `designed_init.py`: `CueGroup`, `MultiProbeSpec`, `cue_index`, `multiprobe_labels`,
+  `build_multiprobe_weights` / `build_multiprobe_model` (n probes, identity or random
+  0/1 layer 3, explicit output scale, `cue_mode` "relu" or "linear"), the four
+  group templates `LEFT_NEG`, `RIGHT_POS`, `RIGHT_NEG`, `LEFT_POS`, `two_probe_spec`,
+  `multiprobe_gradient_report`. +1 test (5 in the file). Suite: 84 passing.
+- Notebook `designed_init_u0.ipynb`: sections 5 (layers 3-4, checkpoint wiring
+  statistics) and 6 (two probes), executed in place; trajectories and
+  `summary_twoprobe.csv` under `results/designed_init/`.
+
+### Results
+**Answers to the three questions.** The loss never goes below 0.1 in any designed run:
+0.696 -> 0.68 (stalled) or 0.67 (u_0-reaching), and the 12000-step base run sits at
+0.6804 from step 1000 on. These are stationary small-weight states; the design
+decides directions, not the function. In the stalled patterns no other neuron reaches
+u_0; in the no-inert single-probe patterns 5-8 cue neurons follow the probe to the same
+pole at cosines 0.74-0.98. Probe norm from 1e-3: x8-13 stalled, x32-36 when it reaches
+u_0; cue neurons collapse to 0.1x in the stalled base case, grow 5x otherwise; random
+fill neurons never move (zero fan-out).
+
+**Layers 3 and 4.** Identity layer 3 with output 20 matches random 0/1 layer 3 with
+unit output to three decimals on all three patterns tried. Fan-in randomness is
+irrelevant at the root; the path-sum scale sets the flow time per step (squared).
+An intermediate claim in the session that identity layer 3 "fixes the cue collapse"
+was a flow-time artifact of unit path sums and is withdrawn. A balanced-sign output
+(so the initial logit has zero mean) gives init cosine 0.93 but the probe shrinks to
+zero as it aligns, at the same flow time for lr 3e-4 and 3e-5; not understood, not
+used.
+
+**Learned wiring (200 Part B runs).** Outgoing layer-2 weights of u_0-aligned neurons
+are 46-48% negative by count and 37-50% by magnitude, mean ~0, both poles, the same as
+every other neuron; layer 3 and the output are 48% and 50% negative. So the observation
+that they are "largely negative" is not borne out here (it may hold for the Adam runs,
+not checked). Structure that is there: at loss 0.3 a unit reading two opposite-pole u_0
+neurons gives them opposite signs 66% of the time (77% by magnitude), i.e. it builds a
+linear readout of u_0.x from the ReLU pair; same-pole pairs get the same sign (84% by
+magnitude). At capture, same-pole pairs get opposite signs (91% by magnitude).
+
+**Two probes.** Probe 0 wired with -1 to C- and D-type groups, probe 1 to A- and
+B-type, identity layer 3, output 20, eps 1e-3, lr 3e-4, 1500 steps:
+
+| cue mode | init cos, probe 0 / 1 | final cos | probe norm/eps | cues median norm/eps | cues on u_0 | loss end |
+|---|---|---|---|---|---|---|
+| relu | +0.05 / -0.08 | +0.925 / -0.926 | 35 / 35 | 3.1 | 0 | 0.669 |
+| linear | +0.42 / -0.43 | +0.903 / -0.901 | 47 / 46 | 12.4 | 0 | 0.652 |
+
+Both probes reach their poles, anti-aligned at -0.94 / -0.91, with no cue neuron
+dragged to u_0 (unlike the single-probe no-inert case) and the random fill inert.
+Linear cues give an eight-times stronger first-order push and a lower loss.
+
+### Decisions
+- Keep all-ones output with an explicit scale; set each probe's pole by the (side,
+  sign) of its informative groups; never share a group between probes.
+- Advice on the 62-neuron design (recorded in the session, not implemented): for a
+  probe at node j, pair a group gated on j's left-child subtree with one on its
+  right-child subtree so the ancestor pushes cancel by symmetry (use all cues under
+  each child, not random subsets); use -1 probe weights only; wire each probe only to
+  its own groups; expect deep probes to move 2^-level slower; freeze the 32 cue rows
+  with `parameter_update_mask` for a first clean run; the random-init bridge is
+  supported by the measured 89% level-4 content of the init gradient, with the caveat
+  that random inits acquire the single aggregate vector E[y x], not per-node cues.
+
+### Current state / where to pick up
+- `two_probe_spec` is the base for the multi-node design; `CueGroup` already expresses
+  per-probe groups with arbitrary cue sets, so a node-j probe is a matter of choosing
+  cue sets under j's children.
+- Open: why the balanced-sign output kills the probe; whether linear cues also cancel
+  ancestor pushes at depth.
