@@ -3992,3 +3992,13 @@ mid-escape) and the earlier per-probe "drift".
   the stored snapshots) was not run; it is the direct test of sampling noise on one run.
 - Possible fix for duplicates: freeze a probe's row once it has locked (|cos| > 0.95), or
   give each unit the probe entry the same norm as its cue block.
+
+## 2026-09-30 05:45 IST — Network graph cell for the 10M run
+
+### User prompts (verbatim)
+- "Can you add a cell in Section 14 similar to Section 13 for visualising the neural net as a whole in a given epoch?"
+
+### Changes
+- Notebook section 14: a graph cell (`plot_layered_relu_graph` on `snapshot_state_dict(zb, GRAPH_EPOCH_B)`)
+  with the same editable parameters as section 13, plus the table of which node each
+  neuron sits on. No code changes.
