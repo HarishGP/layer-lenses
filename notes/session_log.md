@@ -3838,3 +3838,61 @@ eps = 0.01.
   replayable trainer supports it; `train_sweep_run` is constant-LR by design).
 - To keep the early capture, try a learning-rate drop at 10k rather than releasing
   cues, or freezing the probes' own rows after capture.
+
+## 2026-09-30 03:10 IST — One long Kaiming run per cue treatment, cosine annealing
+
+### Goal
+Test whether the ~0.38-0.42 loss floor of the designed hierarchy inits is a constant-LR
+floor: one long run at full Kaiming scale with cosine annealing, cues free and cues frozen.
+
+### User prompts (verbatim)
+- "Just do one full and long Kaiming run with cosine annealing. Run both frozen and free cues version of the experiment."
+- "The previous run did not finish running even after a long time. Can you figure out the issue and fix it and redo?"
+
+### Changes
+- Script `results/designed_init/run_hierarchy_kaiming_cosine.py`: `standard_scale_spec("kaiming")`,
+  linear cues, seed 0, cues free vs frozen for the whole run (parameter update mask on the
+  32 cue rows), `train_relu_mlp` with 1000 epochs x batch 1000 (1M steps), lr 0.02 cosine
+  to 0.001, momentum 0.9, snapshots of all layers every 10 epochs, test error on a fresh
+  200k sample. Notebook section 12. Outputs copied to
+  `notebooks/results/designed_init/hierarchy_kaiming_cosine/`. No library code changes.
+- Bug fixed: the first launch trained the free run to completion (18 min) and then crashed
+  on `np.savez` because the `runs/` subdirectory was never created (earlier scripts saved
+  through `save_run`, which creates parents). Added `os.makedirs` and relaunched; the
+  crashed log is kept as `results/designed_init/hierarchy_kaiming_cosine_crashed.log`.
+
+### Results (2 runs, 17 + 26 min)
+
+| cues | final epoch loss | test error | epochs to 0.3 / 0.2 / 0.1 / 0.05 | on-target ep10 (L0-3) | on-target end |
+|---|---|---|---|---|---|
+| free | 0.0078 | 0.0064 | 35 / 52 / 120 / 318 | 1.00 / 0.50 / 0.75 / 0.50 | 0.50 / 0.50 / 0.38 / 0.31 |
+| frozen | 0.0104 | 0.0067 | 37 / 51 / 135 / 317 | 1.00 / 0.25 / 0.50 / 0.44 | 0.50 / 0.25 / 0.62 / 0.44 |
+
+- The floor was the constant LR. With annealing both runs go to loss ~0.01 and test error
+  0.6-0.7%, below the random-init cosine baseline (0.047 at 1M steps). Free and frozen
+  cues differ little in loss; freezing costs ~0.003.
+- Node coverage (first-layer neurons with |cos| > 0.95 to some tree normal) at the end:
+  free 60/80 neurons aligned covering all 31 nodes (24 probes, 22 cues, 14 random);
+  frozen 76/80 aligned covering all 31 nodes (28 probes, 32 cues, 16 random). Coverage of
+  all 31 nodes is reached by epoch 300 (free) and epoch 100 (frozen).
+- The "on-target 0.5" at the root is not drift: the +u_0 probe sits at cosine 1.00 with
+  norm 17-19, while the -u_0 probe never captured u_0 and was recruited to another node
+  (also at cosine 1.00). About half the probes keep their designed node; the rest and the
+  random neurons fill in the remaining nodes. With free cues 17 of 32 cues end on coarse
+  nodes; the level-4 nodes are then covered by probes and random neurons instead.
+
+### Reading
+- The designed init decides *which* neurons take *which* node only partially; what it
+  decides robustly is that the hierarchy gets learned in full and fast (0.3 by epoch 35,
+  matching the 34-46k steps of the constant-LR Kaiming runs). Below 0.3 the annealed LR
+  is what lets the remaining nodes be captured and the loss go to 0.01.
+- The earlier finding that the deep probes "drift off" at constant LR should be re-read:
+  the network reassigns nodes among neurons; the drifted probe's node is picked up by
+  another neuron.
+
+### Current state / where to pick up
+- Compare with a random Kaiming init under the same annealed schedule (same seed, same
+  batches) to see whether the design speeds the final coverage of level 4 or only the
+  early capture.
+- Track node coverage over epochs (rather than probe on-target) as the main hierarchy
+  metric; the per-probe view undercounts what the net has learned.
