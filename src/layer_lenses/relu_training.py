@@ -72,10 +72,17 @@ def evaluate_relu_mlp(
         log_loss = float(criterion(logits, y_bin).detach().cpu())
         preds_pm1 = torch.where(logits >= 0, 1.0, -1.0)
         zero_one_loss = float((preds_pm1 != y_pm1).float().mean().detach().cpu())
+        # A logit of exactly zero (every ReLU off) counts as +1 above; the strict rule
+        # counts it as -1. The gap between the two is the mass of dead inputs.
+        preds_strict = torch.where(logits > 0, 1.0, -1.0)
+        zero_one_loss_strict = float((preds_strict != y_pm1).float().mean().detach().cpu())
+        zero_logit_fraction = float((logits == 0).float().mean().detach().cpu())
 
     return {
         "log_loss": log_loss,
         "zero_one_loss": zero_one_loss,
+        "zero_one_loss_strict": zero_one_loss_strict,
+        "zero_logit_fraction": zero_logit_fraction,
         "accuracy": 1.0 - zero_one_loss,
         "num_samples": int(x_eval.shape[0]),
     }

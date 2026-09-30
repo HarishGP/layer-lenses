@@ -1,0 +1,5 @@
+linear_frozen_kaiming_cosine_small_62_seed0: data (1000000, 100) float32, 0.0 min
+linear_frozen_kaiming_cosine_small_62_seed0: final epoch loss 0.4358, train log loss 0.4350, test error 0.5005; epochs to 0.3/0.2/0.1/0.05: -1/-1/-1/-1; nodes covered 29/31; on-target end [1.0, 0.75, 0.5, 0.31]; 24.7 min
+linear_frozen_kaiming_cosine_big_80_seed0: data (10000000, 100) float32, 0.3 min
+linear_frozen_kaiming_cosine_big_80_seed0: final epoch loss 0.3710, train log loss 0.3708, test error 0.5005; epochs to 0.3/0.2/0.1/0.05: -1/-1/-1/-1; nodes covered 31/31; on-target end [0.0, 0.5, 0.62, 0.62]; 23.9 min
+ALL DONE

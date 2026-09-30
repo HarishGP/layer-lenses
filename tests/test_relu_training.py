@@ -164,7 +164,7 @@ def test_evaluate_relu_mlp_metrics_shape() -> None:
     with torch.no_grad():
         _ = model(torch.from_numpy(x))
     metrics = evaluate_relu_mlp(model=model, x_eval=x, y_eval=y)
-    assert set(metrics.keys()) == {"log_loss", "zero_one_loss", "accuracy", "num_samples"}
+    assert set(metrics.keys()) == {"log_loss", "zero_one_loss", "zero_one_loss_strict", "zero_logit_fraction", "accuracy", "num_samples"}
     assert metrics["num_samples"] == 64
 
 
@@ -336,3 +336,21 @@ def test_suggest_sgd_lr_for_adam_parity_matches_adam_step_scale() -> None:
     )
     # The model must be left clean: no leftover gradients from the probe.
     assert all(p.grad is None for p in model.parameters())
+
+
+def test_evaluate_relu_mlp_reports_zero_logits_under_both_tie_rules() -> None:
+    import torch
+    from layer_lenses.relu_mlp import ReLUMLP
+    from layer_lenses.relu_training import evaluate_relu_mlp
+
+    model = ReLUMLP(input_dim=2, hidden_dims=[2], bias=False)
+    with torch.no_grad():
+        model.hidden_layers[0].weight.copy_(torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
+        model.output_layer.weight.copy_(torch.tensor([[1.0, 1.0]]))
+    # points in the negative quadrant give logit exactly 0; the others give a positive logit
+    x = np.array([[1.0, 0.0], [0.0, 1.0], [-1.0, -1.0], [-2.0, -0.5]], dtype=np.float32)
+    y = np.array([1, 1, -1, -1], dtype=np.int8)
+    out = evaluate_relu_mlp(model=model, x_eval=x, y_eval=y)
+    assert out["zero_logit_fraction"] == 0.5
+    assert out["zero_one_loss"] == 0.5          # zero logits scored as +1: both negatives wrong
+    assert out["zero_one_loss_strict"] == 0.0   # zero logits scored as -1: all right

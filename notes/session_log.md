@@ -4036,3 +4036,59 @@ exactly at t=0 inside each unit, a candidate explanation to test.
 - "One pole per node suffices for the loss" is not established: the 10M net (mostly single-pole,
   nodes 8/9 missing) sits at 4.4% test error, and the two effects cannot be separated from this
   run. Isolating runs (62-30-40 at 1M/1k; 62-30-40 plus 18 random rows) remain the next step.
+
+## 2026-09-30 07:30 IST — Isolating data size and spare neurons; the dead-second-layer solution
+
+### Goal
+Separate the two changes of the 10M run: the 62-30-40 design at 1M / batch 1k, and the same
+design with the 18 random rows restored (80-30-40) at 10M / batch 10k. Cues frozen.
+
+### User prompts (verbatim)
+- "Go ahead and start those runs."
+
+### Changes
+- Script `results/designed_init/run_hierarchy_kaiming_cosine_isolate.py` (both runs, same
+  schedule as sections 12-14), outputs under `notebooks/results/designed_init/hierarchy_kaiming_cosine_isolate/`.
+- `evaluate_relu_mlp` now also returns `zero_one_loss_strict` (logit > 0 means +1) and
+  `zero_logit_fraction`; `zero_one_loss` (logit >= 0) is unchanged. One test.
+- Notebook section 15: four-run comparison (loss, node coverage, per-node probe outcomes) and
+  a zero-logit diagnosis cell.
+
+### Results (end of training, test set of 200k; per-node counts use |cos| > 0.95)
+
+| run | final loss | test err (>= 0 rule) | test err (strict) | zero-logit frac | neg. output weights | nodes covered | own-probe nodes / intended / opposite | missed by own probes |
+|---|---|---|---|---|---|---|---|---|
+| 1M/1k 80-40-40 (sec. 12) | 0.010 | 0.7% | 0.7% | 0.00 | 21/40 | 31 | 12 / 5 / 7 | 1, 4, 13 |
+| 10M/10k 62-30-40 (sec. 14) | 0.117 | 4.4% | 4.4% | 0.00 | 10/40 | 29 | 13 / 13 / 0 | 8, 9 |
+| 1M/1k 62-30-40 | 0.436 | 50.0% | 8.9% | 0.51 | 0/40 | 29 | 11 / 11 / 0 | 3, 8, 10, 14 |
+| 10M/10k 80-30-40 | 0.371 | 50.0% | 2.1% | 0.49 | 0/40 | 31 | 13 / 13 / 0 | 0, 4 |
+
+- The two new runs found a different solution: on about half of all inputs (the y = -1 class)
+  every second-layer unit is off and the logit is exactly zero. The design's output layer is
+  all ones and its third layer nonnegative, so every logit is positive at init; fitting
+  y = -1 needs either negative output weights or a dead second layer. In these two runs no
+  output weight ever went negative, so the net took the dead route, paying log 2 on every
+  negative point (hence the 0.37-0.44 loss floor). `zero_one_loss` scores a zero logit as +1,
+  which is why the summary shows chance-level test error; the strict rule gives 8.9% and 2.1%.
+- The 10M 62-30-40 run of section 14 started down the same road (21% zero logits at epoch 10)
+  and escaped by epoch 30 when 8 output weights turned negative; the section-12 run had 21
+  negative output weights by epoch 10 and never had zero logits. The same init (62-30-40,
+  seed 0) went one way at 10M/10k and the other at 1M/1k: the branch is decided early and is
+  noise-sensitive.
+- First-layer capture is largely unaffected by which branch is taken: 11-13 of 15 nodes are
+  captured by their own probes, always at the intended pole in the all-cues design (0
+  opposite-pole captures in all three all-cues runs vs 7 in the random-subset run). Restoring
+  the 18 random rows brings node coverage back to 31/31.
+
+### Reading
+- The accuracy comparisons across these four runs are confounded by the output-sign branch,
+  not only by spare neurons. Spare neurons do restore full coverage (31/31 with 80 rows, 29/31
+  without, in both data regimes).
+- The init design should let the output represent both signs from the start: random-sign or
+  balanced output weights (the earlier note that a balanced-sign output "kills the probe" was
+  at eps = 1e-3 under the flow and needs rechecking at Kaiming scale), or a bias.
+
+### Current state / where to pick up
+- Rerun the 62-30-40 and 80-30-40 designs with a balanced-sign output layer (and matching
+  sign structure in layer 3) so the dead-layer branch is unavailable; then redo the
+  spare-neuron and data-size comparison.
