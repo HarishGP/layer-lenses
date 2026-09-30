@@ -13,6 +13,11 @@ from layer_lenses.relu_analysis import (
     masked_relu_logits,
     neuron_leaf_responsibility_from_ablation,
     epoch_replay_summary_table,
+    first_layer_alignment_series,
+    first_layer_odt_alignment,
+    plot_first_layer_alignment_series,
+    snapshot_state_dict,
+    state_dict_from_weight_arrays,
     flatten_named_tensors,
     plot_layered_relu_graph,
     regenerate_seed_result_data,
@@ -460,3 +465,59 @@ def test_hybrid_replay_separates_sgd_and_adam_parameters() -> None:
     assert adam_table["cos_update_grad"].iloc[0] > -0.99
     assert "adam_step_size_median" not in sgd_table.columns
     assert "adam_step_size_median" in adam_table.columns
+
+
+def test_snapshot_state_dict_round_trips_weight_arrays_and_plots() -> None:
+    _, _, tree, _ = generate_cob_odt_data(num_data=32, dim=5, depth=2, seed=4)
+    model = ReLUMLP(input_dim=5, hidden_dims=[4, 3, 2], bias=False)
+    sd = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    epochs = np.array([0, 10, 20])
+    run = {"epochs": epochs, **{f"w__{k}": np.stack([v.numpy() * (1 + t) for t in range(3)]) for k, v in sd.items()}}
+
+    rebuilt = snapshot_state_dict(run, 10)
+    assert set(rebuilt) == set(sd)
+    for k in sd:
+        assert torch.allclose(rebuilt[k], 2 * sd[k])
+    assert rebuilt["output_layer.weight"].shape == (1, 2)
+    with pytest.raises(ValueError):
+        snapshot_state_dict(run, 5)
+
+    direct = state_dict_from_weight_arrays([sd["hidden_layers.0.weight"].numpy()], np.ones(4, dtype=np.float32))
+    assert direct["output_layer.weight"].shape == (1, 4)
+
+    _, visible_edges, fig, _ = plot_layered_relu_graph(state_dict=rebuilt, tree=tree, depth=2, epoch=10, edge_abs_threshold=0.0)
+    assert len(visible_edges) == 4 * 3 + 3 * 2 + 2
+    plt.close(fig)
+
+
+def test_first_layer_alignment_series_matches_direct_cosines() -> None:
+    _, _, tree, _ = generate_cob_odt_data(num_data=32, dim=6, depth=2, seed=7)
+    rng = np.random.default_rng(0)
+    epochs = np.array([0, 5, 10, 15])
+    W0 = rng.normal(size=(4, 5, 6)).astype(np.float32)
+    W1 = rng.normal(size=(4, 3, 5)).astype(np.float32)
+
+    series = first_layer_alignment_series(W0, epochs, tree, neuron_ids=[1, 3], node_ids=[0, 2], fan_out_weights=W1)
+    assert len(series) == 8
+    assert list(series.columns) == ["epoch", "neuron", "norm", "cos_0", "cos_2", "fan_out_norm"]
+
+    row = series[(series.epoch == 10) & (series.neuron == 3)].iloc[0]
+    w = W0[2, 3].astype(np.float64)
+    u2 = tree.w_list[2] / np.linalg.norm(tree.w_list[2])
+    assert row.cos_2 == pytest.approx(float(w @ u2 / np.linalg.norm(w)), abs=1e-6)
+    assert row.norm == pytest.approx(float(np.linalg.norm(w)), abs=1e-6)
+    assert row.fan_out_norm == pytest.approx(float(np.linalg.norm(W1[2][:, 3])), abs=1e-6)
+
+    # agrees with first_layer_odt_alignment on the same snapshot
+    sd = state_dict_from_weight_arrays([W0[2]], np.ones((1, 5), dtype=np.float32))
+    cos = first_layer_odt_alignment(state_dict=sd, tree=tree)["cos"]
+    assert row.cos_0 == pytest.approx(float(cos[3, 0]), abs=1e-5)
+
+    with pytest.raises(ValueError):
+        first_layer_alignment_series(W0, epochs, tree, neuron_ids=[9], node_ids=[0])
+    with pytest.raises(ValueError):
+        first_layer_alignment_series(W0, epochs, tree, neuron_ids=[0], node_ids=[3])
+
+    fig, axes = plot_first_layer_alignment_series(series, title="t")
+    assert len(axes) == 2
+    plt.close(fig)

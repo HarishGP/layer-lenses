@@ -2234,3 +2234,145 @@ def epoch_replay_parameter_series(
     ``"params_before"``. Returns a tensor of shape ``(num_steps, *param_shape)``.
     """
     return torch.stack([rec[key][parameter_name] for rec in replay["steps"]])
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint trajectories stored as weight arrays (e.g. the ``runs/*.npz``
+# files written by the designed-init sweep scripts, keys ``w__<param name>``
+# stacked over snapshot epochs).
+# ---------------------------------------------------------------------------
+
+
+def state_dict_from_weight_arrays(
+    hidden_weights: list[np.ndarray],
+    output_weight: np.ndarray,
+) -> dict[str, torch.Tensor]:
+    """Assemble a bias-free ``ReLUMLP`` state dict from plain weight arrays.
+
+    ``hidden_weights[i]`` becomes ``hidden_layers.i.weight`` and
+    ``output_weight`` becomes ``output_layer.weight``, so the result can be fed
+    to ``plot_layered_relu_graph`` or ``first_layer_odt_alignment`` directly.
+    """
+    state = {
+        f"hidden_layers.{i}.weight": torch.as_tensor(np.asarray(w), dtype=torch.float32)
+        for i, w in enumerate(hidden_weights)
+    }
+    out = torch.as_tensor(np.asarray(output_weight), dtype=torch.float32)
+    state["output_layer.weight"] = out if out.ndim == 2 else out.reshape(1, -1)
+    return state
+
+
+def snapshot_state_dict(run: Any, epoch: int) -> dict[str, torch.Tensor]:
+    """State dict at one snapshot of a ``w__``-keyed trajectory.
+
+    ``run`` is a mapping (``np.load`` result or dict) with an ``epochs`` array
+    and one ``w__<param name>`` array per parameter, stacked along axis 0 in
+    the order of ``epochs``. ``epoch`` must be one of the stored epochs.
+    """
+    epochs = np.asarray(run["epochs"])
+    hits = np.nonzero(epochs == epoch)[0]
+    if hits.size == 0:
+        raise ValueError(f"Epoch {epoch} is not a stored snapshot; stored epochs: {epochs.tolist()}")
+    idx = int(hits[0])
+    keys = [k for k in run.keys() if k.startswith("w__")]
+    hidden = sorted(
+        (int(k.split(".")[1]), k) for k in keys if k.startswith("w__hidden_layers.") and k.endswith(".weight")
+    )
+    return state_dict_from_weight_arrays(
+        [run[k][idx] for _, k in hidden], run["w__output_layer.weight"][idx]
+    )
+
+
+def first_layer_alignment_series(
+    first_layer_weights: np.ndarray,
+    epochs: np.ndarray | list[int],
+    tree: COBODTTree,
+    *,
+    neuron_ids: list[int],
+    node_ids: list[int],
+    fan_out_weights: np.ndarray | None = None,
+) -> pd.DataFrame:
+    """Cosines of chosen first-layer neurons to chosen ODT nodes along a trajectory.
+
+    ``first_layer_weights`` has shape (n_snapshots, width, dim) and ``epochs``
+    labels its first axis. Returns one row per (epoch, neuron) with columns
+    ``norm``, ``cos_<node>`` for each requested node, and ``fan_out_norm``
+    (the norm of the neuron's outgoing column of ``fan_out_weights``, shape
+    (n_snapshots, next_width, width)) when that array is given.
+    """
+    W = np.asarray(first_layer_weights, dtype=np.float64)
+    epochs = np.asarray(epochs)
+    if W.ndim != 3 or W.shape[0] != epochs.shape[0]:
+        raise ValueError(f"first_layer_weights must be (n_snapshots, width, dim) matching epochs; got {W.shape} and {epochs.shape}")
+    width, n_nodes = W.shape[1], tree.w_list.shape[0]
+    for i in neuron_ids:
+        if not 0 <= i < width:
+            raise ValueError(f"neuron id {i} outside [0, {width - 1}]")
+    for n in node_ids:
+        if not 0 <= n < n_nodes:
+            raise ValueError(f"ODT node id {n} outside [0, {n_nodes - 1}]")
+    U = np.asarray(tree.w_list, dtype=np.float64)[node_ids]
+    U = U / np.maximum(np.linalg.norm(U, axis=1, keepdims=True), 1e-12)
+    rows = []
+    for t, e in enumerate(epochs):
+        for i in neuron_ids:
+            w = W[t, i]
+            nrm = float(np.linalg.norm(w))
+            rec = {"epoch": int(e), "neuron": int(i), "norm": nrm}
+            cos = U @ w / max(nrm, 1e-12)
+            rec.update({f"cos_{n}": float(c) for n, c in zip(node_ids, cos)})
+            if fan_out_weights is not None:
+                rec["fan_out_norm"] = float(np.linalg.norm(np.asarray(fan_out_weights)[t][:, i]))
+            rows.append(rec)
+    return pd.DataFrame(rows)
+
+
+def plot_first_layer_alignment_series(
+    series: pd.DataFrame,
+    *,
+    neuron_ids: list[int] | None = None,
+    node_ids: list[int] | None = None,
+    show_norm: bool = True,
+    show_fan_out: bool = True,
+    norm_axis: bool = True,
+    ylim: tuple[float, float] | None = None,
+    figsize_per_row: float = 3.2,
+    title: str | None = None,
+):
+    """One panel per neuron: cosine to each requested node over epochs.
+
+    Cosines are drawn on the left axis in [-1, 1]. When ``norm_axis`` is true
+    the neuron norm and fan-out norm go on a second (right) axis so they do not
+    squash the cosines; otherwise everything shares one axis.
+    """
+    if neuron_ids is None:
+        neuron_ids = sorted(series.neuron.unique().tolist())
+    if node_ids is None:
+        node_ids = [int(c[4:]) for c in series.columns if c.startswith("cos_")]
+    fig, axes = plt.subplots(len(neuron_ids), 1, figsize=(9, figsize_per_row * len(neuron_ids)), sharex=True, squeeze=False)
+    axes = axes[:, 0]
+    for ax, i in zip(axes, neuron_ids):
+        g = series[series.neuron == i].sort_values("epoch")
+        for k, n in enumerate(node_ids):
+            ax.plot(g.epoch, g[f"cos_{n}"], color=f"C{k % 10}", lw=1.8, label=f"cos to node {n}")
+        for yv in (-1.0, 0.0, 1.0):
+            ax.axhline(yv, color="gray", ls="--", lw=0.8)
+        ax.set_ylabel("cosine")
+        ax.set_ylim(*(ylim if ylim is not None else (-1.05, 1.05)))
+        ax.grid(alpha=0.25)
+        ax2 = ax.twinx() if norm_axis else ax
+        if show_norm:
+            ax2.plot(g.epoch, g.norm, color="k", lw=1.4, ls="-", label="neuron norm")
+        if show_fan_out and "fan_out_norm" in g:
+            ax2.plot(g.epoch, g.fan_out_norm, color="k", lw=1.4, ls=":", label="fan-out norm")
+        if norm_axis:
+            ax2.set_ylabel("norm")
+        h1, l1 = ax.get_legend_handles_labels()
+        h2, l2 = (ax2.get_legend_handles_labels() if norm_axis else ([], []))
+        ax.legend(h1 + h2, l1 + l2, fontsize=7, loc="upper left", ncol=2)
+        ax.set_title(f"first-layer neuron {i}", fontsize=9)
+    axes[-1].set_xlabel("epoch")
+    if title:
+        fig.suptitle(title, fontsize=10)
+    fig.tight_layout()
+    return fig, axes

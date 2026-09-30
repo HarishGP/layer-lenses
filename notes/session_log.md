@@ -3896,3 +3896,36 @@ floor: one long run at full Kaiming scale with cosine annealing, cues free and c
   early capture.
 - Track node coverage over epochs (rather than probe on-target) as the main hierarchy
   metric; the per-probe view undercounts what the net has learned.
+
+## 2026-09-30 04:05 IST — Checkpoint visualisation for the cosine-annealed runs
+
+### Goal
+Tools to inspect the stored trajectories (all four weight matrices every 10 epochs): draw the
+learned network at a chosen epoch like `plot_layered_relu_graph`, and track cosines of chosen
+first-layer neurons to chosen ODT nodes over the run as in `scratch.ipynb`.
+
+### User prompts (verbatim)
+- "Do you have the full parameter trajectory of these runs? e.g. in the folder \"results/designed_init/hierarchy_kaiming_cosine/\" I don't see any pickles or large files at all. Are they elsewhere?"
+- "Got it. I am looking to do some more analysis with these checkpoints. Can you add some plotting at the end of desgned_init notebook? \n\nI want to be able to visualise the learned network at a given epoch, similar to the \"plot_layered_relu_graph\" function. From the W0,W1,W2,W3 arrays (and also the tree.w_list for tracking components with the ODT vector. Can you add it?\n\nAlso, a similar functionality as in scratch.ipynb (in the section titled \"Neuron-wise First layer neuron alignment analysis\") to track the cosines of a given bunch of first layer neurons w.r.t. a bunch of ODT nodes."
+
+### Changes
+- `relu_analysis.py`: `state_dict_from_weight_arrays(hidden_weights, output_weight)`,
+  `snapshot_state_dict(run, epoch)` (from a `w__<param>`-keyed npz trajectory),
+  `first_layer_alignment_series(W0_stack, epochs, tree, neuron_ids=, node_ids=, fan_out_weights=)`
+  (long table: norm, cos_<node>, fan-out column norm), `plot_first_layer_alignment_series`
+  (one panel per neuron, cosines on the left axis, norms on a right axis). Two tests.
+- Notebook section 13: graph of the network at `GRAPH_EPOCH` (first-layer nodes labelled by
+  closest ODT node, optional mask to aligned neurons only), a table of which node each
+  neuron sits on by group, and the alignment-series plot with editable neuron/node lists.
+  The user's own cells (loading W0-W3 from the npz) sit just before section 13.
+
+### Decisions
+- Trajectories are stored every 10 epochs (10k steps) in `runs/*.npz`, ~5 MB each, no
+  optimizer state; finer resolution or momentum buffers need a rerun.
+- For a first-layer neuron in a 3-hidden-layer net the scratch notebook's "output weight"
+  has no analogue, so the series reports the norm of its outgoing second-layer column.
+
+### Current state / where to pick up
+- In the free-cue run, probes 1 (-u_0) and 2 (+u_1) wander for 150-250 epochs before
+  locking onto nodes 9 and 13 with cosine -1, while probes 0 and 3 lock within 20 epochs.
+  The late captures are candidates for the linearized-flow / lens analysis.
