@@ -39,6 +39,32 @@ Use notebooks for exploratory analysis, especially:
 - `notebooks/scratch.ipynb` — current ReLU-on-ODT analysis notebook.
 - `notebooks/DLGN_multiseed_multipath_runner.ipynb` — DLGN multipath/multiseed exploration.
 
+## Designed-init hierarchy runs (`notebooks/hierarchy_design_runs.ipynb`)
+
+The notebook has one section per training run from a hand-designed initialisation
+(30 probe neurons, 32 cue neurons). It reads parameter trajectories from
+`results/designed_init/`, which is git-ignored, so on a fresh clone regenerate them first:
+
+```bash
+scripts/regenerate_hierarchy_design_runs.sh
+```
+
+This runs the four scripts kept under `notebooks/results/designed_init/*/run_*.py`
+(the same files that produced the committed `summary.csv` / `per_epoch_*.csv` tables
+there). It needs a CUDA GPU with at least 8 GB free, about 8 GB of host RAM, and roughly
+three hours; each script is independent if you only want some runs. Then execute the
+notebook:
+
+```bash
+cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb
+```
+
+Runs are bitwise reproducible on the same GPU/driver (fixed seeds, fixed batch order);
+on other hardware expect the same qualitative outcome with different per-probe fates.
+The library code behind the design and the plots is in `src/layer_lenses/designed_init.py`
+and `src/layer_lenses/relu_analysis.py`; the narrative is in `notes/session_log.md`
+(entries from 2026-09-28 on).
+
 ## Source-of-Truth Notes
 
 For research details and decisions, prefer:

@@ -4148,3 +4148,20 @@ the dead-second-layer branch is unavailable, and reorganise the designed-init no
   init path to the logit) and rerun the 80-30-40 balanced design; expect intended-pole capture
   to return to ~13/15 with both poles distinct.
 - Node coverage still depends on spare rows; consider 2-3 random rows per level-3 node.
+
+## 2026-09-30 10:10 IST — Handoff commit and push
+
+### User prompts (verbatim)
+- "I want to Commit everything and push to remote. This is a good handoff point for discussing with my students and collaborators. \n\nHow big would the pushed repo be? Give instructions/scripts on generating the files (parameter trajectories etc) necessary to run the \"hierarchy_design_runs\" notebook."
+
+### Changes
+- `scripts/regenerate_hierarchy_design_runs.sh`: runs the four hierarchy scripts (copies under
+  `notebooks/results/designed_init/*/`) from the repo root to rebuild everything
+  `notebooks/hierarchy_design_runs.ipynb` reads from the git-ignored `results/designed_init/`
+  (7 runs, ~3 h on one GPU, needs >= 8 GB GPU memory for the 10M-point runs). README section.
+- Committed the user's working files (`.vscode/settings.json`, `notebooks/scratch.ipynb`,
+  `notebooks/ReLU_replayable_training.ipynb`) as they were; pushed `main` to origin.
+
+### Decisions
+- Raw trajectories (30 MB for the seven runs) stay out of git; collaborators regenerate them.
+  The executed notebook (17 MB with figures) is committed so the results can be read without a GPU.
