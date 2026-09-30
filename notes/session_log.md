@@ -4015,3 +4015,24 @@ mid-escape) and the earlier per-probe "drift".
   -u_0 probe reached its own target and the +u_0 probe went to +u_14; in the 1M run the
   +u_0 probe reached its target and the -u_0 probe went elsewhere. Which probe of the pair
   wins changed between runs; no probe reached the opposite pole. Entry above corrected.
+
+## 2026-09-30 06:20 IST — Per-node reading of the probe outcomes (Q&A, verified from checkpoints)
+
+### User prompts (verbatim)
+- "Ok, I think we should call this a success in terms of init design. All of the 30 probes didn't go to target, but the probes for most of the 15 internal nodes at least one of +u_j or -u_j was reached. Maybe it is the case that there is no need for both +u_j and -u_j to be learned for loss minimisation.\n\nThe larger data run with architectures 62-30-40  is more well behaved in that sense. all u_j except j=8 and 9 were captured at the designed probe in atleast one polarity.\n\nThe smaller data run with 80-40-40 architecture failed to capture the nodes 1,4,13, and 3,6,7,9,10,12,14 are captured at opposite polarity (i.e probe intended tmake them go to +u_j but gradient descent took it to opposite pole). All ODT nodes were captured at some first layer neuron, but intended capture by probes was not happening.\n\nOf course, I am guessing the missing extra freedom of the 18 blnak neurons coast the 62-30-40 run in terms of accuracy.\n\nAm I reading the results right?"
+
+### Verification (end of training, |cos| > 0.95, per internal node j with probes 2j -> +u_j, 2j+1 -> -u_j)
+| run | nodes with >= 1 own probe | at intended pole | opposite pole only | missed by own probes |
+|---|---|---|---|---|
+| 10M/10k frozen 62-30-40 | 13/15 | 13 | 0 | 8, 9 |
+| 1M/1k frozen 80-40-40 | 12/15 | 5 | 7 (3, 6, 7, 9, 10, 12, 14) | 1, 4, 13 |
+| 1M/1k free 80-40-40 | 9/15 | 9 | 0 | 3, 9, 11, 12, 13, 14 |
+Both poles captured by own probes: 10M run nodes 5, 6, 7, 11; frozen 1M run nodes 3 (swapped), 5.
+The user's reading of the two frozen runs is exactly right. Opposite-pole captures occur only
+in the random-subset design (1M frozen); with `subset_mode="all"` the ancestor pushes cancel
+exactly at t=0 inside each unit, a candidate explanation to test.
+
+### Decisions
+- "One pole per node suffices for the loss" is not established: the 10M net (mostly single-pole,
+  nodes 8/9 missing) sits at 4.4% test error, and the two effects cannot be separated from this
+  run. Isolating runs (62-30-40 at 1M/1k; 62-30-40 plus 18 random rows) remain the next step.
