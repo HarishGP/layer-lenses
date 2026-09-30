@@ -105,6 +105,31 @@ def build_data(spec: SweepRunSpec, tree: COBODTTree) -> tuple[np.ndarray, np.nda
     return x, y
 
 
+def build_data_chunked(
+    spec: SweepRunSpec, tree: COBODTTree, *, chunk_size: int = 1_000_000
+) -> tuple[np.ndarray, np.ndarray]:
+    """Like `build_data` but generated in chunks and stored as float32.
+
+    The generator works in float64 and materialises the margins to all 31 nodes, so
+    10M points would need ~18 GB of host memory in one call. Chunk ``k`` uses seed
+    ``data_seed + k`` on the same tree; the result is float32 inputs and int8 labels.
+    A single chunk reproduces `build_data` exactly (up to the float32 cast).
+    """
+    n_chunks = math.ceil(spec.n_train / chunk_size)
+    x = np.empty((spec.n_train, spec.dim), dtype=np.float32)
+    y = np.empty(spec.n_train, dtype=np.int8)
+    start = 0
+    for k in range(n_chunks):
+        n = min(chunk_size, spec.n_train - start)
+        xk, yk, _, _ = generate_cob_odt_data(
+            num_data=n, dim=spec.dim, depth=spec.depth, seed=spec.data_seed + k, threshold=0.0, tree=tree
+        )
+        x[start : start + n] = xk.astype(np.float32)
+        y[start : start + n] = yk.astype(np.int8)
+        start += n
+    return x, y
+
+
 def build_init_model(spec: SweepRunSpec) -> ReLUMLP:
     """Construct the model at initialization from ``init_seed`` alone."""
     set_seed(spec.init_seed)

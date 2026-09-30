@@ -575,6 +575,9 @@ class HierarchyDesignSpec:
     width3: int = 40
     layer2_scale: float = 1 / 3
     layer3_density: float = 0.5
+    # If true, every third-layer row has exactly round(layer3_density * width2) ones
+    # (a random subset per row) instead of independent Bernoulli entries.
+    layer3_exact: bool = False
     layer3_scale: float = 1 / np.sqrt(20)
     output_scale: float = 1 / np.sqrt(40)
     # If set, every row of every layer is rescaled to these norms (layers 1..4),
@@ -678,7 +681,14 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
             unit_probe[row] = p
             row += 1
     W2 *= spec.layer2_scale
-    W3 = (rng.random((spec.width3, spec.width2)) < spec.layer3_density).astype(np.float64) * spec.layer3_scale
+    if spec.layer3_exact:
+        k = int(round(spec.layer3_density * spec.width2))
+        W3 = np.zeros((spec.width3, spec.width2))
+        for r in range(spec.width3):
+            W3[r, rng.choice(spec.width2, size=k, replace=False)] = 1.0
+        W3 *= spec.layer3_scale
+    else:
+        W3 = (rng.random((spec.width3, spec.width2)) < spec.layer3_density).astype(np.float64) * spec.layer3_scale
     Wout = np.full((1, spec.width3), spec.output_scale)
     weights = {
         "hidden_layers.0.weight": W1,

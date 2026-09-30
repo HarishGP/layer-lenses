@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from layer_lenses.init_sweep import (
+    build_data_chunked,
     FIRST_LAYER_KEY,
     SweepRunSpec,
     build_data,
@@ -232,3 +233,22 @@ def test_alignment_rate_sensitivity_matches_small_step_difference() -> None:
     assert np.allclose(jv["B_dot"], fd["B_dot_fd"], rtol=1e-3, atol=1e-9)
     assert np.abs(fd["A_dot_fd"]).max() > 0 and np.abs(fd["B_dot_fd"]).max() > 0
     assert fd["displacement"].iloc[0] == pytest.approx(1e-7 * np.sqrt(sum((p.detach().numpy() ** 2).sum() for p in model.parameters())), rel=1e-6)
+
+
+def test_build_data_chunked_matches_single_call_and_labels() -> None:
+    spec = SweepRunSpec(tree_seed=3, data_seed=11, init_seed=0, batch_size=1, n_train=2500)
+    tree = build_tree(spec)
+    x_ref, y_ref = build_data(spec, tree)
+    x1, y1 = build_data_chunked(spec, tree, chunk_size=10_000)
+    assert x1.dtype == np.float32 and y1.dtype == np.int8
+    assert np.allclose(x1, x_ref.astype(np.float32)) and np.array_equal(y1, y_ref)
+
+    x4, y4 = build_data_chunked(spec, tree, chunk_size=1000)
+    assert x4.shape == (2500, spec.dim) and y4.shape == (2500,)
+    assert np.allclose(x4[:1000], x_ref[:1000].astype(np.float32))  # first chunk shares the seed
+    assert not np.allclose(x4[1000:2000], x_ref[1000:2000].astype(np.float32))  # later chunks are fresh draws
+    assert np.allclose(np.linalg.norm(x4, axis=1), 1.0, atol=1e-5)
+    # labels are consistent with the tree for every chunk
+    from layer_lenses.odt import odt_leaf_ids_for_x
+    leaf_offsets = odt_leaf_ids_for_x(x4.astype(np.float64), tree) - tree.w_list.shape[0]
+    assert np.array_equal(y4, tree.leaf_labels[leaf_offsets].astype(np.int8))

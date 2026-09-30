@@ -3929,3 +3929,66 @@ first-layer neurons to chosen ODT nodes over the run as in `scratch.ipynb`.
 - In the free-cue run, probes 1 (-u_0) and 2 (+u_1) wander for 150-250 epochs before
   locking onto nodes 9 and 13 with cosine -1, while probes 0 and 3 lock within 20 epochs.
   The late captures are candidates for the linearized-flow / lens analysis.
+
+## 2026-09-30 05:20 IST — 10M points, batch 10k, no random neurons, one unit per probe (cues frozen)
+
+### Goal
+Test whether the probe deviations from their designed nodes in the cosine-annealed Kaiming run
+are a finite-sample effect: 10x data and batch, and remove the init randomness (no random
+first-layer rows, one second-layer unit per probe reading every candidate cue, exactly half
+the third-layer entries nonzero). Cues frozen only.
+
+### User prompts (verbatim)
+- "Ok, let's do one thing to see if some of this probe deviation from intended vectors is a finite sample effect. Can you increase the number of data points by a factor of 10, and batch-size also by 10? I remember my CUDA device still had sufficient memory to hold the entire 1M size dataset in memory, so 10x batchsize and data should be possible, without too much extra time. \n\nAlso, to keep the leftover random vectors (first layer neurons apart from cues and probes) from affecting the results, let's just remove them and have a first layer width of just 62. \n\nTo further reduce the effect of randomness, let's just have 30 neurons in the second hidden layer -- one per probe. That way we can just connect all the relevant cues to the second layer instead of choosing a subset.\n\nOne more modification to have the same effect, the third layer 40-by-30 matrix, let's initialize so that the number of non-zero entries in each row is exactly half (i.e.) 15.\n\nWhat do you think of this new experiment, any changes you would suggest?"
+- "Can you give the current run's train config details( for the runs stored in \"results\\designed_init\\hierarchy_kaiming_cosine\\runs\\linear_free_kaiming_cosine_seed0.npz\")"
+- "20  minutes is not a big deal. I would like to get cleaner numbers before analysing. \n\nRun the new experiments just on larger data and batch size, with your proposed fixes (data generator mainly) and only the frozen cues setting."
+
+### Changes
+- `init_sweep.build_data_chunked(spec, tree, chunk_size=1M)`: generates in chunks (seed
+  `data_seed + k`) and stores float32 inputs / int8 labels. The one-call generator works in
+  float64 and would need ~18 GB host memory for 10M points; chunked it took 18 s and 4 GB.
+- `HierarchyDesignSpec.layer3_exact`: exactly round(density * width2) ones per third-layer row.
+- Script `results/designed_init/run_hierarchy_kaiming_cosine_big.py`: design
+  `width1=62, width2=30, width3=40, units_per_level=(1,1,1,1), subset_mode="all", layer3_exact=True`,
+  Kaiming rows, linear cues, seed 0, cues frozen; 10M points, batch 10k, otherwise the section-12
+  schedule (1000 epochs x 1000 steps, lr 0.02 -> 0.001 cosine, momentum 0.9). Notebook section 14.
+  Two tests. First launch crashed on a `.numpy()` of a cuda tensor in a diagnostic print; fixed.
+- Timing: a batch-10k step costs the same as batch-1k (0.87 ms), so the run took 24 min; the 10M
+  dataset occupies 3.7 GB of GPU memory.
+
+### Results (vs. the 1M / batch-1k frozen run of section 12)
+
+| | 1M / 1k, 80-40-40 | 10M / 10k, 62-30-40 |
+|---|---|---|
+| final epoch loss | 0.010 | 0.117 |
+| test error | 0.67% | 4.4% |
+| epochs to 0.3 / 0.2 / 0.1 | 37 / 51 / 135 | 55 / 101 / never |
+| probes on designed target at end (L0-3) | 0.5 / 0.25 / 0.62 / 0.44 | 0.5 / 0.5 / 0.75 / 0.5 |
+| nodes covered at |cos| > 0.95, end | 31 / 31 | 29 / 31 |
+
+- Not a finite-sample effect: with 10x data and 10x batch the probes deviate from their
+  designed nodes just as much (17 of 30 on target). The root pair even flipped: here the
+  -u_0 probe captured u_0 and the +u_0 probe went to u_14.
+- The loss floor is coverage. Level-3 nodes 8 and 9 are never captured by any of the 62
+  neurons (from epoch 100 to the end), while nodes 0-4 each end with two or three neurons
+  on them (e.g. probes 2, 21 and 8 all on u_1; 9, 18, 19 all on u_4). Seven neurons end
+  unaligned (|cos| < 0.95), mostly the ones that lost the competition for a coarse node.
+  Without the 18 spare random neurons there is nobody left to pick up the missing nodes.
+- The probe's own weight in its unit falls with the number of cues the unit reads under row
+  normalisation (0.25 at the root, 0.34 / 0.47 / 0.63 at levels 1-3), an asymmetry that was
+  half as strong with random cue subsets.
+
+### Reading
+The design decides *that* the hierarchy is learned, not which neuron takes which node; the
+assignment is settled by competition during the escape, and duplicated coarse nodes are the
+price. Spare neurons are what made the 80-40-40 run reach 0.01: they fill in whatever the
+probes leave. Same conclusion as the init sweep (winner init-determined but decided
+mid-escape) and the earlier per-probe "drift".
+
+### Current state / where to pick up
+- Cleanest next check of the competition story: same 62-30-40 design at 1M / 1k (isolates
+  data size from architecture, 25 min), and a 62-30-40 run with 18 random rows added back.
+- The gradient-cosine check (full-batch vs minibatch gradient on a wandering probe's row at
+  the stored snapshots) was not run; it is the direct test of sampling noise on one run.
+- Possible fix for duplicates: freeze a probe's row once it has locked (|cos| > 0.95), or
+  give each unit the probe entry the same norm as its cue block.

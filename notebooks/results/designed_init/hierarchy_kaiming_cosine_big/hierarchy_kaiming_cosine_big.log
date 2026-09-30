@@ -1,0 +1,4 @@
+data ready: (10000000, 100) float32, label mean 0.0003, 0.3 min
+probe entry in its unit: root 0.246, level-1 0.343, level-2 0.471, level-3 0.632
+linear_frozen_kaiming_cosine_big_seed0: final epoch loss 0.1167 (min 0.1167), train log loss (2M) 0.1159, test error 0.0444; epochs to 0.3/0.2/0.1/0.05: 55/101/-1/-1; on-target ep10 [1.0, 0.5, 0.25, 0.19] end [0.5, 0.5, 0.75, 0.5]; 24.3 min
+ALL DONE

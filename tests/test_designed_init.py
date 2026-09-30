@@ -262,3 +262,22 @@ def test_standard_scale_spec_normalizes_rows_and_keeps_signs() -> None:
         assert np.allclose(norms[norms > 0], 1 / np.sqrt(3))
         assert np.array_equal(np.sign(Ws[k]), np.sign(Wb[k]))        # sign structure untouched
     assert np.abs(tree.w_list @ Ws["hidden_layers.0.weight"][:30].T).max() < 1e-9
+
+
+def test_hierarchy_layer3_exact_count_and_all_cues_widths() -> None:
+    from layer_lenses.designed_init import HierarchyDesignSpec, build_hierarchy_weights
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    spec = HierarchyDesignSpec(width1=62, width2=30, width3=40, units_per_level=(1, 1, 1, 1), subset_mode="all",
+                               cue_mode="linear", layer3_exact=True, seed=0)
+    assert spec.n_random == 0
+    w, meta = build_hierarchy_weights(spec, tree)
+    W1, W2, W3 = w["hidden_layers.0.weight"], w["hidden_layers.1.weight"], w["hidden_layers.2.weight"]
+    assert W1.shape == (62, 100) and W2.shape == (30, 62) and W3.shape == (40, 30)
+    assert np.all((W3 != 0).sum(axis=1) == 15)
+    assert list(meta["unit_probe"]) == list(range(30))
+    # unit for the root probe reads every level-4 pair (16 pairs x 2 signs) plus its probe
+    assert (W2[0] != 0).sum() == 1 + 32
+    # unit for a level-3 probe reads its two level-4 children (2 pairs x 2 signs) plus its probe
+    assert (W2[29] != 0).sum() == 1 + 4
+    dense = build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", seed=0), tree)[0]
+    assert not np.all((dense["hidden_layers.2.weight"] != 0).sum(axis=1) == 15)
