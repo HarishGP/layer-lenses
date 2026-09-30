@@ -4092,3 +4092,59 @@ design with the 18 random rows restored (80-30-40) at 10M / batch 10k. Cues froz
 - Rerun the 62-30-40 and 80-30-40 designs with a balanced-sign output layer (and matching
   sign structure in layer 3) so the dead-layer branch is unavailable; then redo the
   spare-neuron and data-size comparison.
+
+## 2026-09-30 09:40 IST — Balanced-sign output runs; notebook reorganised into one section per run
+
+### Goal
+Rerun the two all-cues designs (62-30-40 and 80-30-40) with a balanced-sign output layer so
+the dead-second-layer branch is unavailable, and reorganise the designed-init notebook.
+
+### User prompts (verbatim)
+- "Run the balanced-sign output version for both designs. \n\nOne other change request for the notebook. Reorganise so that there is one section for each run in the notebook, with one cell for trajectory plots giving cosines or components of first layer neurons, and one cell for network visualization. Give a brief summary of the run config at the beginning of the section. And a brief summary of the finidings.\n\nRemove the earlier sections probing for smaller sets of vectors. Rename the file appropriately."
+
+### Changes
+- `HierarchyDesignSpec.output_signs` ("ones" | "balanced": alternating +1/-1 over the third-layer
+  units). `probe_node_outcomes`, `hierarchy_run_summary`, `plot_probe_target_cosines` in
+  `designed_init.py`. Tests for all.
+- Script `results/designed_init/run_hierarchy_kaiming_cosine_balanced.py` (both designs, 10M /
+  batch 10k, cues frozen, otherwise the section-14 setup); outputs under
+  `notebooks/results/designed_init/hierarchy_kaiming_cosine_balanced/`.
+- `notebooks/designed_init_u0.ipynb` renamed to `notebooks/hierarchy_design_runs.ipynb` and
+  rebuilt: intro (design, schedule, metrics), then one section per cosine-annealed run (7 runs)
+  with a config table, a findings summary, a trajectory cell (loss / zero-logit fraction / node
+  coverage over epochs, every probe's cosine to its target by level, alignment series for chosen
+  rows) and a network-graph cell; the balanced-output sections carry a fourth cell testing the
+  path-sign rule. The single-, two- and six-probe sections and the SGD sweeps remain in git
+  history (`designed_init_u0.ipynb` through commit 3f06b4a); their summaries stay under
+  `notebooks/results/designed_init/`.
+
+### Results (balanced output, 10M / 10k, cues frozen; |cos| > 0.95)
+
+| run | final loss | test error | zero-logit frac | nodes covered | own-probe nodes / intended / opposite only | missed by own probes |
+|---|---|---|---|---|---|---|
+| 62-30-40 balanced | 0.081 | 3.1% | 0.00 | 30 (14 missing) | 14 / 6 / 8 | 14 |
+| 80-30-40 balanced | 0.033 | 1.0% | 0.00 | 31 | 12 / 6 / 6 | 0, 1, 6 |
+| (62-30-40 all-ones, run 3) | 0.117 | 4.4% | 0.00 | 29 | 13 / 13 / 0 | 8, 9 |
+
+- The balanced output removes the dead-layer branch (zero logits 0 at every epoch, 20-21
+  negative output weights throughout) and lowers the loss of both designs. With the output
+  fixed, the spare-row effect is clean: 0.033 (80 rows) vs 0.081 (62 rows), coverage 31 vs 30.
+- The logit RMS at init drops from 2.1 to 0.10 by cancellation; the escape starts later
+  (loss 0.67 at epoch 10) but 0.3 is reached at the same epoch (31-36).
+- Opposite-pole captures return (8 and 6 nodes), and they are predicted by the sign of the
+  probe's unit path to the logit at init, sum_k Wout[k] W3[k, p]: of the 29 captured probes
+  with a nonzero path, 25 end at the intended pole when the path is positive and at the
+  opposite pole when it is negative (14/15 in the 62 run, 11/14 in the 80 run). The push-sign
+  rule of the design (-s * side) implicitly assumed a positive path; with mixed output signs
+  it becomes -s * side * sign(path). Several pairs therefore land on the same pole (both root
+  probes on -u_0 in the 62 run).
+
+### Decisions
+- The all-ones output is retired for future designs; use balanced signs and fold the path
+  sign into the cue-sign rule so that both probes of a node are pushed to distinct poles.
+
+### Current state / where to pick up
+- Implement the path-sign-aware cue rule (choose each unit's cue signs from the sign of its
+  init path to the logit) and rerun the 80-30-40 balanced design; expect intended-pole capture
+  to return to ~13/15 with both poles distinct.
+- Node coverage still depends on spare rows; consider 2-3 random rows per level-3 node.
