@@ -3967,8 +3967,10 @@ the third-layer entries nonzero). Cues frozen only.
 | nodes covered at |cos| > 0.95, end | 31 / 31 | 29 / 31 |
 
 - Not a finite-sample effect: with 10x data and 10x batch the probes deviate from their
-  designed nodes just as much (17 of 30 on target). The root pair even flipped: here the
-  -u_0 probe captured u_0 and the +u_0 probe went to u_14.
+  designed nodes just as much (17 of 30 on target). Which root probe wins also changed: in
+  the 1M run probe 0 reached +u_0 and probe 1 (-u_0) went to node 9; here probe 1 reached
+  its own target -u_0 (cos -1.00) and probe 0 (+u_0) went to +u_14. No probe ended on the
+  opposite pole of its node; only the winner of the pair changed.
 - The loss floor is coverage. Level-3 nodes 8 and 9 are never captured by any of the 62
   neurons (from epoch 100 to the end), while nodes 0-4 each end with two or three neurons
   on them (e.g. probes 2, 21 and 8 all on u_1; 9, 18, 19 all on u_4). Seven neurons end
@@ -4002,3 +4004,14 @@ mid-escape) and the earlier per-probe "drift".
 - Notebook section 14: a graph cell (`plot_layered_relu_graph` on `snapshot_state_dict(zb, GRAPH_EPOCH_B)`)
   with the same editable parameters as section 13, plus the table of which node each
   neuron sits on. No code changes.
+
+## 2026-09-30 06:00 IST — Correction to the root-probe wording
+
+### User prompts (verbatim)
+- "The probe targets are +u_0,-u_0,+u_1,...+u_14,-u_14 right? I don't see the flip in root probes you mentioned. At the end of training the probe supposed to go to +u+0 did go to +u_14 (with cos 0.76), but the probe targeting -u_0 did go to -u_0. Am I missing something in the figure here?"
+
+### Decisions
+- The 05:20 entry said the root pair "flipped"; that was wrong wording. In the 10M run the
+  -u_0 probe reached its own target and the +u_0 probe went to +u_14; in the 1M run the
+  +u_0 probe reached its target and the -u_0 probe went elsewhere. Which probe of the pair
+  wins changed between runs; no probe reached the opposite pole. Entry above corrected.
