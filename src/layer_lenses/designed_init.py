@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 
@@ -580,6 +581,10 @@ class HierarchyDesignSpec:
     layer3_exact: bool = False
     layer3_scale: float = 1 / np.sqrt(20)
     output_scale: float = 1 / np.sqrt(40)
+    # "ones": all output weights positive (the logit can only be positive at init, so
+    # y = -1 is representable only by negative third-layer weights or a dead layer).
+    # "balanced": alternating +1 / -1 over the third-layer units.
+    output_signs: str = "ones"
     # If set, every row of every layer is rescaled to these norms (layers 1..4),
     # overriding eps and the layer scales, so the init has the row norms of a standard
     # scheme while keeping the sign structure. See `standard_row_norms`.
@@ -689,7 +694,12 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
         W3 *= spec.layer3_scale
     else:
         W3 = (rng.random((spec.width3, spec.width2)) < spec.layer3_density).astype(np.float64) * spec.layer3_scale
-    Wout = np.full((1, spec.width3), spec.output_scale)
+    if spec.output_signs == "ones":
+        Wout = np.full((1, spec.width3), spec.output_scale)
+    elif spec.output_signs == "balanced":
+        Wout = (np.where(np.arange(spec.width3) % 2 == 0, 1.0, -1.0) * spec.output_scale)[None, :]
+    else:
+        raise ValueError(f"output_signs must be 'ones' or 'balanced', got {spec.output_signs!r}")
     weights = {
         "hidden_layers.0.weight": W1,
         "hidden_layers.1.weight": W2,
@@ -748,3 +758,79 @@ def standard_scale_spec(scheme: str, **kw: Any) -> HierarchyDesignSpec:
     """A `HierarchyDesignSpec` whose rows have the norms of a standard init scheme."""
     base = HierarchyDesignSpec(**kw)
     return HierarchyDesignSpec(**{**base.__dict__, "row_norms": standard_row_norms(scheme, base)})
+
+
+# ---------------------------------------------------------------------------
+# Per-run reports for the hierarchy design (first-layer rows 0..29 are the probes,
+# probe 2j -> +u_j, probe 2j+1 -> -u_j; rows 30..61 the cues; the rest random).
+# ---------------------------------------------------------------------------
+
+
+def _first_layer_node_assignment(W1: np.ndarray, tree: COBODTTree, threshold: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(top node, signed cosine to it, aligned flag) for every first-layer row."""
+    W = np.asarray(W1, dtype=np.float64)
+    C = (W / np.maximum(np.linalg.norm(W, axis=1, keepdims=True), 1e-30)) @ tree.w_list.astype(np.float64).T
+    top = np.abs(C).argmax(1)
+    signed = C[np.arange(W.shape[0]), top]
+    return top, signed, np.abs(signed) > threshold
+
+
+def probe_node_outcomes(W1: np.ndarray, tree: COBODTTree, threshold: float = 0.95) -> pd.DataFrame:
+    """One row per internal node 0..14: what its two probes did and who else sits on the node.
+
+    ``own``: number of the node's own probes aligned to it; ``intended`` / ``opposite``: an own
+    probe sits at the designed pole / at the opposite pole; ``others``: other first-layer rows
+    aligned to the node; ``probe_plus`` / ``probe_minus``: where the +u_j and -u_j probes ended.
+    """
+    top, signed, aligned = _first_layer_node_assignment(W1, tree, threshold)
+
+    def where(i: int) -> str:
+        return f"{'+' if signed[i] > 0 else '-'}u{top[i]}({abs(signed[i]):.2f})"
+
+    rows = []
+    for j in range(15):
+        p, m = 2 * j, 2 * j + 1
+        own = [(i, np.sign(signed[i])) for i in (p, m) if top[i] == j and aligned[i]]
+        rows.append({
+            "node": j, "level": int(NODE_LEVEL[j]), "probe_plus": where(p), "probe_minus": where(m), "own": len(own),
+            "intended": any((i == p and s > 0) or (i == m and s < 0) for i, s in own),
+            "opposite": any((i == p and s < 0) or (i == m and s > 0) for i, s in own),
+            "others": int(sum(1 for i in range(W1.shape[0]) if i not in (p, m) and top[i] == j and aligned[i])),
+        })
+    return pd.DataFrame(rows)
+
+
+def hierarchy_run_summary(W1: np.ndarray, tree: COBODTTree, threshold: float = 0.95) -> dict[str, Any]:
+    """Coverage and probe-outcome counts for one first-layer snapshot."""
+    top, signed, aligned = _first_layer_node_assignment(W1, tree, threshold)
+    covered = sorted(set(int(n) for n in top[aligned]))
+    po = probe_node_outcomes(W1, tree, threshold)
+    return {
+        "aligned_rows": int(aligned.sum()), "rows": int(W1.shape[0]),
+        "nodes_covered": len(covered), "missing_nodes": [n for n in range(tree.w_list.shape[0]) if n not in covered],
+        "own_probe_nodes": int((po.own > 0).sum()), "intended_pole": int(po.intended.sum()),
+        "opposite_pole_only": int((po.opposite & ~po.intended).sum()), "both_poles": po.loc[po.own == 2, "node"].tolist(),
+        "missed_by_own_probes": po.loc[po.own == 0, "node"].tolist(),
+    }
+
+
+def plot_probe_target_cosines(W1_stack: np.ndarray, epochs: np.ndarray, tree: COBODTTree, *, axes=None, title: str | None = None):
+    """Signed cosine of every probe to its designed target over the run, one panel per level."""
+    U = tree.w_list.astype(np.float64)
+    W = np.asarray(W1_stack, dtype=np.float64)
+    if axes is None:
+        fig, axes = plt.subplots(1, 4, figsize=(16, 3.4), sharey=True)
+    else:
+        fig = axes[0].figure
+    for p, (node, pole) in enumerate(HIERARCHY_TARGETS):
+        w = W[:, p]; c = pole * (w @ U[node]) / np.maximum(np.linalg.norm(w, axis=1), 1e-30)
+        ax = axes[int(NODE_LEVEL[node])]
+        ax.plot(epochs, c, lw=1.1, ls="-" if pole > 0 else "--", label=f"{'+' if pole > 0 else '-'}u{node}")
+    for l, ax in enumerate(axes):
+        ax.axhline(0, color="gray", lw=0.6); ax.set_ylim(-1.05, 1.05); ax.set_title(f"level {l} probes", fontsize=9); ax.set_xlabel("epoch"); ax.grid(alpha=0.25)
+        ax.legend(fontsize=6, ncol=2 if l >= 2 else 1)
+    axes[0].set_ylabel("cosine to designed target")
+    if title:
+        fig.suptitle(title, fontsize=10)
+    fig.tight_layout()
+    return fig, axes

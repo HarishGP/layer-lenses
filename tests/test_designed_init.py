@@ -281,3 +281,49 @@ def test_hierarchy_layer3_exact_count_and_all_cues_widths() -> None:
     assert (W2[29] != 0).sum() == 1 + 4
     dense = build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", seed=0), tree)[0]
     assert not np.all((dense["hidden_layers.2.weight"] != 0).sum(axis=1) == 15)
+
+
+def test_hierarchy_balanced_output_signs() -> None:
+    from layer_lenses.designed_init import HierarchyDesignSpec, build_hierarchy_weights, standard_scale_spec
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    w = build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", output_signs="balanced"), tree)[0]
+    out = w["output_layer.weight"].ravel()
+    assert out.shape == (40,) and (out > 0).sum() == 20 and (out < 0).sum() == 20
+    assert np.allclose(np.abs(out), np.abs(out[0]))
+    ks = build_hierarchy_weights(standard_scale_spec("kaiming", width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", output_signs="balanced"), tree)[0]
+    ko = ks["output_layer.weight"].ravel()
+    assert (ko < 0).sum() == 20 and np.isclose(np.linalg.norm(ko), np.sqrt(2.0))
+    ones = build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all"), tree)[0]["output_layer.weight"].ravel()
+    assert (ones > 0).all()
+    with pytest.raises(ValueError):
+        build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", output_signs="random"), tree)
+
+
+def test_probe_node_outcomes_and_run_summary_on_a_constructed_first_layer() -> None:
+    from layer_lenses.designed_init import HIERARCHY_TARGETS, hierarchy_run_summary, probe_node_outcomes, plot_probe_target_cosines
+    from matplotlib import pyplot as plt
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    U = tree.w_list
+    rng = np.random.default_rng(0)
+    W1 = rng.normal(size=(62, 100)) * 0.01          # unaligned filler
+    for p, (node, pole) in enumerate(HIERARCHY_TARGETS):
+        W1[p] = pole * U[node]                       # every probe exactly on target
+    W1[1] = -U[0] * -1                               # probe 1 (-u_0) at the opposite pole (+u_0)
+    W1[3] = U[20]                                    # probe 3 (-u_1) captured by a level-4 node
+    W1[40] = U[1]                                    # a cue row sits on u_1
+    po = probe_node_outcomes(W1, tree)
+    assert len(po) == 15
+    n0, n1, n2 = po.iloc[0], po.iloc[1], po.iloc[2]
+    assert n0.own == 2 and n0.intended and n0.opposite
+    assert n1.own == 1 and n1.intended and not n1.opposite and n1.others == 1 and n1.probe_minus.startswith("+u20")
+    assert n2.own == 2 and n2.intended and not n2.opposite
+    s = hierarchy_run_summary(W1, tree)
+    assert s["own_probe_nodes"] == 15 and s["intended_pole"] == 15 and s["opposite_pole_only"] == 0
+    assert s["missed_by_own_probes"] == [] and 1 not in s["both_poles"] and 0 in s["both_poles"]
+    assert s["nodes_covered"] == 16 and s["missing_nodes"] == [n for n in range(15, 31) if n != 20]
+    W1b = W1.copy(); W1b[[0, 1]] = W1b[[0, 1]] @ np.eye(100) * 0 + rng.normal(size=(2, 100))
+    s2 = hierarchy_run_summary(W1b, tree)
+    assert s2["missed_by_own_probes"] == [0] and s2["own_probe_nodes"] == 14
+    fig, axes = plot_probe_target_cosines(np.stack([W1, W1b]), np.array([0, 10]), tree, title="t")
+    assert len(axes) == 4
+    plt.close(fig)
