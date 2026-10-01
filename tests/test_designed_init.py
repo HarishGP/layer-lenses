@@ -399,3 +399,25 @@ def test_probe_gradient_stats_fractions_and_direction() -> None:
     assert 29 not in level4_descendants(1)
     fr = st[["frac_target", "frac_desc_l4", "frac_other_l4", "frac_other_internal", "frac_offspan"]].iloc[[0, 3]].sum(axis=1)
     assert np.allclose(fr, 1.0)
+
+
+def test_layer3_balanced_paths_gives_equal_alternating_unit_paths() -> None:
+    from layer_lenses.designed_init import HierarchyDesignSpec, build_hierarchy_weights, standard_scale_spec
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    base = dict(width1=80, width2=30, width3=40, units_per_level=(1, 1, 1, 1), subset_mode="all", cue_mode="linear", cue_offspan_ratio=0.2, seed=0,
+                output_signs="balanced", path_sign_cues=True, cue_block_scale="inv_sqrt", layer3_mode="balanced_paths")
+    w, meta = build_hierarchy_weights(standard_scale_spec("kaiming", **base), tree)
+    W3, wout = w["hidden_layers.2.weight"], w["output_layer.weight"].ravel()
+    assert np.all((W3 != 0).sum(axis=1) == 15) and np.all((W3 != 0).sum(axis=0) == 20)
+    path = W3.T @ wout; quantum = abs(W3[W3 != 0][0]) * abs(wout[0])
+    assert np.allclose(np.abs(path), 10 * quantum) and np.array_equal(np.sign(path), np.where(np.arange(30) % 2 == 0, 1, -1))
+    assert meta["zero_path_units"] == [] and meta["flipped_units"] == list(range(1, 30, 2))
+    pos = wout > 0
+    for j in range(15):
+        a, b = 2 * j, 2 * j + 1
+        assert (W3[pos, a] != 0).sum() == 15 and (W3[pos, b] != 0).sum() == 5 and (W3[~pos, a] != 0).sum() == 5 and (W3[~pos, b] != 0).sum() == 15
+        assert not np.any((W3[:, a] != 0) & (W3[:, b] != 0))          # complementary subsets within a pair
+    with pytest.raises(ValueError):
+        build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", layer3_mode="balanced_paths"), tree)
+    with pytest.raises(ValueError):
+        build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", output_signs="balanced", layer3_mode="balanced_paths", layer3_majority=10), tree)

@@ -1,0 +1,40 @@
+{
+  "runs": [
+    {
+      "name": "balpaths_80",
+      "n_train": 10000000,
+      "batch": 10000,
+      "width1": 80
+    }
+  ],
+  "epochs": 1000,
+  "lr": 0.02,
+  "eta_min_ratio": 0.05,
+  "momentum": 0.9,
+  "scale": "kaiming",
+  "cues": "frozen",
+  "output_signs": "balanced",
+  "path_sign_cues": true,
+  "layer3_mode": "balanced_paths",
+  "layer3_majority": 15,
+  "cue_block_scale": "inv_sqrt",
+  "design": {
+    "seed": 0,
+    "cue_mode": "linear",
+    "subset_mode": "all",
+    "units_per_level": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "width2": 30,
+    "width3": 40,
+    "cue_offspan_ratio": 0.2,
+    "output_signs": "balanced",
+    "path_sign_cues": true,
+    "layer3_mode": "balanced_paths",
+    "layer3_majority": 15,
+    "cue_block_scale": "inv_sqrt"
+  }
+}

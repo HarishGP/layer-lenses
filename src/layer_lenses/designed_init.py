@@ -599,6 +599,14 @@ class HierarchyDesignSpec:
     # With layer3_exact, repair the third layer by row-count-preserving 2x2 swaps until every
     # unit has a nonzero path to the logit (needed for path_sign_cues to apply to every unit).
     layer3_nonzero_paths: bool = False
+    # "random": third layer as above. "balanced_paths" (needs output_signs="balanced", even
+    # width2 and width3): every unit connects to exactly width3/2 third-layer neurons; unit 2j
+    # to `layer3_majority` of the positive-output neurons and the rest negative-output ones,
+    # unit 2j+1 the reverse, so every unit's path to the logit is +-(2*majority - width3/2)
+    # quanta with alternating sign. Within a pair the two units use complementary subsets of
+    # each output-sign group, so every third-layer row has exactly width2/2 ones.
+    layer3_mode: str = "random"
+    layer3_majority: int = 15
     # If set, every row of every layer is rescaled to these norms (layers 1..4),
     # overriding eps and the layer scales, so the init has the row norms of a standard
     # scheme while keeping the sign structure. See `standard_row_norms`.
@@ -746,7 +754,24 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
     elif spec.cue_block_scale != "none":
         raise ValueError(f"cue_block_scale must be 'none' or 'inv_sqrt', got {spec.cue_block_scale!r}")
     W2 *= spec.layer2_scale
-    if spec.layer3_exact:
+    if spec.layer3_mode == "balanced_paths":
+        if spec.output_signs != "balanced":
+            raise ValueError("layer3_mode='balanced_paths' needs output_signs='balanced'")
+        if spec.width2 % 2 or spec.width3 % 2:
+            raise ValueError("layer3_mode='balanced_paths' needs even width2 and width3")
+        n_conn = spec.width3 // 2; minority = n_conn - spec.layer3_majority
+        if not 0 <= minority < spec.layer3_majority:
+            raise ValueError(f"layer3_majority must be in ({n_conn / 2}, {n_conn}], got {spec.layer3_majority}")
+        pos_rows = np.arange(0, spec.width3, 2); neg_rows = np.arange(1, spec.width3, 2)   # output_signs="balanced" alternates +,-
+        W3 = np.zeros((spec.width3, spec.width2))
+        for j in range(spec.width2 // 2):
+            a, b = 2 * j, 2 * j + 1
+            pa = rng.permutation(pos_rows); W3[pa[: spec.layer3_majority], a] = 1.0; W3[pa[spec.layer3_majority:], b] = 1.0
+            nb = rng.permutation(neg_rows); W3[nb[: spec.layer3_majority], b] = 1.0; W3[nb[spec.layer3_majority:], a] = 1.0
+        W3 *= spec.layer3_scale
+    elif spec.layer3_mode != "random":
+        raise ValueError(f"layer3_mode must be 'random' or 'balanced_paths', got {spec.layer3_mode!r}")
+    elif spec.layer3_exact:
         k = int(round(spec.layer3_density * spec.width2))
         W3 = np.zeros((spec.width3, spec.width2))
         for r in range(spec.width3):
@@ -760,7 +785,7 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
         Wout = (np.where(np.arange(spec.width3) % 2 == 0, 1.0, -1.0) * spec.output_scale)[None, :]
     else:
         raise ValueError(f"output_signs must be 'ones' or 'balanced', got {spec.output_signs!r}")
-    if spec.layer3_nonzero_paths:
+    if spec.layer3_nonzero_paths and spec.layer3_mode == "random":
         if not spec.layer3_exact:
             raise ValueError("layer3_nonzero_paths requires layer3_exact=True")
         W3 = _repair_zero_unit_paths(W3, Wout.ravel(), rng)

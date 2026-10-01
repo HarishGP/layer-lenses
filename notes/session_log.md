@@ -4314,3 +4314,48 @@ first ~20 epochs (the freeze-then-release protocol that worked for the cues).
 - Implement a minimum-path-magnitude option for the third layer and rerun run 9; alternatively
   a freeze of layers 2-4 until epoch 20.
 - Not pushed; commit only.
+
+## 2026-10-01 — Balanced third-layer paths (every unit +-10 quanta); run 10
+
+### User prompts (verbatim)
+- "Terminology clarification. Does \"unit\" refer to a neuron ion the second hidden layer? And by path to logit of a unit, do you mean the sum of products of edge weights between that unit and the logit? i.e. sum of 40 terms for each unit, with each of these terms being a product of two edge weights along a path from that unit to the logit?"
+- "Ok, consider a balanced init for the third layer weights then. Every unit is connected to exactly 20 neurons in the third hidden layer. Let's make it so that exactly 15 of them are connected to an third hidden layer neuron with positive W_out and 5 of them are connected to a neuron with negative W_out. Alternate with vice versa units : i.e. connected to 15 negative W_out and 5 positive W_out. \n\nIs something like the init scheme above what you had in mind?"
+- "Implement it and rerun run 9's config"
+
+### Changes
+- `HierarchyDesignSpec.layer3_mode` ("random" | "balanced_paths") and `layer3_majority` (15):
+  with balanced output signs, unit 2j connects to `majority` positive-output and
+  `width3/2 - majority` negative-output third-layer neurons, unit 2j+1 the reverse, the two
+  units of a pair using complementary subsets of each output-sign group, so every row has
+  width2/2 = 15 ones and every unit's path to the logit is +-(2*majority - width3/2) = +-10
+  quanta with alternating sign. The path-sign rule then flips exactly the odd units. Test.
+- Script `results/designed_init/run_hierarchy_kaiming_cosine_balpaths.py` (run 9's config with
+  the balanced third layer); trajectories tracked under
+  `results/designed_init/hierarchy_kaiming_cosine_balpaths/`. Notebook section 10 (config,
+  findings, trajectory and graph cells, and a path-sign stability cell).
+- Terminology settled: "unit" = second-hidden-layer neuron; "path to the logit" = sum over the
+  40 third-layer neurons of W3[k, unit] * Wout[k] (the ungated two-edge path sum).
+- A first launch ran with an unmodified script for a few seconds (a sed pattern missed the
+  line); killed, fixed, relaunched from a clean folder.
+
+### Results (80-30-40, 10M / 10k, frozen cues, balanced output, path-sign cues, inv_sqrt, balanced paths)
+- Init: |path| = 0.82 for every unit (run 9: 0.08-0.65), probe gradient norms 8-11e-4 (run 9
+  median 1.8e-4), 30/30 pushed toward target, logit RMS 0.12.
+- From epoch 20 on: all 15 internal nodes captured by their own probes at the intended pole,
+  10 at both poles, all 31 nodes covered. 25/30 probes end at the intended pole, 0 opposite.
+  Loss 0.3 / 0.1 / 0.05 at epochs 17 / 53 / 460; final loss 0.029, test error 0.90%
+  (run 9: 23 / 86 / 255, 0.017, 0.52%). Test error at epoch 50: 3.4% (run 9: 4.4%).
+- Only unit 2's path changed sign (run 9: four); its probe (+u_1) was pulled to -u_0 again,
+  but node 1 is held by probe 3. Five units dropped their probe entry (6, 13, 14, 27, 29).
+- The final loss sits on a plateau near 0.07 from epoch 100 to 300 before the annealed tail.
+
+### Reading
+With balanced output, path-sign-aware cues, equalised cue blocks and +-10-quanta paths, the
+design decides the whole first-layer assignment: every internal node on its own probe at the
+designed pole by epoch 20. The remaining gap to run 9's final loss is not about coverage.
+
+### Current state / where to pick up
+- Look at the epoch-100-300 plateau of run 10 (which parts of the net are still moving) and
+  at probes 2 and 5 being pulled to the root pole: a root-direction leak in the level-1 units'
+  lens after the root pair is captured.
+- Not pushed; commit only.
