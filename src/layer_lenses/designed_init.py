@@ -590,6 +590,12 @@ class HierarchyDesignSpec:
     # with a negative path get their cue signs flipped (= wired for the opposite pole), so the
     # first-order push points to the designed pole again. Units with a zero path are untouched.
     path_sign_cues: bool = False
+    # "none": every cue entry of a unit is +-1 (so a root unit's cue block has norm sqrt(32)
+    # against a probe entry of 1, and after row normalisation its probe entry is the smallest).
+    # "inv_sqrt": each unit's cue block is scaled by 1/sqrt(number of nonzero cue entries), so
+    # every unit has probe entry 1 and cue-block norm 1 before the row rescale, i.e. the same
+    # probe weight at every level afterwards.
+    cue_block_scale: str = "none"
     # With layer3_exact, repair the third layer by row-count-preserving 2x2 swaps until every
     # unit has a nonzero path to the logit (needed for path_sign_cues to apply to every unit).
     layer3_nonzero_paths: bool = False
@@ -729,6 +735,16 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
                         raise ValueError(f"cue_mode must be 'relu' or 'linear', got {spec.cue_mode!r}")
             unit_probe[row] = p
             row += 1
+    if spec.cue_block_scale == "inv_sqrt":
+        for u in range(spec.width2):
+            if unit_probe[u] < 0:
+                continue
+            cue_cols = np.ones(spec.width1, dtype=bool); cue_cols[unit_probe[u]] = False
+            n_cues = int((W2[u, cue_cols] != 0).sum())
+            if n_cues:
+                W2[u, cue_cols] /= np.sqrt(n_cues)
+    elif spec.cue_block_scale != "none":
+        raise ValueError(f"cue_block_scale must be 'none' or 'inv_sqrt', got {spec.cue_block_scale!r}")
     W2 *= spec.layer2_scale
     if spec.layer3_exact:
         k = int(round(spec.layer3_density * spec.width2))

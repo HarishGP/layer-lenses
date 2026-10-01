@@ -364,3 +364,21 @@ def test_path_sign_cues_restore_first_order_push_under_balanced_output() -> None
     assert (c_aware > 0).sum() >= 27 and (c_aware > 0).sum() > (c_plain > 0).sum()
     with pytest.raises(ValueError):
         build_hierarchy_weights(standard_scale_spec("kaiming", **{**base, "layer3_exact": False}, layer3_nonzero_paths=True), tree)
+
+
+def test_cue_block_scale_equalises_probe_entries_across_levels() -> None:
+    from layer_lenses.designed_init import HIERARCHY_TARGETS, NODE_LEVEL, build_hierarchy_weights, standard_scale_spec
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    base = dict(width1=80, width2=30, width3=40, units_per_level=(1, 1, 1, 1), subset_mode="all", cue_mode="linear", layer3_exact=True, cue_offspan_ratio=0.2, seed=0,
+                output_signs="balanced", path_sign_cues=True, layer3_nonzero_paths=True)
+    w_none = build_hierarchy_weights(standard_scale_spec("kaiming", **base), tree)[0]["hidden_layers.1.weight"]
+    w_eq = build_hierarchy_weights(standard_scale_spec("kaiming", **base, cue_block_scale="inv_sqrt"), tree)[0]["hidden_layers.1.weight"]
+    probe_none = np.array([abs(w_none[u, u]) for u in range(30)]); probe_eq = np.array([abs(w_eq[u, u]) for u in range(30)])
+    assert probe_none[0] < probe_none[29] * 0.5                       # root probe entry much smaller without the scaling
+    assert np.allclose(probe_eq, 1.0, atol=1e-6)                     # equal (and = cue-block norm) with it
+    for u in range(30):
+        cue = np.delete(w_eq[u], u)
+        assert np.isclose(np.linalg.norm(cue), 1.0, atol=1e-6) and np.isclose(np.linalg.norm(w_eq[u]), np.sqrt(2), atol=1e-6)
+        assert np.array_equal(np.sign(cue), np.sign(np.delete(w_none[u], u)))   # signs (incl. path-sign flips) unchanged
+    with pytest.raises(ValueError):
+        build_hierarchy_weights(standard_scale_spec("kaiming", **base, cue_block_scale="sqrt"), tree)

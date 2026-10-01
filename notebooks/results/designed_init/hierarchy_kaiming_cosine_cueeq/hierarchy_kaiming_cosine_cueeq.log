@@ -1,0 +1,4 @@
+linear_frozen_kaiming_cosine_cueeq_80_seed0: data (10000000, 100) float32, 0.3 min
+linear_frozen_kaiming_cosine_cueeq_80_seed0: flipped units [2, 3, 4, 5, 9, 11, 12, 13, 16, 20, 21, 26, 27], zero-path units after repair [], path signs [1, 1, -1, -1, -1, -1, 1, 1, 1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, -1, -1, 1, 1, 1, 1, -1, -1, 1, 1]
+linear_frozen_kaiming_cosine_cueeq_80_seed0: final epoch loss 0.0167, train log loss 0.0165, test error 0.0052 (strict 0.0052, zero-logit 0.000); epochs to 0.3/0.2/0.1/0.05: 23/30/86/255; nodes covered 30/31; on-target end [1.0, 0.25, 0.75, 0.88]; 25.0 min
+ALL DONE

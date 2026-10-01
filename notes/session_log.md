@@ -4224,3 +4224,42 @@ logit, and rerun the 80-30-40 balanced-output design.
   of the unit's cue block, or scale the unit's cue block by 1/sqrt(n_cues)) and rerun; if the
   coarse probes then capture, the design decides the whole assignment.
 - Not pushed to origin; commit only.
+
+## 2026-10-01 — Equalised cue blocks (probe push equal across levels)
+
+### User prompts (verbatim)
+- "Error when running the last cell in Section 8 :\n\nHierarchyDesignSpec.__init__() got an unexpected keyword argument 'path_sign_cues'"
+- "Equalise the probe's effective push across levels, for instance by scaling each unit's cue block by one over the square root of its cue count."
+
+### Changes
+- The section-8 error was a stale kernel: `%autoreload` cannot replace a dataclass's generated
+  `__init__`, so a kernel started before a field is added keeps the old constructor. Restart.
+- `HierarchyDesignSpec.cue_block_scale` ("none" | "inv_sqrt"): each unit's cue block is divided
+  by sqrt(number of nonzero cue entries), so after the row rescale every unit has probe entry
+  1.0 and cue-block norm 1.0 (before: 0.25 at the root, 0.63 at level 3). Signs, including the
+  path-sign flips, unchanged. One test.
+- Script `results/designed_init/run_hierarchy_kaiming_cosine_cueeq.py` (run 8 plus the scaling),
+  trajectories tracked under `results/designed_init/hierarchy_kaiming_cosine_cueeq/`, copies
+  under `notebooks/results/designed_init/hierarchy_kaiming_cosine_cueeq/`. Notebook section 9.
+
+### Results (80-30-40, 10M / 10k, frozen cues, balanced output, path-sign cues, inv_sqrt)
+- Init push component along the target by level (x1e-4): 1.08 / 0.80 / 0.97 / 0.85, vs
+  0.47 / 0.45 / 0.73 / 0.82 for run 8; still 30/30 probes pushed toward target.
+- Loss 0.017, test error 0.52% (run 8: 0.030, 0.95%; best error of any designed run);
+  0.3 / 0.1 / 0.05 at epochs 23 / 86 / 255; no zero logits.
+- Both root probes lock onto +-u_0 by epoch 20. 21/30 probes at the intended pole, 0 at the
+  opposite; 13/15 internal nodes by own probes, both poles for 8 nodes. Missed: node 1 (both
+  probes go to level-4 nodes; node 1 covered by two other rows) and node 10, whose probes
+  reached cosine 1.00 by epoch 100 and slid back to ~0.75 by epoch 300; node 10 is the only
+  node uncovered at the end (30/31) while the loss keeps falling.
+
+### Reading
+- With the three fixes (balanced output, path-sign-aware cue signs, equalised cue blocks) the
+  design now decides most of the assignment: the root pair, 8 full pairs, 0 sign errors.
+  What is left looks like late-phase reassignment (node 10) and one level-1 node.
+
+### Current state / where to pick up
+- Look at the node-10 slide-back (epochs 100-300): which rows take over its role, and whether
+  freezing captured probe rows would hold it.
+- Node 1: check its two units' init push (both nonzero) and the rows that end on u_1.
+- Not pushed; commit only.
