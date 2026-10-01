@@ -33,6 +33,14 @@ dist/
 # Generated experiment outputs
 results/*
 !results/.gitkeep
+# Trajectories, summaries and per-epoch tables read by notebooks/hierarchy_design_runs.ipynb
+# (about 30 MB; kept in git so the notebook runs without a GPU)
+!results/designed_init/
+results/designed_init/*
+!results/designed_init/hierarchy_kaiming_cosine/
+!results/designed_init/hierarchy_kaiming_cosine_big/
+!results/designed_init/hierarchy_kaiming_cosine_isolate/
+!results/designed_init/hierarchy_kaiming_cosine_balanced/
 
 # Large model artifacts
 *.pt

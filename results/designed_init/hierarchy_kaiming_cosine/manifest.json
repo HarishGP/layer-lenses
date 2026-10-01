@@ -1,0 +1,10 @@
+{
+  "epochs": 1000,
+  "batch": 1000,
+  "lr": 0.02,
+  "eta_min_ratio": 0.05,
+  "momentum": 0.9,
+  "scale": "kaiming",
+  "cue_mode": "linear",
+  "seed": 0
+}

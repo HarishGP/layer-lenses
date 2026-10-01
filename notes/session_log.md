@@ -4165,3 +4165,15 @@ the dead-second-layer branch is unavailable, and reorganise the designed-init no
 ### Decisions
 - Raw trajectories (30 MB for the seven runs) stay out of git; collaborators regenerate them.
   The executed notebook (17 MB with figures) is committed so the results can be read without a GPU.
+
+## 2026-10-01 — Trajectories committed for the hierarchy-runs notebook
+
+### User prompts (verbatim)
+- "Commit the trajectories required for running the notebook too for now. My students don't have access to a GPU system yet."
+
+### Changes
+- `.gitignore` now re-includes the four run folders under `results/designed_init/`
+  (`hierarchy_kaiming_cosine`, `_big`, `_isolate`, `_balanced`: `runs/*.npz`, `summary.csv`,
+  `per_epoch_*.csv`, `tree.npz`, `manifest.json`, ~30 MB), the only tracked content under
+  `results/`. README adjusted: the notebook runs on a fresh clone without a GPU; the
+  regeneration script remains the way to rebuild from scratch.

@@ -1,0 +1,26 @@
+{
+  "n_train": 10000000,
+  "epochs": 1000,
+  "batch": 10000,
+  "lr": 0.02,
+  "eta_min_ratio": 0.05,
+  "momentum": 0.9,
+  "scale": "kaiming",
+  "cues": "frozen",
+  "design": {
+    "seed": 0,
+    "cue_mode": "linear",
+    "subset_mode": "all",
+    "units_per_level": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "width1": 62,
+    "width2": 30,
+    "width3": 40,
+    "layer3_exact": true,
+    "cue_offspan_ratio": 0.2
+  }
+}

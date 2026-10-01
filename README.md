@@ -42,24 +42,24 @@ Use notebooks for exploratory analysis, especially:
 ## Designed-init hierarchy runs (`notebooks/hierarchy_design_runs.ipynb`)
 
 The notebook has one section per training run from a hand-designed initialisation
-(30 probe neurons, 32 cue neurons). It reads parameter trajectories from
-`results/designed_init/`, which is git-ignored, so on a fresh clone regenerate them first:
-
-```bash
-scripts/regenerate_hierarchy_design_runs.sh
-```
-
-This runs the four scripts kept under `notebooks/results/designed_init/*/run_*.py`
-(the same files that produced the committed `summary.csv` / `per_epoch_*.csv` tables
-there). It needs a CUDA GPU with at least 8 GB free, about 8 GB of host RAM, and roughly
-three hours; each script is independent if you only want some runs. Then execute the
-notebook:
+(30 probe neurons, 32 cue neurons). It reads parameter trajectories (all four weight
+matrices every 10 epochs), summaries and per-epoch tables from `results/designed_init/`.
+The four run folders it needs are committed (about 30 MB, the only tracked content under
+`results/`), so the notebook runs on a fresh clone without a GPU:
 
 ```bash
 cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb
 ```
 
-Runs are bitwise reproducible on the same GPU/driver (fixed seeds, fixed batch order);
+To regenerate the runs from scratch instead (CUDA GPU with at least 8 GB free, about 8 GB
+of host RAM, roughly three hours; each script is independent if you only want some runs):
+
+```bash
+scripts/regenerate_hierarchy_design_runs.sh
+```
+
+This runs the four scripts kept under `notebooks/results/designed_init/*/run_*.py`, the
+same files that produced the committed outputs. Then execute the notebook as above. Runs are bitwise reproducible on the same GPU/driver (fixed seeds, fixed batch order);
 on other hardware expect the same qualitative outcome with different per-probe fates.
 The library code behind the design and the plots is in `src/layer_lenses/designed_init.py`
 and `src/layer_lenses/relu_analysis.py`; the narrative is in `notes/session_log.md`
