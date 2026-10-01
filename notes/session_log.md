@@ -4263,3 +4263,54 @@ logit, and rerun the 80-30-40 balanced-output design.
   freezing captured probe rows would hold it.
 - Node 1: check its two units' init push (both nonzero) and the rows that end on u_1.
 - Not pushed; commit only.
+
+## 2026-10-01 — Why probes 2 and 3 (+-u_1) fail in run 9: population-gradient analysis
+
+### User prompts (verbatim)
+- "Ok, before we do that, I want to analyse the neuron 2 and neuron 3's failure to move along +u_1 and -u_1 respectively.  Isn't the init designed so that at epoch 0, the gradient for the probe neuron would point towards the target ODT vector? I don't see that happening at even epoch 10. \n\nCan you also get the statistics on the initial gradient properties? Maybe also a wrapper function to get the parameter gradients w.r.t. the entire train loss (population gradient) at a given checkpoint epoch? We have such a function in ReLU_analysis already, I think."
+
+### Changes
+- `relu_analysis.population_gradient_at_snapshot(run, epoch, x, y, device=, batch_size=)`: rebuilds
+  the model from a `w__`-keyed trajectory at a stored epoch and accumulates the mean-loss gradient
+  over all given points in batches (wraps `log_loss_gradients`). 2.6 s for 2M points on the GPU.
+- `designed_init.probe_gradient_stats(grad_W1, W1, tree)`: per probe, cosine of the push (-grad)
+  with the designed target and with the current row, gradient norm, energy fractions of the push
+  along the target / its level-4 descendants / other level-4 nodes / other internal nodes /
+  off-span, closest signed node, and the row's own cosine to the target. Tests for both.
+- Notebook section 9: a gradient-analysis cell (init statistics for all 30 probes, probes 0-5
+  over epochs 0-100, each unit's path to the logit / probe entry / cue-sign retention, plots).
+
+### Findings (run 9, gradient over the first 2M training points)
+- At epoch 0 the push does point at the target for every probe: cosine with the target 0.68
+  (root), 0.55 (level 1), 0.42 (level 2), 0.32 (level 3). The energy of the push along the target
+  is only 46% / 31% / 18% / 10% by level; the rest lies along level-4 directions (for level 1:
+  32% along the node's own level-4 descendants, 36% along other level-4 nodes), i.e. the
+  constant part of the lens. Off-span energy is ~1%.
+- Why probes 2 and 3 fail anyway: their units (2, 3) had init paths to the logit of -0.08, the
+  smallest possible magnitude (one quantum: one third-layer entry times one output weight),
+  so the cue-sign rule flipped their cues. Within 10 epochs layers 3-4 moved and the paths
+  crossed zero (+0.02 and +1.09 at epoch 10). With the path positive the flipped wiring pushes
+  toward the opposite pole: probe 3's push at epoch 10 has cosine -0.89 with -u_1 (79% of its
+  energy along +u_1); unit 2's path sat near zero, so probe 2 got almost no push (gradient norm
+  1.3e-4 at epoch 10 vs 15-28e-4 for probes 0, 1, 4). Units 3 and 5 then drove their probe
+  entry to ~0 (by epochs 30 and 50), disconnecting the probe; the rows ended on level-4 nodes.
+- Across all 30 units: 4 paths changed sign during the run (units 2, 3, 5, 12, all with the
+  minimum init magnitude 0.08 and all negative, i.e. rule-flipped) and 0 of those 4 probes
+  captured; of the 26 whose sign held, 21 captured. Probes whose units kept a larger initial
+  path (0: +0.16, 4: -0.24) had 2-3x larger gradients and reached cosine 0.94 / 0.82 by
+  epoch 10, before the downstream changed.
+- The designed second-layer wiring is short-lived: by epoch 10 only ~26% of the cue entries of
+  units 2-5 (52% for the root units) still carry their init sign, and the trainable cue block
+  norm grows. The probe has to capture inside that window.
+
+### Reading
+The design is right at t = 0 but relies on two things that layers 2-4 overturn within ~10
+epochs: the sign of each unit's path to the logit (one quantum for a third of the units) and
+the cue signs in layer 2. Remedies to test: build W3 so every unit's path has magnitude of at
+least a few quanta (|n+ - n-| >= 3) with the designed sign, and/or freeze layers 2-4 for the
+first ~20 epochs (the freeze-then-release protocol that worked for the cues).
+
+### Current state / where to pick up
+- Implement a minimum-path-magnitude option for the third layer and rerun run 9; alternatively
+  a freeze of layers 2-4 until epoch 20.
+- Not pushed; commit only.

@@ -908,3 +908,34 @@ def plot_probe_target_cosines(W1_stack: np.ndarray, epochs: np.ndarray, tree: CO
         fig.suptitle(title, fontsize=10)
     fig.tight_layout()
     return fig, axes
+
+
+def probe_gradient_stats(grad_W1: np.ndarray, W1: np.ndarray, tree: COBODTTree) -> pd.DataFrame:
+    """Where the population gradient wants to move each probe, per probe row.
+
+    ``grad_W1`` is the gradient of the loss w.r.t. the first-layer weight (so the push is
+    ``-grad_W1``). Columns: ``grad_norm``; ``cos_push_target`` (cosine of the push with the
+    designed signed target); ``cos_push_row`` (with the current row); ``push_along_target``
+    (signed component); energy fractions of the push along the target, along the target's
+    level-4 descendants, along the other level-4 nodes, along the other internal nodes, and
+    off the ODT span; ``push_top`` (the signed ODT node closest to the push) and
+    ``row_cos_target`` (where the row currently is).
+    """
+    U = tree.w_list.astype(np.float64)
+    G = -np.asarray(grad_W1, dtype=np.float64); W = np.asarray(W1, dtype=np.float64)
+    rows = []
+    for p, (node, pole) in enumerate(HIERARCHY_TARGETS):
+        g = G[p]; gn = np.linalg.norm(g); c = U @ g; e = c ** 2 / max(gn ** 2, 1e-300)
+        desc = level4_descendants(node)
+        other_l4 = [n for n in range(LEVEL4_FIRST, LEVEL4_FIRST + NUM_LEVEL4) if n not in desc]
+        other_int = [n for n in range(LEVEL4_FIRST) if n != node]
+        top = int(np.abs(c).argmax())
+        rows.append({
+            "probe": p, "target": f"{'+' if pole > 0 else '-'}u{node}", "level": int(NODE_LEVEL[node]), "grad_norm": gn,
+            "cos_push_target": float(pole * c[node] / max(gn, 1e-300)), "cos_push_row": float(g @ W[p] / max(gn * np.linalg.norm(W[p]), 1e-300)),
+            "push_along_target": float(pole * c[node]),
+            "frac_target": float(e[node]), "frac_desc_l4": float(e[desc].sum()), "frac_other_l4": float(e[other_l4].sum()),
+            "frac_other_internal": float(e[other_int].sum()), "frac_offspan": float(max(0.0, 1.0 - e.sum())),
+            "push_top": f"{'+' if c[top] > 0 else '-'}u{top}", "row_cos_target": float(pole * (U[node] @ W[p]) / max(np.linalg.norm(W[p]), 1e-300)),
+        })
+    return pd.DataFrame(rows)

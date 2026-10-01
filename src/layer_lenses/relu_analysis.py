@@ -2376,3 +2376,42 @@ def plot_first_layer_alignment_series(
         fig.suptitle(title, fontsize=10)
     fig.tight_layout()
     return fig, axes
+
+
+def population_gradient_at_snapshot(
+    run: Any,
+    epoch: int,
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    hidden_dims: list[int] | None = None,
+    device: str = "cpu",
+    batch_size: int = 1_000_000,
+) -> dict[str, np.ndarray]:
+    """Gradient of the mean log loss over all of ``(x, y)`` at one stored snapshot.
+
+    ``run`` is a ``w__``-keyed trajectory (see `snapshot_state_dict`). The model is rebuilt
+    from the snapshot (bias-free ``ReLUMLP``; ``hidden_dims`` is inferred from the weights
+    unless given) and the gradient is accumulated over batches of ``batch_size`` rows, so
+    the whole set never has to sit on the device at once. Returns numpy arrays keyed like
+    the state dict. With ``x`` the full training set this is the population (full-batch)
+    gradient the optimiser would see at that checkpoint.
+    """
+    state = snapshot_state_dict(run, epoch)
+    if hidden_dims is None:
+        hidden_dims = [int(state[f"hidden_layers.{i}.weight"].shape[0]) for i in range(len(state) - 1)]
+    model = ReLUMLP(input_dim=int(state["hidden_layers.0.weight"].shape[1]), hidden_dims=hidden_dims, bias=False)
+    model.load_state_dict(state)
+    n = x.shape[0]
+    total: dict[str, np.ndarray] | None = None
+    for start in range(0, n, batch_size):
+        xb, yb = x[start : start + batch_size], y[start : start + batch_size]
+        g = log_loss_gradients(model=model, x=np.ascontiguousarray(xb), y=np.ascontiguousarray(yb), device=device)
+        w = xb.shape[0] / n
+        if total is None:
+            total = {k: v.numpy().astype(np.float64) * w for k, v in g.items()}
+        else:
+            for k, v in g.items():
+                total[k] += v.numpy().astype(np.float64) * w
+    assert total is not None
+    return total

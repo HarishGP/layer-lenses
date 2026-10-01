@@ -382,3 +382,20 @@ def test_cue_block_scale_equalises_probe_entries_across_levels() -> None:
         assert np.array_equal(np.sign(cue), np.sign(np.delete(w_none[u], u)))   # signs (incl. path-sign flips) unchanged
     with pytest.raises(ValueError):
         build_hierarchy_weights(standard_scale_spec("kaiming", **base, cue_block_scale="sqrt"), tree)
+
+
+def test_probe_gradient_stats_fractions_and_direction() -> None:
+    from layer_lenses.designed_init import HIERARCHY_TARGETS, level4_descendants, probe_gradient_stats
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1)); U = tree.w_list
+    rng = np.random.default_rng(0)
+    W1 = rng.normal(size=(62, 100)); G = np.zeros((62, 100))
+    G[0] = -(3 * U[0] + 4 * U[15])                       # push = 3 u_0 + 4 u_15 for probe 0 (+u_0; 15 is a descendant)
+    G[3] = -(-U[1] + U[29])                             # push = -u_1 + u_29 for probe 3 (-u_1; 29 is not a descendant of 1)
+    st = probe_gradient_stats(G, W1, tree)
+    r0, r3 = st.iloc[0], st.iloc[3]
+    assert r0.target == "+u0" and np.isclose(r0.cos_push_target, 0.6) and np.isclose(r0.frac_target, 0.36) and np.isclose(r0.frac_desc_l4, 0.64)
+    assert np.isclose(r0.frac_offspan, 0.0, atol=1e-9) and r0.push_top == "+u15" and np.isclose(r0.grad_norm, 5.0)
+    assert r3.target == "-u1" and np.isclose(r3.cos_push_target, np.sqrt(0.5)) and np.isclose(r3.frac_other_l4, 0.5) and np.isclose(r3.frac_desc_l4, 0.0)
+    assert 29 not in level4_descendants(1)
+    fr = st[["frac_target", "frac_desc_l4", "frac_other_l4", "frac_other_internal", "frac_offspan"]].iloc[[0, 3]].sum(axis=1)
+    assert np.allclose(fr, 1.0)

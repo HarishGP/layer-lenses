@@ -521,3 +521,20 @@ def test_first_layer_alignment_series_matches_direct_cosines() -> None:
     fig, axes = plot_first_layer_alignment_series(series, title="t")
     assert len(axes) == 2
     plt.close(fig)
+
+
+def test_population_gradient_at_snapshot_matches_one_shot_gradient() -> None:
+    from layer_lenses.relu_analysis import population_gradient_at_snapshot
+    rng = np.random.default_rng(3)
+    model = ReLUMLP(input_dim=6, hidden_dims=[5, 4], bias=False)
+    sd = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    run = {"epochs": np.array([0, 10]), **{f"w__{k}": np.stack([v.numpy(), 2 * v.numpy()]) for k, v in sd.items()}}
+    x = rng.normal(size=(23, 6)).astype(np.float32); y = np.where(rng.random(23) < 0.5, -1, 1).astype(np.int8)
+    g_batched = population_gradient_at_snapshot(run, 10, x, y, batch_size=7)
+    with torch.no_grad():
+        for k, v in model.state_dict().items():
+            v.copy_(2 * sd[k])
+    g_once = log_loss_gradients(model=model, x=x, y=y)
+    assert set(g_batched) == set(g_once)
+    for k in g_once:
+        assert np.allclose(g_batched[k], g_once[k].numpy(), atol=1e-6)
