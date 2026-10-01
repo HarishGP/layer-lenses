@@ -585,6 +585,14 @@ class HierarchyDesignSpec:
     # y = -1 is representable only by negative third-layer weights or a dead layer).
     # "balanced": alternating +1 / -1 over the third-layer units.
     output_signs: str = "ones"
+    # Path-sign-aware cue rule: a unit pushes its probe toward the designed pole only if the
+    # unit's initial path to the logit, sum_k Wout[k] W3[k, unit], is positive. If true, units
+    # with a negative path get their cue signs flipped (= wired for the opposite pole), so the
+    # first-order push points to the designed pole again. Units with a zero path are untouched.
+    path_sign_cues: bool = False
+    # With layer3_exact, repair the third layer by row-count-preserving 2x2 swaps until every
+    # unit has a nonzero path to the logit (needed for path_sign_cues to apply to every unit).
+    layer3_nonzero_paths: bool = False
     # If set, every row of every layer is rescaled to these norms (layers 1..4),
     # overriding eps and the layer scales, so the init has the row norms of a standard
     # scheme while keeping the sign structure. See `standard_row_norms`.
@@ -627,6 +635,42 @@ def hierarchy_labels(spec: HierarchyDesignSpec) -> list[str]:
         labels += [f"-u{node}", f"+u{node}"]
     labels += [f"rand{i}" for i in range(spec.n_random)]
     return labels
+
+
+def _repair_zero_unit_paths(W3: np.ndarray, wout: np.ndarray, rng: np.random.Generator, max_iter: int = 10_000) -> np.ndarray:
+    """Make every column of a 0/1-structured ``W3`` have a nonzero path ``wout @ W3[:, u]``.
+
+    Uses 2x2 swaps between a positive-output row ``k`` and a negative-output row ``k2`` and
+    two columns ``u`` (the zero-path one) and ``v``: ones move from ``(k2, u), (k, v)`` to
+    ``(k, u), (k2, v)``, so every row keeps its count. ``v`` is chosen so it does not become
+    zero itself. Entries are assumed to share one magnitude (``layer3_exact``).
+    """
+    W = W3.copy()
+    mag = float(np.abs(W[W != 0]).max()) if (W != 0).any() else 1.0
+    pos_rows = np.nonzero(wout > 0)[0]; neg_rows = np.nonzero(wout < 0)[0]
+    step = 2 * mag * float(np.abs(wout).max())
+    for _ in range(max_iter):
+        path = W.T @ wout
+        zero = np.nonzero(np.isclose(path, 0.0, atol=1e-9))[0]
+        if zero.size == 0:
+            return W
+        u = int(rng.choice(zero))
+        candidates = []
+        for k in pos_rows:
+            if W[k, u] != 0:
+                continue
+            for k2 in neg_rows:
+                if W[k2, u] == 0:
+                    continue
+                vs = np.nonzero((W[k] != 0) & (W[k2] == 0))[0]
+                vs = [v for v in vs if v != u and not np.isclose(path[v] - step, 0.0, atol=1e-9)]
+                if vs:
+                    candidates.append((k, k2, vs))
+        if not candidates:
+            raise RuntimeError(f"could not repair the zero path of unit {u}")
+        k, k2, vs = candidates[rng.integers(len(candidates))]; v = int(rng.choice(vs))
+        W[k, u], W[k2, u], W[k, v], W[k2, v] = mag, 0.0, 0.0, mag
+    raise RuntimeError("zero-path repair did not converge")
 
 
 def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
@@ -700,6 +744,19 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
         Wout = (np.where(np.arange(spec.width3) % 2 == 0, 1.0, -1.0) * spec.output_scale)[None, :]
     else:
         raise ValueError(f"output_signs must be 'ones' or 'balanced', got {spec.output_signs!r}")
+    if spec.layer3_nonzero_paths:
+        if not spec.layer3_exact:
+            raise ValueError("layer3_nonzero_paths requires layer3_exact=True")
+        W3 = _repair_zero_unit_paths(W3, Wout.ravel(), rng)
+    unit_path = W3.T @ Wout.ravel()                      # init weight of each unit's path to the logit
+    unit_path_sign = np.sign(unit_path).astype(int)
+    flipped_units: list[int] = []
+    if spec.path_sign_cues:
+        for u in range(spec.width2):
+            if unit_path_sign[u] < 0 and unit_probe[u] >= 0:
+                cue_cols = np.ones(spec.width1, dtype=bool); cue_cols[unit_probe[u]] = False
+                W2[u, cue_cols] *= -1.0
+                flipped_units.append(u)
     weights = {
         "hidden_layers.0.weight": W1,
         "hidden_layers.1.weight": W2,
@@ -712,7 +769,8 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
             norms = np.linalg.norm(M, axis=1, keepdims=True)
             weights[key] = np.where(norms > 0, M / np.maximum(norms, 1e-30) * target, 0.0)
     meta = {"unit_probe": unit_probe, "labels": hierarchy_labels(spec), "targets": HIERARCHY_TARGETS,
-            "cue_rows": list(range(spec.cue_first_row, spec.cue_first_row + 2 * NUM_LEVEL4))}
+            "cue_rows": list(range(spec.cue_first_row, spec.cue_first_row + 2 * NUM_LEVEL4)),
+            "unit_path_sign": unit_path_sign, "flipped_units": flipped_units, "zero_path_units": [int(u) for u in np.nonzero(unit_path_sign == 0)[0]]}
     return weights, meta
 
 

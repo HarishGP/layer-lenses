@@ -4177,3 +4177,50 @@ the dead-second-layer branch is unavailable, and reorganise the designed-init no
   `per_epoch_*.csv`, `tree.npz`, `manifest.json`, ~30 MB), the only tracked content under
   `results/`. README adjusted: the notebook runs on a fresh clone without a GPU; the
   regeneration script remains the way to rebuild from scratch.
+
+## 2026-10-01 — Path-sign-aware cue rule; 80-30-40 balanced rerun
+
+### Goal
+Make the design's push-sign rule account for the sign of each unit's initial path to the
+logit, and rerun the 80-30-40 balanced-output design.
+
+### User prompts (verbatim)
+- "Implement the path-sign-aware cue rule and rerun the 80-30-40 balanced design"
+
+### Changes
+- `HierarchyDesignSpec.path_sign_cues`: after layers 3-4 are built, units whose init path
+  `sum_k Wout[k] W3[k, unit]` is negative get their cue signs flipped (the probe entry stays
+  -1), i.e. they are wired for the opposite pole so the first-order push points to the
+  designed pole. `HierarchyDesignSpec.layer3_nonzero_paths`: with `layer3_exact`, repairs the
+  third layer by row-count-preserving 2x2 swaps (`_repair_zero_unit_paths`) until no unit has
+  a zero path. `meta` now carries `unit_path_sign`, `flipped_units`, `zero_path_units`. One
+  test checks the cue signs, the repair, and the first-order push at init via autograd.
+- Script `results/designed_init/run_hierarchy_kaiming_cosine_pathsign.py` (80-30-40, 10M /
+  10k, frozen cues, balanced output, both options on). Outputs tracked under
+  `results/designed_init/hierarchy_kaiming_cosine_pathsign/` (gitignore extended) and copies
+  under `notebooks/results/designed_init/hierarchy_kaiming_cosine_pathsign/`. Notebook
+  section 8 (with a cell showing the init push and the end pole of every probe).
+
+### Results
+- At init (200k-point population gradient), probes pushed toward their target: 13/30 with
+  run 7's init, 28/30 with the flips alone (6 units still had a zero path), 30/30 with the
+  repair (mean cosine of -grad with the target +0.36). 13 of 30 units were flipped.
+- Trained: loss 0.030, test error 0.95% (run 7: 0.033, 1.0%); 0.3 / 0.1 / 0.05 at epochs
+  28 / 110 / 456; no zero logits. All 31 nodes covered from epoch 50; 67/80 rows aligned.
+- Pole outcomes: 18 of 30 probes end at their intended pole and 0 at the opposite pole
+  (run 7: 6 intended / 6 opposite nodes). 12 of 15 internal nodes captured by own probes,
+  both poles for 3, 4, 7, 9, 11, 12. Missed by own probes: the root and both level-1 nodes
+  (0, 1, 2), taken by cues / random rows; the same three were among the misses in run 7.
+
+### Reading
+- The sign rule is now complete: push sign = -s * side * sign(path). With the path made
+  positive-effective for every unit, opposite-pole capture disappears.
+- The remaining failure is the coarse end. Root/level-1 units read the most cues, so under
+  row normalisation their probe entry is the smallest (0.25 at the root vs 0.63 at level 3),
+  and those probes lose the race to rows that start partly aligned.
+
+### Current state / where to pick up
+- Equalise the probe's effective push across levels (e.g. set the probe entry to the norm
+  of the unit's cue block, or scale the unit's cue block by 1/sqrt(n_cues)) and rerun; if the
+  coarse probes then capture, the design decides the whole assignment.
+- Not pushed to origin; commit only.

@@ -327,3 +327,40 @@ def test_probe_node_outcomes_and_run_summary_on_a_constructed_first_layer() -> N
     fig, axes = plot_probe_target_cosines(np.stack([W1, W1b]), np.array([0, 10]), tree, title="t")
     assert len(axes) == 4
     plt.close(fig)
+
+
+def test_path_sign_cues_restore_first_order_push_under_balanced_output() -> None:
+    import torch
+    from layer_lenses.designed_init import (HIERARCHY_TARGETS, build_hierarchy_model, build_hierarchy_weights, hierarchy_unit_cues,
+                                            hierarchy_cue_index, standard_scale_spec)
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    base = dict(width1=80, width2=30, width3=40, units_per_level=(1, 1, 1, 1), subset_mode="all", cue_mode="linear", layer3_exact=True, cue_offspan_ratio=0.2, seed=0, output_signs="balanced")
+    plain = standard_scale_spec("kaiming", **base)
+    aware = standard_scale_spec("kaiming", **base, path_sign_cues=True, layer3_nonzero_paths=True)
+    w0, m0 = build_hierarchy_weights(plain, tree)
+    w1, m1 = build_hierarchy_weights(aware, tree)
+    W3 = w1["hidden_layers.2.weight"]
+    assert np.all((W3 != 0).sum(axis=1) == 15)                      # row counts preserved by the repair
+    assert m1["zero_path_units"] == [] and len(m0["zero_path_units"]) > 0
+    assert len(m1["flipped_units"]) > 0 and m0["flipped_units"] == []
+    assert np.array_equal(w1["hidden_layers.0.weight"], w0["hidden_layers.0.weight"])
+    W2 = w1["hidden_layers.1.weight"]
+    for u, (node, pole) in enumerate(HIERARCHY_TARGETS):
+        assert W2[u, u] < 0                                          # probe weight untouched
+        eff = pole * int(m1["unit_path_sign"][u])
+        left, right = hierarchy_unit_cues(node, eff)
+        for s, n in left + right:                                    # cue signs follow the effective pole
+            assert np.sign(W2[u, hierarchy_cue_index(n, s, aware)]) > 0
+            assert np.sign(W2[u, hierarchy_cue_index(n, -s, aware)]) < 0
+    # first-order push at init: -grad of the population loss on each probe row vs its designed target
+    x, y = build_data(SweepRunSpec(tree_seed=5178, data_seed=11, init_seed=0, batch_size=1, n_train=100_000), tree)
+    xt, yt = torch.from_numpy(x).float(), torch.from_numpy(y).float()
+    def pushes(spec):
+        model, _ = build_hierarchy_model(spec, tree); model.zero_grad()
+        torch.nn.functional.softplus(-yt * model(xt).reshape(-1)).mean().backward()
+        g = -model.hidden_layers[0].weight.grad.numpy()
+        return np.array([pole * (g[p] @ tree.w_list[node]) / (np.linalg.norm(g[p]) * np.linalg.norm(tree.w_list[node]) + 1e-30) for p, (node, pole) in enumerate(HIERARCHY_TARGETS)])
+    c_plain, c_aware = pushes(plain), pushes(aware)
+    assert (c_aware > 0).sum() >= 27 and (c_aware > 0).sum() > (c_plain > 0).sum()
+    with pytest.raises(ValueError):
+        build_hierarchy_weights(standard_scale_spec("kaiming", **{**base, "layer3_exact": False}, layer3_nonzero_paths=True), tree)

@@ -41,6 +41,7 @@ results/designed_init/*
 !results/designed_init/hierarchy_kaiming_cosine_big/
 !results/designed_init/hierarchy_kaiming_cosine_isolate/
 !results/designed_init/hierarchy_kaiming_cosine_balanced/
+!results/designed_init/hierarchy_kaiming_cosine_pathsign/
 
 # Large model artifacts
 *.pt
