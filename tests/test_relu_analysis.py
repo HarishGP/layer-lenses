@@ -552,3 +552,26 @@ def test_snapshot_state_dict_accepts_load_hier_run_style_dict() -> None:
         assert torch.allclose(a[k], b[k]) and torch.allclose(a[k], 3 * sd[k])
     with pytest.raises(KeyError):
         snapshot_state_dict({"epochs": np.array([0]), "w__hidden_layers.0.weight": stacks["hidden_layers.0.weight"][:1]}, 0)
+
+
+def test_first_layer_gradient_series_components_and_offspan() -> None:
+    from layer_lenses.relu_analysis import first_layer_gradient_series, plot_first_layer_gradient_series
+    _, _, tree, _ = generate_cob_odt_data(num_data=16, dim=8, depth=2, seed=9)
+    U = tree.w_list / np.linalg.norm(tree.w_list, axis=1, keepdims=True)          # 3 orthonormal rows in R^8
+    rng = np.random.default_rng(0)
+    off = rng.normal(size=8); off -= U.T @ (U @ off); off *= 2.0 / np.linalg.norm(off)   # off-span vector of norm 2
+    G = np.zeros((4, 8)); G[1] = -(3 * U[0] - 1 * U[2] + off)                        # push on row 1 = 3 u_0 - u_2 + off
+    series = first_layer_gradient_series({0: G, 10: {"hidden_layers.0.weight": 2 * G}}, tree, neuron_ids=[1], node_ids=[0, 2])
+    assert list(series.columns) == ["epoch", "neuron", "grad_norm", "comp_0", "comp_2", "inspan_norm", "offspan_norm"]
+    r0, r10 = series.iloc[0], series.iloc[1]
+    assert np.isclose(r0.comp_0, 3.0) and np.isclose(r0.comp_2, -1.0) and np.isclose(r0.offspan_norm, 2.0) and np.isclose(r0.inspan_norm, np.sqrt(10))
+    assert np.isclose(r0.grad_norm, np.sqrt(14)) and np.isclose(r10.comp_0, 6.0) and np.isclose(r10.offspan_norm, 4.0)
+    raw = first_layer_gradient_series({0: G}, tree, neuron_ids=[1], node_ids=[0], push=False)
+    assert np.isclose(raw.iloc[0].comp_0, -3.0)
+    norm = first_layer_gradient_series({0: G}, tree, neuron_ids=[1], node_ids=[0], normalize=True)
+    assert np.isclose(norm.iloc[0].comp_0, 3 / np.sqrt(14)) and np.isclose(norm.iloc[0].grad_norm, 1.0)
+    with pytest.raises(ValueError):
+        first_layer_gradient_series({0: G}, tree, neuron_ids=[7], node_ids=[0])
+    fig, axes = plot_first_layer_gradient_series(series, title="t")
+    assert len(axes) == 1
+    plt.close(fig)

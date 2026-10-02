@@ -4359,3 +4359,22 @@ designed pole by epoch 20. The remaining gap to run 9's final loss is not about 
   at probes 2 and 5 being pulled to the root pole: a root-direction leak in the level-1 units'
   lens after the root pair is captured.
 - Not pushed; commit only.
+
+## 2026-10-02 — Population-gradient component plots vs epoch
+
+### User prompts (verbatim)
+- "Fix the error for the following cell:" (cell calling `population_gradient_at_snapshot(run10, ...)`; KeyError 'w__output_layer.weight')
+- "Can you add a cell for visualizing population gradients in the same manner as the plots for the parameter trajectories? It should take neurons and ODT nodes as arguments and plot the components of the population gradient w.r.t. epochs. Also add another line for the norm of the projection of the gradient in the orthogonal complement of all the ODT vectors."
+- "I meant vs epochs and not w.r.t epochs"
+
+### Changes
+- `snapshot_state_dict` (and so `population_gradient_at_snapshot`) accepts the notebooks'
+  `load_hier_run` dicts (`epochs` + `W` sub-dict) as well as `w__`-keyed mappings.
+- `relu_analysis.first_layer_gradient_series(grads_by_epoch, tree, neuron_ids=, node_ids=,
+  push=True, normalize=False)`: per (epoch, neuron) the signed components of the push (-grad,
+  or the raw gradient) along the unit ODT normals, the in-span norm, the norm of the projection
+  onto the orthogonal complement of all ODT normals, and the total norm.
+  `plot_first_layer_gradient_series`: one panel per neuron vs epoch. Tests.
+- Notebook: a parametrised cell at the end (RUN, GRAD_EPOCHS, NEURON_IDS, NODE_IDS, PUSH,
+  NORMALIZE) that caches population gradients per run tag. Left unexecuted to avoid racing the
+  user's live editor; a dry run on run 10 checked it.

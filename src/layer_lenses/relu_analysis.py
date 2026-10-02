@@ -2422,3 +2422,83 @@ def population_gradient_at_snapshot(
                 total[k] += v.numpy().astype(np.float64) * w
     assert total is not None
     return total
+
+
+def first_layer_gradient_series(
+    grads_by_epoch: dict[int, dict[str, np.ndarray] | np.ndarray],
+    tree: COBODTTree,
+    *,
+    neuron_ids: list[int],
+    node_ids: list[int],
+    push: bool = True,
+    normalize: bool = False,
+) -> pd.DataFrame:
+    """Components of the first-layer population gradient of chosen rows along chosen ODT nodes, per epoch.
+
+    ``grads_by_epoch`` maps an epoch to either the full gradient dict (as returned by
+    `population_gradient_at_snapshot`) or the first-layer gradient array ``(width, dim)``.
+    With ``push`` (default) the series describes ``-grad``, the direction the row moves in;
+    otherwise the raw gradient. Columns per (epoch, neuron): ``grad_norm``, ``comp_<node>``
+    (signed component along the unit ODT normal), ``offspan_norm`` (norm of the projection
+    onto the orthogonal complement of all ODT normals), and ``inspan_norm``. With
+    ``normalize`` every component and norm is divided by ``grad_norm`` (components become
+    cosines, the off-span norm the off-span fraction's square root).
+    """
+    U = np.asarray(tree.w_list, dtype=np.float64)
+    U = U / np.maximum(np.linalg.norm(U, axis=1, keepdims=True), 1e-300)
+    n_nodes = U.shape[0]
+    for n in node_ids:
+        if not 0 <= n < n_nodes:
+            raise ValueError(f"ODT node id {n} outside [0, {n_nodes - 1}]")
+    rows = []
+    for e in sorted(grads_by_epoch):
+        g_all = grads_by_epoch[e]
+        G = np.asarray(g_all["hidden_layers.0.weight"] if isinstance(g_all, dict) else g_all, dtype=np.float64)
+        if push:
+            G = -G
+        for i in neuron_ids:
+            if not 0 <= i < G.shape[0]:
+                raise ValueError(f"neuron id {i} outside [0, {G.shape[0] - 1}]")
+            g = G[i]; gn = float(np.linalg.norm(g)); c = U @ g
+            off = g - U.T @ c
+            scale = max(gn, 1e-300) if normalize else 1.0
+            rec = {"epoch": int(e), "neuron": int(i), "grad_norm": gn / scale}
+            rec.update({f"comp_{n}": float(c[n]) / scale for n in node_ids})
+            rec["inspan_norm"] = float(np.linalg.norm(c)) / scale
+            rec["offspan_norm"] = float(np.linalg.norm(off)) / scale
+            rows.append(rec)
+    return pd.DataFrame(rows)
+
+
+def plot_first_layer_gradient_series(
+    series: pd.DataFrame,
+    *,
+    neuron_ids: list[int] | None = None,
+    node_ids: list[int] | None = None,
+    show_total_norm: bool = True,
+    figsize_per_row: float = 3.2,
+    title: str | None = None,
+    ylabel: str = "component of push (-grad)",
+):
+    """One panel per neuron: gradient components along the chosen nodes, the off-span norm and the total norm vs epoch."""
+    if neuron_ids is None:
+        neuron_ids = sorted(series.neuron.unique().tolist())
+    if node_ids is None:
+        node_ids = [int(c[5:]) for c in series.columns if c.startswith("comp_")]
+    fig, axes = plt.subplots(len(neuron_ids), 1, figsize=(9, figsize_per_row * len(neuron_ids)), sharex=True, squeeze=False)
+    axes = axes[:, 0]
+    for ax, i in zip(axes, neuron_ids):
+        g = series[series.neuron == i].sort_values("epoch")
+        for k, n in enumerate(node_ids):
+            ax.plot(g.epoch, g[f"comp_{n}"], color=f"C{k % 10}", lw=1.8, marker="o", ms=2.5, label=f"along u_{n}")
+        ax.plot(g.epoch, g.offspan_norm, color="k", lw=1.6, ls="--", marker="o", ms=2.5, label="off-span norm")
+        if show_total_norm:
+            ax.plot(g.epoch, g.grad_norm, color="gray", lw=1.2, ls=":", label="total norm")
+        ax.axhline(0, color="gray", lw=0.6)
+        ax.set_ylabel(ylabel); ax.grid(alpha=0.25); ax.legend(fontsize=7, ncol=2, loc="upper left")
+        ax.set_title(f"first-layer neuron {i}", fontsize=9)
+    axes[-1].set_xlabel("epoch")
+    if title:
+        fig.suptitle(title, fontsize=10)
+    fig.tight_layout()
+    return fig, axes
