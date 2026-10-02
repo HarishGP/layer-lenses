@@ -4378,3 +4378,39 @@ designed pole by epoch 20. The remaining gap to run 9's final loss is not about 
 - Notebook: a parametrised cell at the end (RUN, GRAD_EPOCHS, NEURON_IDS, NODE_IDS, PUSH,
   NORMALIZE) that caches population gradients per run tag. Left unexecuted to avoid racing the
   user's live editor; a dry run on run 10 checked it.
+
+## 2026-10-02 — Why the snapshot population gradient on a captured probe is not "c * u_0"
+
+### User prompts (verbatim)
+- "I am somewhat confused by how these gradients can lead to these trajectories -- e.g. probe 0, the gradient doesn't seem to settle at a constant times u_0."
+
+### Analysis (run 10, probe 0, epochs 100-130; gradients over 1-2M training points)
+- Mismatch: the snapshot push on probe 0 is 0.027 in norm, perpendicular to the row (cosine
+  0.01 with it), persistent between snapshots (cosine 0.96 at 10-epoch spacing), and would
+  rotate the row by ~35 degrees per epoch at lr 0.0195 / momentum 0.9. The row rotates
+  0.1-0.2 degrees per ten epochs and moves radially (+0.035 per epoch, cosine 0.998 with u_0).
+- Edge of stability: curvature along the full gradient gives lr * lambda = 3.9 at epoch 100
+  (2.7 at 300) against the heavy-ball limit 2(1+beta) = 3.8. The full gradient (norm 3.2)
+  lives in layers 2-3 (2.5 and 2.0); row 0 carries 8e-5 of its squared norm. One step along
+  -g drops the loss 0.103 -> 0.073 and the gradient norm to 0.30; the opposite flank has the
+  same loss, i.e. a period-2 oscillation across a sharp valley in the downstream weights.
+  On the two flanks probe 0's push along u_0 is -0.009 and +0.020: the radial part averages
+  to the positive drift that is seen; the off-span part (0.014) is the same at both flanks.
+- Step-level replay (400 SGD-momentum steps from the snapshot, batch 10k, population gradient
+  on row 0 at every step): per-step |push| 0.02-0.03 (up to 0.44 during the momentum
+  transient), nearly uncorrelated from step to step (off-span direction loses its correlation
+  with step 0 within ~10 steps; running mean of the push falls to 0.0033 at 400 steps, ~1/10
+  of the per-step size and still falling); row rotates 0.5 degrees in 400 steps.
+- So the instantaneous population gradient on a captured row is dominated by a fluctuating
+  component set by the phase of the fast downstream coordinates (the lens swings with the
+  oscillating layers 2-4), ~100x larger than the time-averaged push the row actually
+  integrates (0.0348 per epoch / (0.195 * 1000) = 1.8e-4 per step, radial). The
+  "constant times u_0" picture holds for the time average; snapshots every 10k steps sample
+  the oscillation at a fixed phase, which is why they look persistent.
+
+### Decisions
+- From ~epoch 20 on (lr * lambda near the limit) the snapshot gradient plots measure the
+  oscillation, not the drift; the gradient plots are meaningful early (epochs 0-10) and
+  for the time-averaged push. A `mean push from the trajectory` series
+  (delta w between snapshots / (sum of lr/(1-beta) * steps)) would be the right companion
+  to the gradient cell; not implemented yet.
