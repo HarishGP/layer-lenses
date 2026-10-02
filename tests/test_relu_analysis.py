@@ -538,3 +538,17 @@ def test_population_gradient_at_snapshot_matches_one_shot_gradient() -> None:
     assert set(g_batched) == set(g_once)
     for k in g_once:
         assert np.allclose(g_batched[k], g_once[k].numpy(), atol=1e-6)
+
+
+def test_snapshot_state_dict_accepts_load_hier_run_style_dict() -> None:
+    model = ReLUMLP(input_dim=5, hidden_dims=[4, 3], bias=False)
+    sd = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    stacks = {k: np.stack([v.numpy(), 3 * v.numpy()]) for k, v in sd.items()}
+    flat = {"epochs": np.array([0, 10]), **{f"w__{k}": v for k, v in stacks.items()}}
+    nested = {"epochs": np.array([0, 10]), "W": stacks, "tag": "x", "dims": [4, 3]}
+    a, b = snapshot_state_dict(flat, 10), snapshot_state_dict(nested, 10)
+    assert set(a) == set(b) == set(sd)
+    for k in sd:
+        assert torch.allclose(a[k], b[k]) and torch.allclose(a[k], 3 * sd[k])
+    with pytest.raises(KeyError):
+        snapshot_state_dict({"epochs": np.array([0]), "w__hidden_layers.0.weight": stacks["hidden_layers.0.weight"][:1]}, 0)

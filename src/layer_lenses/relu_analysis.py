@@ -2263,23 +2263,30 @@ def state_dict_from_weight_arrays(
 
 
 def snapshot_state_dict(run: Any, epoch: int) -> dict[str, torch.Tensor]:
-    """State dict at one snapshot of a ``w__``-keyed trajectory.
+    """State dict at one snapshot of a stored trajectory.
 
-    ``run`` is a mapping (``np.load`` result or dict) with an ``epochs`` array
-    and one ``w__<param name>`` array per parameter, stacked along axis 0 in
-    the order of ``epochs``. ``epoch`` must be one of the stored epochs.
+    ``run`` is either a mapping (``np.load`` result or dict) with an ``epochs`` array and
+    one ``w__<param name>`` array per parameter, or a dict with ``epochs`` and a ``W``
+    sub-dict mapping parameter names to the same stacked arrays (the form returned by the
+    notebooks' ``load_hier_run``). Arrays are stacked along axis 0 in the order of
+    ``epochs``; ``epoch`` must be one of the stored epochs.
     """
     epochs = np.asarray(run["epochs"])
     hits = np.nonzero(epochs == epoch)[0]
     if hits.size == 0:
         raise ValueError(f"Epoch {epoch} is not a stored snapshot; stored epochs: {epochs.tolist()}")
     idx = int(hits[0])
-    keys = [k for k in run.keys() if k.startswith("w__")]
+    if "W" in run.keys() and isinstance(run["W"], dict):
+        weights = {name: arr for name, arr in run["W"].items()}
+    else:
+        weights = {k[3:]: run[k] for k in run.keys() if k.startswith("w__")}
     hidden = sorted(
-        (int(k.split(".")[1]), k) for k in keys if k.startswith("w__hidden_layers.") and k.endswith(".weight")
+        (int(k.split(".")[1]), k) for k in weights if k.startswith("hidden_layers.") and k.endswith(".weight")
     )
+    if not hidden or "output_layer.weight" not in weights:
+        raise KeyError("run must hold 'w__hidden_layers.<i>.weight' / 'w__output_layer.weight' arrays, or a 'W' dict with those parameter names")
     return state_dict_from_weight_arrays(
-        [run[k][idx] for _, k in hidden], run["w__output_layer.weight"][idx]
+        [weights[k][idx] for _, k in hidden], weights["output_layer.weight"][idx]
     )
 
 
