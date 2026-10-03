@@ -54,3 +54,5 @@ results/designed_init/*
 *.pkl.gz
 *.gz
 *.joblib
+# The replayable run needs its small metadata pickle (config, specs, tree, losses; 0.4 MB)
+!results/designed_init/hierarchy_replayable/replay/meta.pkl
