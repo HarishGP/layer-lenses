@@ -4414,3 +4414,49 @@ designed pole by epoch 20. The remaining gap to run 9's final loss is not about 
   for the time-averaged push. A `mean push from the trajectory` series
   (delta w between snapshots / (sum of lr/(1-beta) * steps)) would be the right companion
   to the gradient cell; not implemented yet.
+
+## 2026-10-03 — Run 11: replayable version of run 10 (1M points, lr 0.01, momentum snapshots)
+
+### User prompts (verbatim)
+- "Can you replay the training for any given epoch with just these checkpoints? Or do you need additional details?  \n\nI am more or less happy with run 10 initialisation as it behaves as intended, but I would like one more run with the following simplifications:\n\n1. Lesser learning rate (the loss fluctuations from epoch 100 to 300 are very wild).\n2. quick full replay between any pair of adjacent checkpoints. Similar to the replayable training notebook with population gradients per step.\n3. To further point 2, I am also looking to scale back to 1M training points as I can keep the entire data in memory without issue, but hopefully the trajectory stays the same. \n\n\nWe can do one more run with these mods, and move on to the next phase where we do detailed trajectory analysis of this run in a separate notebook."
+- "hi there is a power failure, and I will have to shut down the system. Can you safely terminate the process now?"
+- "System is back up, relaunch the run."
+
+### Answer to the replay question
+Not from the earlier checkpoints: exact replay needs the momentum buffers at the checkpoint (plus
+the data and batch order, which are deterministic from the seeds). Runs 1-10 stored weights only.
+Run 11 stores weights and momentum every 1000 steps.
+
+### Changes
+- `relu_analysis`: `designed_run_seed_result`, `save_designed_run` / `load_designed_run`
+  (weights.npz + momentum.npz + meta.pkl, each < 50 MB), `regenerate_seed_result_data` extended to
+  the `kind="sweep_chunked"` data spec, and `replay_interval_from_snapshot(seed_result, epoch_start,
+  epoch_end=None, data=, record_full_data_gradient=, full_data_subsample=, record_params=,
+  neuron_rows=)`: exact multi-epoch replay between checkpoints (stored lr history, momentum, fixed
+  batch order) with per-step batch loss, mini-batch gradient, update and population gradient of
+  chosen first-layer rows; verified against the next snapshot. Exactness test.
+- Script `results/designed_init/run_hierarchy_replayable.py` (run 10's design; 1M points = run 10's
+  first chunk; batch 10k so an epoch is 100 steps; 10 000 epochs = 1M steps; lr 0.01 -> 0.0005;
+  momentum 0.9; snapshots with momentum every 10 epochs). First launch killed by a power failure
+  (process terminated cleanly, code committed); relaunched after the restart, 26 min.
+- Outputs tracked under `results/designed_init/hierarchy_replayable/` (replay folder 89 MB in two
+  files); summaries under `notebooks/results/designed_init/hierarchy_replayable/`.
+- Notebook section 11 in `hierarchy_design_runs.ipynb`; new notebook
+  `notebooks/hierarchy_trajectory_analysis.ipynb` (load, overview, exact replay of one interval,
+  per-step population-gradient components, mini-batch vs population gradient, network graph).
+
+### Results
+- Replay exact to the bit at every interval tested (epochs 0, 100, 500): 2 s per 1000-step
+  interval plain, 13 s with per-step population gradients on 200k points, 53 s on all 1M.
+- Loss 0.3 / 0.1 / 0.05 at steps 34k / 122k / 670k (run 10: 17k / 53k / 460k). All 15 internal
+  nodes on their own probes at the intended pole from step 100k (14/15 at 50k), 31/31 covered
+  from 100k; 24/30 probes at the intended pole, 0 opposite, 9 nodes at both poles; no unit path
+  changed sign. Final loss 0.037, test error 1.58% (run 10: 0.029, 0.90%).
+- Fluctuations over steps 100k-300k (loss per 1000 steps): std 0.013, range 0.056 (run 10:
+  0.023, 0.141). Reusing 1M points ten times: no sign of overfitting.
+
+### Current state / where to pick up
+- Trajectory analysis phase in `hierarchy_trajectory_analysis.ipynb`: per-step population
+  gradients during the capture of each node (steps 20k-100k), the root-pole pull on the +u_1 /
+  -u_2 probes, and the late-phase slow drift.
+- Not pushed; commit only.
