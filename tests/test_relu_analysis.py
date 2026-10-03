@@ -575,3 +575,39 @@ def test_first_layer_gradient_series_components_and_offspan() -> None:
     fig, axes = plot_first_layer_gradient_series(series, title="t")
     assert len(axes) == 1
     plt.close(fig)
+
+
+def test_designed_run_save_load_and_interval_replay_are_exact(tmp_path) -> None:
+    from layer_lenses.init_sweep import SweepRunSpec, build_data_chunked, build_tree
+    from layer_lenses.relu_analysis import (designed_run_seed_result, load_designed_run, replay_interval_from_snapshot, save_designed_run,
+                                            train_relu_mlp_with_optimizer_snapshots, regenerate_seed_result_data)
+    tree = build_tree(SweepRunSpec(tree_seed=5, data_seed=0, init_seed=0, batch_size=1, dim=12, depth=2))
+    x, y = build_data_chunked(SweepRunSpec(tree_seed=5, data_seed=7, init_seed=0, batch_size=1, dim=12, depth=2, n_train=600), tree, chunk_size=300)
+    torch.manual_seed(0)
+    model = ReLUMLP(input_dim=12, hidden_dims=[6, 4], bias=False)
+    mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}; mask["hidden_layers.0.weight"][2:4] = 0.0
+    cfg = ReLUTrainConfig(epochs=8, lr=0.05, batch_size=100, seed=1, device="cpu", snapshot_epochs=(0, 2, 4, 6, 8), lr_scheduler_eta_min_ratio=0.1,
+                          optimizer="sgd", momentum=0.9, parameter_update_mask=mask)
+    out = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=cfg)
+    data_spec = {"kind": "sweep_chunked", "tree_seed": 5, "data_seed": 7, "n_train": 600, "chunk_size": 300, "eval_seed": 99, "n_eval": 50, "dim": 12, "depth": 2}
+    sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 12, "hidden_dims": [6, 4], "bias": False}, data_spec=data_spec, tree=tree, tag="t")
+    regen = regenerate_seed_result_data(sr)
+    assert np.allclose(regen["x_train"], x) and np.array_equal(regen["y_train"], y) and regen["x_eval"].shape == (50, 12)
+    folder = save_designed_run(sr, tmp_path / "run")
+    assert {p.name for p in folder.iterdir()} == {"weights.npz", "momentum.npz", "meta.pkl"}
+    lo = load_designed_run(folder)
+    assert sorted(lo["out"]["checkpoint_snapshots"]) == [0, 2, 4, 6, 8]
+    for e in (0, 4, 8):
+        for k, v in out["checkpoint_snapshots"][e].items():
+            assert torch.equal(lo["out"]["checkpoint_snapshots"][e][k], v)
+    # replay 2 epochs from the loaded run and land exactly on the next snapshot (params and momentum)
+    rep = replay_interval_from_snapshot(lo, 2, data=regen, record_full_data_gradient=True, full_data_subsample=200, record_params=True, neuron_rows=[0, 1, 2])
+    assert rep["epoch_end"] == 4 and rep["num_steps"] == 12 and rep["grad_rows"].shape == (12, 3, 12) and rep["full_grad_rows"].shape == (12, 3, 12)
+    assert rep["verification"]["max_abs_param_diff_overall"] == 0.0 and rep["verification"]["max_abs_momentum_diff"] == 0.0
+    assert np.all(rep["update_rows"][:, 2] == 0.0)                      # frozen row never moves
+    assert np.allclose(rep["params_rows"][0], out["checkpoint_snapshots"][2]["hidden_layers.0.weight"].numpy()[[0, 1, 2]])
+    assert np.allclose(rep["lr"][:6], out["lr_history"][2]) and np.allclose(rep["lr"][6:], out["lr_history"][3])
+    rep2 = replay_interval_from_snapshot(lo, 6, data=regen)                # last interval, no explicit end
+    assert rep2["epoch_end"] == 8 and rep2["verification"]["max_abs_param_diff_overall"] == 0.0
+    with pytest.raises(ValueError):
+        replay_interval_from_snapshot(lo, 8, data=regen)

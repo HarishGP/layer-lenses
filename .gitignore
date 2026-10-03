@@ -44,6 +44,7 @@ results/designed_init/*
 !results/designed_init/hierarchy_kaiming_cosine_pathsign/
 !results/designed_init/hierarchy_kaiming_cosine_cueeq/
 !results/designed_init/hierarchy_kaiming_cosine_balpaths/
+!results/designed_init/hierarchy_replayable/
 
 # Large model artifacts
 *.pt

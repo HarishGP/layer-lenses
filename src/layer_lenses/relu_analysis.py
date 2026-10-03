@@ -1830,6 +1830,19 @@ def regenerate_seed_result_data(seed_result: dict[str, Any]) -> dict[str, np.nda
         raise KeyError("seed_result has neither 'data' nor 'data_spec'.")
 
     spec = seed_result["data_spec"]
+    if spec.get("kind") == "sweep_chunked":
+        # Designed-init runs: tree from `init_sweep.build_tree`, training data from
+        # `build_data_chunked`, evaluation data from `build_data` with its own seed.
+        from layer_lenses.init_sweep import SweepRunSpec, build_data, build_data_chunked, build_tree
+
+        base = dict(tree_seed=int(spec["tree_seed"]), init_seed=0, batch_size=1, dim=int(spec["dim"]), depth=int(spec["depth"]))
+        tree = build_tree(SweepRunSpec(data_seed=0, **base))
+        x_train, y_train = build_data_chunked(SweepRunSpec(data_seed=int(spec["data_seed"]), n_train=int(spec["n_train"]), **base), tree, chunk_size=int(spec.get("chunk_size", 1_000_000)))
+        x_eval, y_eval = build_data(SweepRunSpec(data_seed=int(spec["eval_seed"]), n_train=int(spec["n_eval"]), **base), tree)
+        stored_tree = seed_result.get("tree")
+        if stored_tree is not None and not np.allclose(stored_tree.w_list, tree.w_list):
+            raise RuntimeError("Regenerated ODT does not match the stored tree; data_spec is inconsistent.")
+        return {"x_train": x_train, "y_train": y_train, "x_eval": x_eval, "y_eval": y_eval}
     x_train, y_train, x_eval, y_eval, tree, _ = _generate_cob_odt_split(
         dim=int(spec["dim"]),
         depth=int(spec["depth"]),
@@ -2502,3 +2515,179 @@ def plot_first_layer_gradient_series(
         fig.suptitle(title, fontsize=10)
     fig.tight_layout()
     return fig, axes
+
+
+# ---------------------------------------------------------------------------
+# Replayable designed-init runs: compact on-disk format and multi-epoch replay.
+# ---------------------------------------------------------------------------
+
+
+def designed_run_seed_result(
+    *,
+    out: dict[str, Any],
+    train_config: ReLUTrainConfig,
+    model_spec: dict[str, Any],
+    data_spec: dict[str, Any],
+    tree: COBODTTree,
+    design: dict[str, Any] | None = None,
+    tag: str = "",
+) -> dict[str, Any]:
+    """Wrap the output of `train_relu_mlp_with_optimizer_snapshots` as a replayable result.
+
+    The dict has the keys `replay_epoch_from_snapshot` / `replay_interval_from_snapshot`
+    read (``out``, ``train_config``, ``model_spec``, ``data_spec``, ``tree``) plus the
+    design description and a tag. ``data_spec`` must be understood by
+    `regenerate_seed_result_data` (``kind="sweep_chunked"`` for the designed-init runs).
+    """
+    return {"tag": tag, "tree": tree, "data_spec": dict(data_spec), "model_spec": dict(model_spec),
+            "train_config": train_config, "out": out, "design": dict(design or {})}
+
+
+def save_designed_run(seed_result: dict[str, Any], folder: str | Path) -> Path:
+    """Write a replayable designed-init run as small files (none above ~50 MB).
+
+    ``weights.npz``: ``epochs`` and one ``w__<param>`` stack per parameter;
+    ``momentum.npz``: the SGD momentum buffers at the same epochs (``m__<param>``);
+    ``meta.pkl``: everything else (config, specs, tree, design, losses, lr history,
+    final model state) without the snapshots. `load_designed_run` reverses this.
+    """
+    folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
+    out = seed_result["out"]; ck = out["checkpoint_snapshots"]; epochs = sorted(ck)
+    names = list(ck[epochs[0]].keys())
+    np.savez(folder / "weights.npz", epochs=np.array(epochs), **{f"w__{n}": np.stack([ck[e][n].numpy() for e in epochs]) for n in names})
+    opt = out["optimizer_snapshots"]
+    mom = {n: [] for n in names}
+    for e in epochs:
+        state = _as_optimizer_state_list(opt[e])[0]["state"]
+        for i, n in enumerate(names):
+            buf = state.get(i, {}).get("momentum_buffer")
+            mom[n].append(buf.numpy() if buf is not None else np.zeros_like(ck[e][n].numpy()))
+    np.savez(folder / "momentum.npz", epochs=np.array(epochs), **{f"m__{n}": np.stack(v) for n, v in mom.items()})
+    light_out = {k: v for k, v in out.items() if k not in ("checkpoint_snapshots", "optimizer_snapshots", "permutation_generator_snapshots")}
+    light_out["model_state_final"] = {k: v.detach().cpu().clone() for k, v in out["model"].state_dict().items()}
+    light_out.pop("model", None)
+    meta = {k: v for k, v in seed_result.items() if k != "out"}; meta["out"] = light_out; meta["parameter_names"] = names
+    with open(folder / "meta.pkl", "wb") as f:
+        pickle.dump(meta, f)
+    return folder
+
+
+def load_designed_run(folder: str | Path) -> dict[str, Any]:
+    """Load a run written by `save_designed_run` back into a replayable seed_result."""
+    folder = Path(folder)
+    with open(folder / "meta.pkl", "rb") as f:
+        meta = pickle.load(f)
+    w = np.load(folder / "weights.npz"); m = np.load(folder / "momentum.npz")
+    epochs = [int(e) for e in w["epochs"]]; names = meta["parameter_names"]
+    ck = {e: {n: torch.from_numpy(w[f"w__{n}"][i].copy()) for n in names} for i, e in enumerate(epochs)}
+    cfg: ReLUTrainConfig = meta["train_config"]
+    lr_hist = meta["out"].get("lr_history") or meta["out"].get("lr_history_by_group", {}).get("sgd")
+    opt = {}
+    for i, e in enumerate(epochs):
+        lr = float(lr_hist[e]) if lr_hist is not None and e < len(lr_hist) else cfg.lr
+        state = {j: {"momentum_buffer": torch.from_numpy(m[f"m__{n}"][i].copy())} for j, n in enumerate(names)}
+        opt[e] = [{"state": state, "param_groups": [{"lr": lr, "momentum": cfg.momentum, "dampening": 0, "weight_decay": cfg.weight_decay, "nesterov": False,
+                                                      "maximize": False, "foreach": None, "differentiable": False, "fused": None, "params": list(range(len(names)))}]}]
+    spec = meta["model_spec"]
+    model = ReLUMLP(input_dim=spec["input_dim"], hidden_dims=list(spec["hidden_dims"]), bias=spec.get("bias", False), activation=spec.get("activation", "relu"))
+    model.load_state_dict(meta["out"]["model_state_final"])
+    out = dict(meta["out"]); out["model"] = model; out["checkpoint_snapshots"] = ck; out["optimizer_snapshots"] = opt
+    result = {k: v for k, v in meta.items() if k not in ("out", "parameter_names")}; result["out"] = out
+    return result
+
+
+def replay_interval_from_snapshot(
+    seed_result: dict[str, Any],
+    epoch_start: int,
+    *,
+    epoch_end: int | None = None,
+    data: dict[str, np.ndarray] | None = None,
+    device: str | None = None,
+    record_full_data_gradient: bool = False,
+    full_data_subsample: int | None = None,
+    record_params: bool = False,
+    neuron_rows: list[int] | None = None,
+) -> dict[str, Any]:
+    """Re-run training from the snapshot at ``epoch_start`` up to ``epoch_end`` step by step.
+
+    ``epoch_end`` defaults to the next stored snapshot. Mini-batches follow the fixed
+    (identity) order the trainer used, the learning rate of every epoch is taken from the
+    stored ``lr_history``, and the momentum buffers come from the snapshot, so the replay
+    is exact; the end state is checked against the snapshot at ``epoch_end`` when it exists.
+
+    Per step this records the batch loss, the mini-batch gradient and the update of the
+    first-layer rows in ``neuron_rows`` (all rows if None) and, with
+    ``record_full_data_gradient``, the gradient of the mean loss over the first
+    ``full_data_subsample`` training points (all of them if None) on those rows. With
+    ``record_params`` the first-layer rows before every step are kept too. Returns the
+    step records as stacked arrays, step-indexed from the start of ``epoch_start``.
+    """
+    out = seed_result["out"]; config: ReLUTrainConfig = seed_result["train_config"]
+    if epoch_start not in out["optimizer_snapshots"]:
+        raise KeyError(f"epoch {epoch_start} has no optimizer snapshot; available: {sorted(out['optimizer_snapshots'])[:5]} ...")
+    stored = sorted(out["checkpoint_snapshots"])
+    if epoch_end is None:
+        later = [e for e in stored if e > epoch_start]
+        if not later:
+            raise ValueError(f"epoch {epoch_start} is the last snapshot; nothing to replay.")
+        epoch_end = later[0]
+    if not epoch_start < epoch_end <= config.epochs:
+        raise ValueError(f"need epoch_start < epoch_end <= {config.epochs}, got {epoch_start}, {epoch_end}")
+    dev = torch.device(device if device is not None else config.device)
+    if data is None:
+        data = regenerate_seed_result_data(seed_result)
+    x = torch.from_numpy(data["x_train"]).float().to(dev)
+    y_bin = _labels_pm1_to_binary(torch.from_numpy(data["y_train"]).float().to(dev))
+    n = x.shape[0]
+    n_full = n if full_data_subsample is None else min(int(full_data_subsample), n)
+    x_full, y_full = data["x_train"][:n_full], data["y_train"][:n_full]
+
+    model = checkpoint_model_from_state(out["model"], out["checkpoint_snapshots"][epoch_start]).to(dev); model.train()
+    optimizers = build_relu_optimizers(model, config)
+    for optimizer, st in zip(optimizers, _as_optimizer_state_list(out["optimizer_snapshots"][epoch_start])):
+        optimizer.load_state_dict(copy.deepcopy(st))
+    lr_hist = out.get("lr_history") or out.get("lr_history_by_group", {}).get("sgd")
+    masks = _parameter_update_masks(model=model, config=config, device=dev)
+    proj = _first_layer_projection_vector(model=model, config=config, device=dev)
+    criterion = torch.nn.BCEWithLogitsLoss()
+    rows = list(range(model.hidden_layers[0].weight.shape[0])) if neuron_rows is None else list(neuron_rows)
+    W1 = model.hidden_layers[0].weight
+    rec = {"step": [], "epoch": [], "batch_loss": [], "grad_rows": [], "update_rows": [], "full_grad_rows": [], "params_rows": [], "lr": []}
+    step = 0
+    for epoch in range(epoch_start, epoch_end):
+        if lr_hist is not None:
+            for optimizer in optimizers:
+                for g in optimizer.param_groups:
+                    g["lr"] = float(lr_hist[epoch])
+        for start in range(0, n, config.batch_size):
+            idx = slice(start, min(start + config.batch_size, n))
+            before = W1.detach()[rows].cpu().clone()
+            if record_params:
+                rec["params_rows"].append(before.numpy())
+            if record_full_data_gradient:
+                fg = log_loss_gradients(model=model, x=x_full, y=y_full, device=str(dev)); model.train()
+                rec["full_grad_rows"].append(fg["hidden_layers.0.weight"][rows].numpy())
+            loss = relu_training_step(model=model, optimizers=optimizers, criterion=criterion, x_batch=x[idx], y_batch_bin=y_bin[idx],
+                                      first_layer_projection_vector=proj, parameter_update_masks=masks)
+            rec["grad_rows"].append(W1.grad.detach()[rows].cpu().numpy().copy())
+            rec["update_rows"].append((W1.detach()[rows].cpu() - before).numpy())
+            rec["batch_loss"].append(float(loss.cpu())); rec["step"].append(step); rec["epoch"].append(epoch); rec["lr"].append(float(optimizers[0].param_groups[0]["lr"]))
+            step += 1
+    params_after = _named_parameter_tensors(model)
+    verification = None
+    if epoch_end in out["checkpoint_snapshots"]:
+        nxt = out["checkpoint_snapshots"][epoch_end]
+        diff = {k: float((params_after[k] - nxt[k].float()).abs().max()) for k in params_after}
+        verification = {"epoch_end": epoch_end, "max_abs_param_diff": diff, "max_abs_param_diff_overall": max(diff.values())}
+        if epoch_end in out["optimizer_snapshots"]:
+            st_next = _as_optimizer_state_list(out["optimizer_snapshots"][epoch_end])[0]["state"]
+            st_now = _state_dict_to_cpu(optimizers[0].state_dict())["state"]
+            verification["max_abs_momentum_diff"] = max(float((st_now[k]["momentum_buffer"].float() - st_next[k]["momentum_buffer"].float()).abs().max()) for k in st_next if "momentum_buffer" in st_next[k])
+    result = {"epoch_start": epoch_start, "epoch_end": epoch_end, "rows": rows, "num_steps": step, "verification": verification, "params_after": params_after,
+              "step": np.array(rec["step"]), "epoch": np.array(rec["epoch"]), "lr": np.array(rec["lr"]), "batch_loss": np.array(rec["batch_loss"]),
+              "grad_rows": np.stack(rec["grad_rows"]), "update_rows": np.stack(rec["update_rows"])}
+    if record_full_data_gradient:
+        result["full_grad_rows"] = np.stack(rec["full_grad_rows"]); result["full_data_subsample"] = n_full
+    if record_params:
+        result["params_rows"] = np.stack(rec["params_rows"])
+    return result
