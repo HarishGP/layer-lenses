@@ -4460,3 +4460,44 @@ Run 11 stores weights and momentum every 1000 steps.
   gradients during the capture of each node (steps 20k-100k), the root-pole pull on the +u_1 /
   -u_2 probes, and the late-phase slow drift.
 - Not pushed; commit only.
+
+## 2026-10-03 — Why runs 10 and 11 have an unstable loss phase and run 9 does not (Q&A, measured)
+
+### User prompts (verbatim)
+- "Why do you think the training loss curves for run 10 and run 11 go through an unstable phase (around epoch 200 for run 10 and epoch 2000 for run 11)? Run 9 for example does not."
+
+### Measurements (top Hessian eigenvalue by power iteration on 100k training points; heavy-ball limit lr*lambda = 2(1+0.9) = 3.8)
+- Run 9: lambda rises to ~165 by step 30k (lr*lambda 3.3-3.4) and then stays at 150-170 while the
+  cosine lr anneals, so lr*lambda falls to 3.0 at 150k and 2.5 at 300k: the run leaves the edge of
+  stability after ~50k steps. Per-1000-step loss std over 100k-150k: 0.0065, falling to 0.001.
+- Run 10: lambda reaches 174 at step 20k and keeps pace with the lr (188 at 100k), so lr*lambda
+  stays at 3.4-3.7 from 20k to 200k steps; loss windows show recurring spikes (min 0.065, max
+  0.14-0.15 per 10-epoch window). Steps 210k-290k are a sequence of catapults: lambda collapses
+  184 -> 155 -> 107 -> 41 (epoch 230, loss 0.137) -> 149 -> 88 -> 106 -> 126 -> 119 -> 164, with
+  the top eigenvector moving from layer 2 (share 0.57) to layer 3 (0.82 at epoch 280). After
+  epoch 290 lambda is ~150-160, lr*lambda 2.3-2.7, and the loss is smooth. Per-1000-step std over
+  150k-300k: 0.015-0.032, then 0.003.
+- Run 11 (lr halved): lambda doubles to track the limit (369 at 50k, 357 at 100k, 388 at 250k, 649
+  at 500k, 1917 at 1M; lr*lambda 3.3-3.7 from 50k to 500k), top eigenvector in layers 2-3
+  (0.58/0.41) throughout. Per-100-step loss spikes to 0.37-0.41 (5-8 per 20k steps) between
+  100k and 180k steps, then none: std 0.001 from 180k on although lr*lambda is still 3.34 and
+  lambda keeps growing. The loss plateaus (0.105 -> 0.083 over 100k-400k) while pinned.
+
+### Reading
+- The unstable phase is edge-of-stability behaviour: progressive sharpening pins lr*lambda near
+  3.8, the period-2 oscillation along the top direction (layers 2-3, i.e. the unit weights and the
+  third layer) grows, and catapults (loss spike, sharpness collapse, re-sharpening) follow. Run 10
+  shows the catapult sequence at 210k-290k; run 11, with half the lr, shows spikes without
+  catastrophic collapses at 100k-180k and then a damped oscillation while still pinned.
+- Run 9 does not sharpen progressively: its lambda saturates at ~160, so the annealing lr takes it
+  off the edge by ~50k steps. The one design difference is the third layer: the balanced
+  +-10-quanta paths give every unit the same large gain to the logit, raising the curvature of the
+  loss w.r.t. layers 2-3 (lambda 174 vs 43 at step 20k) and letting it keep rising as the lr
+  anneals. Halving the lr (run 11) does not remove the edge: the sharpness doubles to compensate.
+- Being at the edge costs loss: the snapshot sits on the oscillation's flank (0.103 vs 0.073 at
+  the valley floor in run 10 at epoch 100), which is the plateau of run 11 at 0.08-0.1.
+
+### Current state / where to pick up
+- If the plateau/spikes matter: leave the edge rather than lower the lr uniformly (faster mid-run
+  lr decay, or a smaller path majority such as 12/8 = +-4 quanta, trading sign robustness), or
+  accept it and analyse the valley-floor trajectory (project out the top eigendirection).
