@@ -4501,3 +4501,22 @@ Run 11 stores weights and momentum every 1000 steps.
 - If the plateau/spikes matter: leave the edge rather than lower the lr uniformly (faster mid-run
   lr decay, or a smaller path majority such as 12/8 = +-4 quanta, trading sign robustness), or
   accept it and analyse the valley-floor trajectory (project out the top eigendirection).
+
+## 2026-10-05 — Section 2b (recorded rows step by step) in the trajectory notebook
+
+### User prompts (verbatim)
+- "In the trajectory plots in the hierarchy_design_runs notebook, there is a line for \"fan-out norm\" for a first hidden layer neuron. Can you define that?"
+- "In the new hierarchy_trajectory_analysis.ipynb notebook. Can you explain the schema of rep object output by replay_interval_from_snapshot? What its keys are and what is stored in them?"
+- "Ok, now explain the the gser object output by first_layer_gradient_series"
+- "Can you add a new section between current sections 2 and 3 of the hieararchy_design_runs.ipynb notebook that plots param_rows?"
+
+### Changes
+- `notebooks/hierarchy_trajectory_analysis.ipynb` (the notebook that has `rep` / `params_rows`;
+  the prompt named the runs notebook): new section 2b between the replay and the gradient
+  sections: cosines of the recorded rows to chosen ODT nodes and their norms step by step across
+  the replayed interval, and each step's movement split into the part along the row (norm
+  change) and perpendicular to it (rotation) next to the mini-batch gradient norm. Left
+  unexecuted for the user's kernel; logic checked in a dry run (interval from epoch 100: probes
+  0-5 drift smoothly, cosines 0.85 / -0.85 / 0.6 / -0.6 for the root and u_1 pairs).
+- Definitions given in chat: fan-out norm of first-layer neuron i = ||W2[:, i]||, the norm of
+  its outgoing column in the second layer; `rep` schema; `gser` columns.
