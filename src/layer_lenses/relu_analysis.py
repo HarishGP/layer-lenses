@@ -2782,3 +2782,191 @@ def replay_interval_from_snapshot(
     if lock is not None:
         result["locked_rows"] = np.stack(rec["locked_rows"]); result["lock_step"] = lock.lock_step.cpu().numpy().copy()
     return result
+
+
+# ---------------------------------------------------------------------------------------------
+# Step anatomy: full-parameter replay of a few steps, loss along an update, curvature
+# ---------------------------------------------------------------------------------------------
+
+
+def replay_steps_full(
+    seed_result: dict[str, Any],
+    epoch_start: int,
+    *,
+    step_from: int = 0,
+    step_to: int | None = None,
+    data: dict[str, np.ndarray] | None = None,
+    device: str | None = None,
+    probe_points: int | None = 20_000,
+) -> dict[str, Any]:
+    """Replay from the snapshot at ``epoch_start`` and record every parameter for steps ``step_from .. step_to-1``.
+
+    Step indices count from the start of ``epoch_start`` (``step_to`` defaults to the next
+    stored snapshot). Steps before ``step_from`` are replayed silently. For each recorded step
+    ``t`` the lists hold, in order: ``params_before`` (dict name -> array, the parameters the
+    step starts from), ``momentum_before`` (the SGD momentum buffers, same keys; empty for a
+    fresh buffer), ``grads`` (the mini-batch gradient the optimizer consumed), ``updates``
+    (``params_after - params_before``), ``batch_loss`` (on the step's mini-batch, before the
+    step), ``probe_loss`` (mean loss on the first ``probe_points`` training points, before the
+    step; None disables it), ``lr`` and ``batch_index``. ``params_after`` / ``momentum_after``
+    are the state after the last recorded step.
+    """
+    out = seed_result["out"]; config: ReLUTrainConfig = seed_result["train_config"]
+    if epoch_start not in out["optimizer_snapshots"]:
+        raise KeyError(f"epoch {epoch_start} has no optimizer snapshot")
+    dev = torch.device(device if device is not None else config.device)
+    if data is None:
+        data = regenerate_seed_result_data(seed_result)
+    x = torch.from_numpy(data["x_train"]).float().to(dev); y_bin = _labels_pm1_to_binary(torch.from_numpy(data["y_train"]).float().to(dev)); n = x.shape[0]
+    steps_per_epoch = -(-n // config.batch_size)
+    later = [e for e in sorted(out["checkpoint_snapshots"]) if e > epoch_start]
+    if step_to is None:
+        if not later:
+            raise ValueError(f"epoch {epoch_start} is the last snapshot")
+        step_to = (later[0] - epoch_start) * steps_per_epoch
+    if not 0 <= step_from < step_to <= (config.epochs - epoch_start) * steps_per_epoch:
+        raise ValueError(f"need 0 <= step_from < step_to <= {(config.epochs - epoch_start) * steps_per_epoch}, got {step_from}, {step_to}")
+    model = checkpoint_model_from_state(out["model"], out["checkpoint_snapshots"][epoch_start]).to(dev); model.train()
+    optimizers = build_relu_optimizers(model, config)
+    for optimizer, st in zip(optimizers, _as_optimizer_state_list(out["optimizer_snapshots"][epoch_start])):
+        optimizer.load_state_dict(copy.deepcopy(st))
+    lr_hist = out.get("lr_history") or next(iter(out.get("lr_history_by_group", {}).values()), None)
+    masks = _parameter_update_masks(model=model, config=config, device=dev); proj = _first_layer_projection_vector(model=model, config=config, device=dev)
+    lock = None
+    if config.first_layer_rotation_lock is not None:
+        lock = rotation_lock_state(model=model, config=config, device=dev, snapshot=out["rotation_lock_snapshots"][epoch_start])
+    criterion = torch.nn.BCEWithLogitsLoss(); names = [nm for nm, _ in model.named_parameters()]
+    def momentum_now() -> dict[str, np.ndarray]:
+        st = optimizers[0].state_dict()["state"]
+        return {nm: st[i]["momentum_buffer"].detach().cpu().numpy().copy() for i, nm in enumerate(names) if i in st and st[i].get("momentum_buffer") is not None}
+    def probe_loss() -> float | None:
+        if probe_points is None:
+            return None
+        with torch.no_grad():
+            return float(criterion(model(x[:probe_points]), y_bin[:probe_points]).cpu())
+    rec: dict[str, list] = {k: [] for k in ("step", "epoch", "batch_index", "lr", "batch_loss", "probe_loss", "params_before", "momentum_before", "grads", "updates")}
+    for t in range(step_to):
+        epoch = epoch_start + t // steps_per_epoch; b = t % steps_per_epoch
+        if b == 0 and lr_hist is not None and not np.isnan(lr_hist[epoch]):
+            for optimizer in optimizers:
+                for g in optimizer.param_groups:
+                    g["lr"] = float(lr_hist[epoch])
+        idx = slice(b * config.batch_size, min((b + 1) * config.batch_size, n))
+        record = t >= step_from
+        if record:
+            before = {nm: p.detach().cpu().numpy().copy() for nm, p in model.named_parameters()}
+            rec["params_before"].append(before); rec["momentum_before"].append(momentum_now()); rec["probe_loss"].append(probe_loss())
+        loss = relu_training_step(model=model, optimizers=optimizers, criterion=criterion, x_batch=x[idx], y_batch_bin=y_bin[idx],
+                                  first_layer_projection_vector=proj, parameter_update_masks=masks, rotation_lock=lock)
+        if record:
+            rec["grads"].append({nm: (p.grad.detach().cpu().numpy().copy() if p.grad is not None else np.zeros(tuple(p.shape), dtype=np.float32)) for nm, p in model.named_parameters()})
+            rec["updates"].append({nm: p.detach().cpu().numpy() - before[nm] for nm, p in model.named_parameters()})
+            rec["batch_loss"].append(float(loss.cpu())); rec["step"].append(t); rec["epoch"].append(epoch); rec["batch_index"].append(b); rec["lr"].append(float(optimizers[0].param_groups[0]["lr"]))
+    result: dict[str, Any] = {k: (np.array(v) if k in ("step", "epoch", "batch_index", "lr", "batch_loss") else v) for k, v in rec.items()}
+    result["probe_loss"] = np.array([np.nan if v is None else v for v in rec["probe_loss"]])
+    result["params_after"] = {nm: p.detach().cpu().numpy().copy() for nm, p in model.named_parameters()}; result["momentum_after"] = momentum_now()
+    result["probe_loss_after"] = probe_loss(); result["epoch_start"] = epoch_start; result["steps_per_epoch"] = steps_per_epoch; result["probe_points"] = probe_points
+    result["momentum"] = float(config.momentum); result["parameter_names"] = names
+    return result
+
+
+def model_from_param_arrays(template_model: ReLUMLP, params: dict[str, np.ndarray], device: str = "cpu") -> ReLUMLP:
+    """Copy of ``template_model`` with its parameters set from ``params`` (name -> array)."""
+    model = copy.deepcopy(template_model).to(torch.device(device))
+    with torch.no_grad():
+        for nm, p in model.named_parameters():
+            p.copy_(torch.as_tensor(np.asarray(params[nm]), dtype=p.dtype, device=p.device))
+    return model
+
+
+def loss_on_points(template_model: ReLUMLP, params: dict[str, np.ndarray], x: np.ndarray, y: np.ndarray, *, device: str = "cpu", batch_size: int = 200_000) -> float:
+    """Mean BCE log loss of the network with parameters ``params`` on ``(x, y)``, ``y`` in {-1, +1}."""
+    model = model_from_param_arrays(template_model, params, device); model.eval(); dev = torch.device(device)
+    crit = torch.nn.BCEWithLogitsLoss(reduction="sum"); total = 0.0
+    with torch.no_grad():
+        for s in range(0, x.shape[0], batch_size):
+            xb = torch.from_numpy(x[s:s + batch_size]).float().to(dev); yb = _labels_pm1_to_binary(torch.from_numpy(y[s:s + batch_size]).float().to(dev))
+            total += float(crit(model(xb), yb).cpu())
+    return total / x.shape[0]
+
+
+def loss_along_update(template_model: ReLUMLP, params: dict[str, np.ndarray], update: dict[str, np.ndarray], x: np.ndarray, y: np.ndarray,
+                      alphas: np.ndarray | list[float] = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0), *, device: str = "cpu") -> pd.DataFrame:
+    """Loss on ``(x, y)`` at ``params + alpha * update`` for each alpha (alpha = 1 is the step the optimizer took)."""
+    rows = [{"alpha": float(a), "loss": loss_on_points(template_model, {k: params[k] + a * update[k] for k in params}, x, y, device=device)} for a in alphas]
+    return pd.DataFrame(rows)
+
+
+def layerwise_update_ablation(template_model: ReLUMLP, params: dict[str, np.ndarray], update: dict[str, np.ndarray], x: np.ndarray, y: np.ndarray, *, device: str = "cpu") -> pd.DataFrame:
+    """Loss on ``(x, y)`` when the update is applied to one parameter tensor only, or to all but one.
+
+    Rows: ``none`` (before the step), ``all`` (the step as taken), ``only <name>`` and ``all but <name>``
+    for every parameter tensor; ``update_norm`` is the norm of that tensor's update.
+    """
+    rows = [{"applied": "none", "loss": loss_on_points(template_model, params, x, y, device=device), "update_norm": 0.0},
+            {"applied": "all", "loss": loss_on_points(template_model, {k: params[k] + update[k] for k in params}, x, y, device=device), "update_norm": float(np.sqrt(sum((u ** 2).sum() for u in update.values())))}]
+    for nm in params:
+        only = {k: params[k] + (update[k] if k == nm else 0.0) for k in params}; rest = {k: params[k] + (0.0 if k == nm else update[k]) for k in params}
+        rows.append({"applied": f"only {nm}", "loss": loss_on_points(template_model, only, x, y, device=device), "update_norm": float(np.linalg.norm(update[nm]))})
+        rows.append({"applied": f"all but {nm}", "loss": loss_on_points(template_model, rest, x, y, device=device), "update_norm": float(np.sqrt(sum((u ** 2).sum() for k, u in update.items() if k != nm)))})
+    return pd.DataFrame(rows)
+
+
+def flatten_parameter_dict(d: dict[str, np.ndarray], names: list[str]) -> np.ndarray:
+    """Concatenate the arrays of ``d`` in the order ``names`` into one flat vector."""
+    return np.concatenate([np.asarray(d[nm]).ravel() for nm in names])
+
+
+_flat = flatten_parameter_dict
+
+
+def hessian_quadratic_form(template_model: ReLUMLP, params: dict[str, np.ndarray], direction: dict[str, np.ndarray], x: np.ndarray, y: np.ndarray, *, device: str = "cpu") -> dict[str, float]:
+    """Curvature of the mean loss on ``(x, y)`` along ``direction``: ``d^T H d / |d|^2``, plus the gradient component ``g . d / |d|``.
+
+    Computed with one Hessian-vector product (double backward) through the ReLU network at ``params``.
+    """
+    model = model_from_param_arrays(template_model, params, device); model.train(); dev = torch.device(device)
+    xb = torch.from_numpy(x).float().to(dev); yb = _labels_pm1_to_binary(torch.from_numpy(y).float().to(dev))
+    plist = [p for _, p in model.named_parameters()]; dlist = [torch.as_tensor(np.asarray(direction[nm]), dtype=p.dtype, device=dev) for nm, p in model.named_parameters()]
+    norm = float(torch.sqrt(sum((d ** 2).sum() for d in dlist)).cpu())
+    if norm == 0.0:
+        raise ValueError("direction must be nonzero")
+    dlist = [d / norm for d in dlist]
+    loss = torch.nn.BCEWithLogitsLoss()(model(xb), yb)
+    grads = torch.autograd.grad(loss, plist, create_graph=True)
+    gd = sum((g * d).sum() for g, d in zip(grads, dlist))
+    hv = torch.autograd.grad(gd, plist)
+    return {"curvature": float(sum((h * d).sum() for h, d in zip(hv, dlist)).cpu()), "grad_along": float(gd.detach().cpu()), "direction_norm": norm, "loss": float(loss.detach().cpu())}
+
+
+def top_hessian_eigenvalue(template_model: ReLUMLP, params: dict[str, np.ndarray], x: np.ndarray, y: np.ndarray, *, device: str = "cpu", iters: int = 30,
+                           mask: dict[str, np.ndarray] | None = None, seed: int = 0, init_direction: dict[str, np.ndarray] | None = None) -> dict[str, Any]:
+    """Largest Hessian eigenvalue of the mean loss on ``(x, y)`` at ``params`` by power iteration.
+
+    ``mask`` (0/1 per parameter tensor, e.g. the training update mask) restricts the eigenproblem to the
+    trainable coordinates. Power iteration finds the eigenvalue of largest magnitude; when that one is
+    negative a second, shifted pass finds the largest algebraic eigenvalue instead. Returns ``lambda_max``,
+    the unit eigenvector (dict name -> array), the fraction of its squared norm in each parameter tensor,
+    and the Rayleigh quotients of every iteration.
+    """
+    model = model_from_param_arrays(template_model, params, device); model.train(); dev = torch.device(device)
+    xb = torch.from_numpy(x).float().to(dev); yb = _labels_pm1_to_binary(torch.from_numpy(y).float().to(dev))
+    named = list(model.named_parameters()); plist = [p for _, p in named]
+    m = [torch.as_tensor(np.asarray(mask[nm]), dtype=p.dtype, device=dev) if mask is not None else torch.ones_like(p) for nm, p in named]
+    gen = torch.Generator(device="cpu").manual_seed(seed)
+    v = [torch.as_tensor(np.asarray(init_direction[nm]), dtype=p.dtype, device=dev) if init_direction is not None else torch.randn(p.shape, generator=gen).to(dev) for nm, p in named]
+    v = [vi * mi for vi, mi in zip(v, m)]; nv = torch.sqrt(sum((vi ** 2).sum() for vi in v)); v = [vi / nv for vi in v]
+    loss = torch.nn.BCEWithLogitsLoss()(model(xb), yb); grads = torch.autograd.grad(loss, plist, create_graph=True)
+    def power(v, shift):                      # power iteration on (H - shift I) restricted by the mask; returns Rayleigh quotients of H and the final vector
+        hist = []
+        for _ in range(iters):
+            gd = sum((g * vi).sum() for g, vi in zip(grads, v)); hv = torch.autograd.grad(gd, plist, retain_graph=True)
+            hv = [h * mi for h, mi in zip(hv, m)]; hist.append(float(sum((h * vi).sum() for h, vi in zip(hv, v)).cpu()))
+            hv = [h - shift * vi for h, vi in zip(hv, v)]
+            nh = torch.sqrt(sum((h ** 2).sum() for h in hv)); v = [h / nh for h in hv]
+        return hist, v
+    history, v = power(v, 0.0)
+    if history[-1] < 0:                       # the dominant eigenvalue by magnitude is negative: shift and iterate again for the largest algebraic one
+        shift = history[-1]; history2, v = power(v, shift); history = history + history2
+    vec = {nm: vi.detach().cpu().numpy().copy() for (nm, _), vi in zip(named, v)}
+    return {"lambda_max": history[-1], "eigenvector": vec, "layer_fraction": {nm: float((vi ** 2).sum()) for nm, vi in vec.items()}, "history": history}

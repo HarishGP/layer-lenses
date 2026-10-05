@@ -4760,3 +4760,45 @@ first layer barely moves and its gate flips are rare and smooth.
 - Adam needs no mechanism that "penalises orthogonal movement": its per-coordinate update is
   bounded by ~lr whatever the gradient size, so the feedback loop cannot start, even though the
   first layer moves more. Logged for later study (adaptive edge of stability), out of scope now.
+
+## 2026-10-05 — Anatomy of run 11's epoch-1759 spike (trajectory notebook section 5)
+
+### User prompts (verbatim)
+- "Ok, consider run 11, epoch 1759 last step the batch loss is greater than 2. \n\nWhat exactly at the previous step causing such a loss shootup? The mini-batch gradient norm doesn't seem too out of the ordinary here.\n\nAdd a section 5 to the hieararchy trajectory analysis notebook analysing this."
+
+### Changes
+- `relu_analysis.py`: `replay_steps_full` (full-parameter, momentum, gradient, update, batch-loss and
+  probe-loss record of a window of steps replayed from a snapshot), `model_from_param_arrays`,
+  `loss_on_points`, `loss_along_update` (line search along the step taken), `layerwise_update_ablation`
+  (step applied to one tensor only / all but one), `hessian_quadratic_form` (curvature along a direction
+  by one HVP), `top_hessian_eigenvalue` (power iteration restricted by the update mask; shifted second
+  pass when the dominant eigenvalue is negative), `flatten_parameter_dict`. Test: the full replay
+  matches the row-level replay, params chain through updates, line search / ablation / curvature /
+  eigenvector consistency. Suite 110 passing.
+- `notebooks/hierarchy_trajectory_analysis.ipynb` section 5: window replay plots (losses, per-layer
+  update and gradient norms, consecutive-step cosines), per-step sharpness table and heavy-ball mode
+  multiplier, line search and layer ablation at a chosen step, the recovery over the next interval.
+  Cells validated headlessly (not executed in the file; the user's kernel was live).
+
+### What happens before the blow-up (run 11, interval from 1750, steps 980-999)
+- Global, not a hard batch: probe loss on 20k fixed points tracks the batch loss (0.83 -> 2.28 -> 5.64).
+- Six-step geometric growth from step 994: update norm 0.042 -> 0.28 (x1.3-1.7 per step), consecutive
+  gradients anti-parallel (cos -0.92..-0.99), consecutive updates anti-parallel (cos -0.85..-0.91).
+  The gradient norm at step 994 (5.7) is ordinary; its sign alternation along an unstable direction is not.
+- The direction is the top Hessian eigenvector (cos 0.92-0.98 with the update), 59% W2 / 40% W3, <1% W1.
+- lr*lambda_max sits at 3.5-3.7 (just under the heavy-ball limit 2(1+beta) = 3.8, mode multiplier 0.95)
+  through steps 980-993, crosses to 4.3 at 994 and reaches 5.1-5.3 at 996-998 (linear growth 2-3 per
+  step; observed 1.3-1.7). Layer-3 gate flips per step rise 0.05% -> 0.5% with the amplitude: the
+  oscillation sharpens its own direction.
+- Step 998 in detail: loss along the update 0.83 (alpha 0) -> 0.19 (0.5) -> 2.28 (1): twice too long.
+  Only W3's part: 0.13; only W2's: 0.36; both: 2.28. The buffer term (0.095) opposes the gradient term
+  (0.25), cos -0.96: momentum is not the driver, the gradient itself doubles each step.
+- Recovery: loss flips 5.6, 2.2, 0.7, 2.3, 0.8, ... back to 0.15 within 40 steps while lr*lambda_max
+  drops from 3.6 to 0.9 and settles at 2.2-2.5 (catapult to a flatter region). Net displacement 0.91,
+  of which W1 0.62: the first layer is kicked by the spike (its gradient is 7x normal at the peak).
+
+### Reading
+Nothing special happens at "the previous step": the spike is the linear instability of heavy-ball SGD
+along the top eigendirection in layers 2-3, armed by progressive sharpening (marginal all epoch) and
+triggered when the sharpness along that direction edges past 3.8/lr; the amplitude then grows
+geometrically for six steps and the loss follows the square of the amplitude.

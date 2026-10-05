@@ -695,3 +695,42 @@ def test_rotation_lock_run_snapshots_save_load_and_replay_exactly(tmp_path) -> N
     W0 = lo["out"]["checkpoint_snapshots"][e_lock]["hidden_layers.0.weight"].numpy()[row]
     for upd in rep["update_rows"][:, 0]:                                                  # every update of a locked row is radial
         assert np.linalg.norm(upd - (upd @ d) * d) < 1e-6 * max(1.0, np.linalg.norm(W0))
+
+
+def test_step_anatomy_helpers_replay_curvature_and_ablation(tmp_path) -> None:
+    from layer_lenses.init_sweep import SweepRunSpec, build_data_chunked, build_tree
+    from layer_lenses.relu_analysis import (designed_run_seed_result, hessian_quadratic_form, layerwise_update_ablation, loss_along_update, loss_on_points,
+                                            replay_interval_from_snapshot, replay_steps_full, top_hessian_eigenvalue, train_relu_mlp_with_optimizer_snapshots, _flat)
+    tree = build_tree(SweepRunSpec(tree_seed=5, data_seed=0, init_seed=0, batch_size=1, dim=12, depth=2))
+    x, y = build_data_chunked(SweepRunSpec(tree_seed=5, data_seed=7, init_seed=0, batch_size=1, dim=12, depth=2, n_train=600), tree, chunk_size=600)
+    data_spec = {"kind": "sweep_chunked", "tree_seed": 5, "data_seed": 7, "n_train": 600, "chunk_size": 600, "eval_seed": 99, "n_eval": 50, "dim": 12, "depth": 2}
+    torch.manual_seed(0); model = ReLUMLP(input_dim=12, hidden_dims=[6, 4], bias=False)
+    mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}; mask["hidden_layers.0.weight"][2:4] = 0.0
+    cfg = ReLUTrainConfig(epochs=6, lr=0.3, batch_size=100, seed=1, device="cpu", snapshot_epochs=(0, 2, 4, 6), lr_scheduler_eta_min_ratio=0.1, optimizer="sgd", momentum=0.9, parameter_update_mask=mask)
+    out = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=cfg)
+    sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 12, "hidden_dims": [6, 4], "bias": False}, data_spec=data_spec, tree=tree, tag="t")
+    d = {"x_train": x, "y_train": y}
+    R = replay_steps_full(sr, 2, step_from=3, step_to=9, data=d, probe_points=200)          # steps 3..8 of the 12-step interval 2 -> 4
+    assert R["step"].tolist() == [3, 4, 5, 6, 7, 8] and R["epoch"].tolist() == [2, 2, 2, 3, 3, 3] and len(R["params_before"]) == 6
+    rep = replay_interval_from_snapshot(sr, 2, data=d)                                          # same steps seen by the row-level replay
+    for i, t in enumerate(R["step"]):
+        assert np.allclose(R["updates"][i]["hidden_layers.0.weight"], rep["update_rows"][t]) and np.allclose(R["grads"][i]["hidden_layers.0.weight"], rep["grad_rows"][t])
+        assert np.isclose(R["batch_loss"][i], rep["batch_loss"][t])
+    for i in range(5):                                                                           # params_before chain through the updates
+        for nm in R["parameter_names"]:
+            assert np.allclose(R["params_before"][i][nm] + R["updates"][i][nm], R["params_before"][i + 1][nm], atol=1e-6)
+    assert np.all(R["updates"][0]["hidden_layers.0.weight"][2:4] == 0.0) and set(R["momentum_before"][0]) == set(R["parameter_names"])
+    tmpl = sr["out"]["model"]; p, u = R["params_before"][0], R["updates"][0]
+    la = loss_along_update(tmpl, p, u, x[:200], y[:200], alphas=[0.0, 1.0])
+    assert np.isclose(la.loss[0], R["probe_loss"][0]) and np.isclose(la.loss[1], R["probe_loss"][1]) and np.isclose(la.loss[0], loss_on_points(tmpl, p, x[:200], y[:200]))
+    ab = layerwise_update_ablation(tmpl, p, u, x[:200], y[:200]); assert ab.applied.tolist()[:2] == ["none", "all"] and len(ab) == 2 + 2 * len(R["parameter_names"]) and np.isclose(ab.loss[1], la.loss[1])
+    q = hessian_quadratic_form(tmpl, p, u, x[:200], y[:200]); assert np.isclose(q["loss"], loss_on_points(tmpl, p, x[:200], y[:200])) and np.isclose(q["direction_norm"], np.linalg.norm(_flat(u, R["parameter_names"])))
+    ev = top_hessian_eigenvalue(tmpl, p, x[:200], y[:200], iters=40, mask=mask)
+    assert ev["lambda_max"] >= q["curvature"] - 1e-4 and abs(sum(ev["layer_fraction"].values()) - 1) < 1e-5 and np.all(ev["eigenvector"]["hidden_layers.0.weight"][2:4] == 0.0)
+    assert abs(hessian_quadratic_form(tmpl, p, ev["eigenvector"], x[:200], y[:200])["curvature"] - ev["lambda_max"]) < 1e-3 * max(1.0, ev["lambda_max"])
+    # the curvature along the top eigenvector matches the finite-difference second derivative of the loss along it (float32 loss, so a step of 0.02)
+    v = ev["eigenvector"]; f = lambda a: loss_on_points(tmpl, {k: p[k] + a * v[k] for k in p}, x[:200], y[:200]); h = 0.02
+    fd = (f(h) - 2 * f(0.0) + f(-h)) / h ** 2
+    assert abs(ev["lambda_max"] - fd) < 0.15 * max(1.0, abs(fd))
+    with pytest.raises(ValueError):
+        replay_steps_full(sr, 2, step_from=5, step_to=5, data=d)
