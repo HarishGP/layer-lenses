@@ -4586,3 +4586,16 @@ the ODT span but not small as inputs to their units.
 - Trace the death of third-layer units step by step in the replay (steps 300k-600k), and test a
   milder scale (0.1) or a probe scale applied only to the in-span part.
 - Not pushed; commit only.
+
+## 2026-10-05 — Epoch window for trajectory_plots; back to run 11
+
+### User prompts (verbatim)
+- "Ok, this was a bad idea. I am going back to analysing run 11.\n\nCan you add an argument to the trajectory_plots function in hierarchy_design_runs notebook to take a start and end epoch and only plot points between the two?"
+
+### Changes
+- `trajectory_plots(run, neuron_ids, node_ids=None, start_epoch=None, end_epoch=None)` in the setup
+  cell of `notebooks/hierarchy_design_runs.ipynb`: inclusive epoch window (in the run's own epoch
+  units) applied to the loss curve, the zero-logit / coverage panels, the probe-target cosines and
+  the alignment series; the default-node choice uses the last snapshot inside the window; an empty
+  window raises with the stored epoch range. Setup cell edited in place, not re-executed (re-run it
+  in the live kernel). Checked in a dry run on run 11 with epochs 100-600.
