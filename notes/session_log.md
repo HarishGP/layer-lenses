@@ -4520,3 +4520,29 @@ Run 11 stores weights and momentum every 1000 steps.
   0-5 drift smoothly, cosines 0.85 / -0.85 / 0.6 / -0.6 for the root and u_1 pairs).
 - Definitions given in chat: fan-out norm of first-layer neuron i = ||W2[:, i]||, the norm of
   its outgoing column in the second layer; `rep` schema; `gser` columns.
+
+## 2026-10-05 — Why a push with cosine 0.48 to u_0 raises row 0's cosine to u_0 (epochs 100-110 of run 11)
+
+### User prompts (verbatim)
+- "If there is no oscillation, I still cannot understand what happens from smooth phase epoch 100 to 110.\n\nFor example with row 0, the cosine with +u_0 stays around 0.85, but the push's cosine with +u_0 never exceeds 0.5. The norm is also increasing (from 1.6 to 1.65), so the push cannot be explained as the init shrinking to zero."
+
+### Measurement (population push on row 0 over 200k points, exact replay of epochs 100-110)
+- Row 0: norm 1.602 -> 1.650, cos(u_0) 0.854 -> 0.890. Push at step 0: |p| 0.00244, along u_0
+  +0.00116, along the row's own off-u_0 direction e -0.00089, orthogonal to both 0.00196, along
+  the row +0.00053 (cosines: 0.48 with u_0, 0.22 with the row).
+- First-order rate d cos = (p.u_0 - cos * p.w_hat)/|w| with the step-0 push held for the interval
+  predicts +0.044; actual +0.036. Displacement over the 1000 steps: +0.100 along u_0, -0.087 along
+  e, 0.093 orthogonal to both, norm change +0.048; the sum of population pushes x lr/(1-beta)
+  along u_0 is +0.102.
+- The off-span part of the push (59% of its energy) has cosine -0.50 with the row's own off-span
+  part and only 0.51 of its energy in the span of the cue rows' off-span components (random: 0.46),
+  so it is not the cues' off-span leaking in. The row's off-span part shrinks 0.80 -> 0.71 and
+  rotates by ~6 degrees over the interval (cosine 0.9954 start to end).
+
+### Reading
+cos(push, u_0) understates what the push does to the row's direction: besides adding u_0 it
+removes the row's leftover init direction (the -0.00089 along e), and both raise cos(w, u_0).
+The remaining sideways part rotates the off-span residue inside the orthogonal complement, which
+changes cos(w, u_0) only at second order. The norm grows because the push's projection on the row
+(+0.0005) is positive: 0.85 x 0.00116 - 0.53 x 0.00089. So the row moves toward u_0 by adding
+u_0 and shedding its init component at the same time, not by a push along u_0.
