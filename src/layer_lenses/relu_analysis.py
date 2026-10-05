@@ -1492,8 +1492,17 @@ def train_relu_mlp_with_optimizer_snapshots(
     y_train: np.ndarray,
     config: ReLUTrainConfig,
     shuffle_each_epoch: bool = False,
+    start_epoch: int = 0,
+    initial_optimizer_states: list[dict[str, Any]] | None = None,
 ) -> dict[str, object]:
     """Train like ``train_relu_mlp`` but also snapshot optimizer / LR / RNG state.
+
+    ``start_epoch`` resumes the schedule at that epoch: the model is taken as the state at
+    ``start_epoch``, the cosine schedulers are advanced to it, and only epochs
+    ``start_epoch .. config.epochs - 1`` are run; ``epoch_losses`` / ``lr_history`` keep
+    length ``config.epochs`` with NaN for the skipped epochs. ``initial_optimizer_states``
+    (one state dict per optimizer, e.g. a stored snapshot) continues the optimizer exactly;
+    without it the optimizer starts fresh (what an optimizer switch wants).
 
     At every epoch ``e`` in ``config.snapshot_epochs`` (taken *before* the
     epoch's mini-batch steps, exactly like ``checkpoint_snapshots``) this records:
@@ -1527,6 +1536,22 @@ def train_relu_mlp_with_optimizer_snapshots(
     schedulers = build_relu_schedulers(optimizers, config)
     group_names = optimizer_group_names(config)
     primary_index = primary_optimizer_index(config)
+    if not 0 <= start_epoch <= config.epochs:
+        raise ValueError(f"start_epoch must be in [0, {config.epochs}], got {start_epoch}")
+    if initial_optimizer_states is not None:
+        states = _as_optimizer_state_list(initial_optimizer_states)
+        if len(states) != len(optimizers):
+            raise ValueError(f"got {len(states)} initial optimizer state(s) for {len(optimizers)} optimizer(s)")
+        for optimizer, st in zip(optimizers, states):
+            optimizer.load_state_dict(copy.deepcopy(st))
+        # the stored state carries the lr of its epoch; put the base lr back so that advancing
+        # the (recursive) cosine scheduler below lands on the schedule's value at start_epoch
+        for optimizer, scheduler in zip(optimizers, schedulers):
+            for group, base in zip(optimizer.param_groups, scheduler.base_lrs):
+                group["lr"] = base; group["initial_lr"] = base
+    for _ in range(start_epoch):          # advance the cosine schedules to start_epoch (sets the lr as well)
+        for scheduler in schedulers:
+            scheduler.step()
 
     permutation_generator: torch.Generator | None = None
     if shuffle_each_epoch:
@@ -1534,14 +1559,14 @@ def train_relu_mlp_with_optimizer_snapshots(
         permutation_generator.manual_seed(config.seed)
 
     num_samples = x.shape[0]
-    losses: list[float] = []
-    lr_history: list[float] = []
-    lr_history_by_group: dict[str, list[float]] = {name: [] for name in group_names}
+    losses: list[float] = [float("nan")] * start_epoch
+    lr_history: list[float] = [float("nan")] * start_epoch
+    lr_history_by_group: dict[str, list[float]] = {name: [float("nan")] * start_epoch for name in group_names}
     checkpoint_snapshots: dict[int, dict[str, torch.Tensor]] = {}
     optimizer_snapshots: dict[int, list[dict[str, Any]]] = {}
     permutation_generator_snapshots: dict[int, torch.Tensor] = {}
 
-    epoch_iter = range(config.epochs + 1)
+    epoch_iter = range(start_epoch, config.epochs + 1)
     if config.show_progress:
         from tqdm.auto import tqdm
 
@@ -1606,6 +1631,7 @@ def train_relu_mlp_with_optimizer_snapshots(
         "optimizer_parameter_names": optimizer_parameter_names(model, config),
         "permutation_generator_snapshots": permutation_generator_snapshots,
         "shuffle_each_epoch": shuffle_each_epoch,
+        "start_epoch": start_epoch,
     }
 
 
@@ -2547,52 +2573,78 @@ def save_designed_run(seed_result: dict[str, Any], folder: str | Path) -> Path:
     """Write a replayable designed-init run as small files (none above ~50 MB).
 
     ``weights.npz``: ``epochs`` and one ``w__<param>`` stack per parameter;
-    ``momentum.npz``: the SGD momentum buffers at the same epochs (``m__<param>``);
-    ``meta.pkl``: everything else (config, specs, tree, design, losses, lr history,
-    final model state) without the snapshots. `load_designed_run` reverses this.
+    ``optimizer_state.npz``: every tensor of the optimizer state at the same epochs, one
+    stack per (state key, parameter) as ``s__<key>__<param>`` (SGD: ``momentum_buffer``;
+    AdamW: ``exp_avg``, ``exp_avg_sq``, ``step``); ``meta.pkl``: everything else (config,
+    specs, tree, design, losses, lr history, final model state, the optimizer's param-group
+    template) without the snapshots. `load_designed_run` reverses this.
     """
     folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
     out = seed_result["out"]; ck = out["checkpoint_snapshots"]; epochs = sorted(ck)
     names = list(ck[epochs[0]].keys())
     np.savez(folder / "weights.npz", epochs=np.array(epochs), **{f"w__{n}": np.stack([ck[e][n].numpy() for e in epochs]) for n in names})
     opt = out["optimizer_snapshots"]
-    mom = {n: [] for n in names}
+    first = _as_optimizer_state_list(opt[epochs[0]])[0]
+    state_keys = sorted({k for st in first["state"].values() for k, v in st.items() if isinstance(v, torch.Tensor)})
+    # a fresh optimizer has an empty state at epoch 0; look at the last snapshot for the keys instead
+    if not state_keys:
+        last = _as_optimizer_state_list(opt[epochs[-1]])[0]
+        state_keys = sorted({k for st in last["state"].values() for k, v in st.items() if isinstance(v, torch.Tensor)})
+    stacks: dict[str, list[np.ndarray]] = {}
     for e in epochs:
         state = _as_optimizer_state_list(opt[e])[0]["state"]
         for i, n in enumerate(names):
-            buf = state.get(i, {}).get("momentum_buffer")
-            mom[n].append(buf.numpy() if buf is not None else np.zeros_like(ck[e][n].numpy()))
-    np.savez(folder / "momentum.npz", epochs=np.array(epochs), **{f"m__{n}": np.stack(v) for n, v in mom.items()})
+            for k in state_keys:
+                val = state.get(i, {}).get(k)
+                if val is None:
+                    val = torch.zeros((), dtype=torch.float32) if k == "step" else torch.zeros_like(ck[e][n])
+                stacks.setdefault(f"s__{k}__{n}", []).append(val.detach().cpu().float().numpy())
+    np.savez(folder / "optimizer_state.npz", epochs=np.array(epochs), **{k: np.stack(v) for k, v in stacks.items()})
+    template = {k: v for k, v in _as_optimizer_state_list(opt[epochs[-1]])[0]["param_groups"][0].items() if k != "params"}
     light_out = {k: v for k, v in out.items() if k not in ("checkpoint_snapshots", "optimizer_snapshots", "permutation_generator_snapshots")}
     light_out["model_state_final"] = {k: v.detach().cpu().clone() for k, v in out["model"].state_dict().items()}
     light_out.pop("model", None)
     meta = {k: v for k, v in seed_result.items() if k != "out"}; meta["out"] = light_out; meta["parameter_names"] = names
+    meta["optimizer_state_keys"] = state_keys; meta["optimizer_param_group"] = template
     with open(folder / "meta.pkl", "wb") as f:
         pickle.dump(meta, f)
     return folder
 
 
 def load_designed_run(folder: str | Path) -> dict[str, Any]:
-    """Load a run written by `save_designed_run` back into a replayable seed_result."""
+    """Load a run written by `save_designed_run` back into a replayable seed_result.
+
+    Reads the current format (``optimizer_state.npz``) and the earlier SGD-only one
+    (``momentum.npz`` with ``m__<param>`` stacks).
+    """
     folder = Path(folder)
     with open(folder / "meta.pkl", "rb") as f:
         meta = pickle.load(f)
-    w = np.load(folder / "weights.npz"); m = np.load(folder / "momentum.npz")
+    w = np.load(folder / "weights.npz")
     epochs = [int(e) for e in w["epochs"]]; names = meta["parameter_names"]
     ck = {e: {n: torch.from_numpy(w[f"w__{n}"][i].copy()) for n in names} for i, e in enumerate(epochs)}
     cfg: ReLUTrainConfig = meta["train_config"]
     lr_hist = meta["out"].get("lr_history") or meta["out"].get("lr_history_by_group", {}).get("sgd")
+    if (folder / "optimizer_state.npz").exists():
+        st_npz = np.load(folder / "optimizer_state.npz"); state_keys = meta["optimizer_state_keys"]; template = dict(meta["optimizer_param_group"])
+        def state_at(i):
+            return {j: {k: torch.as_tensor(np.asarray(st_npz[f"s__{k}__{n}"][i]).copy()) for k in state_keys} for j, n in enumerate(names)}
+    else:
+        m = np.load(folder / "momentum.npz"); template = {"momentum": cfg.momentum, "dampening": 0, "weight_decay": cfg.weight_decay, "nesterov": False, "maximize": False, "foreach": None, "differentiable": False, "fused": None}
+        def state_at(i):
+            return {j: {"momentum_buffer": torch.from_numpy(m[f"m__{n}"][i].copy())} for j, n in enumerate(names)}
     opt = {}
     for i, e in enumerate(epochs):
-        lr = float(lr_hist[e]) if lr_hist is not None and e < len(lr_hist) else cfg.lr
-        state = {j: {"momentum_buffer": torch.from_numpy(m[f"m__{n}"][i].copy())} for j, n in enumerate(names)}
-        opt[e] = [{"state": state, "param_groups": [{"lr": lr, "momentum": cfg.momentum, "dampening": 0, "weight_decay": cfg.weight_decay, "nesterov": False,
-                                                      "maximize": False, "foreach": None, "differentiable": False, "fused": None, "params": list(range(len(names)))}]}]
+        lr = float(lr_hist[e]) if lr_hist is not None and e < len(lr_hist) and not np.isnan(lr_hist[e]) else template.get("lr", cfg.lr)
+        group = dict(template); group["lr"] = lr; group["params"] = list(range(len(names)))
+        if "initial_lr" in group:
+            group["initial_lr"] = float(group["initial_lr"])
+        opt[e] = [{"state": state_at(i), "param_groups": [group]}]
     spec = meta["model_spec"]
     model = ReLUMLP(input_dim=spec["input_dim"], hidden_dims=list(spec["hidden_dims"]), bias=spec.get("bias", False), activation=spec.get("activation", "relu"))
     model.load_state_dict(meta["out"]["model_state_final"])
     out = dict(meta["out"]); out["model"] = model; out["checkpoint_snapshots"] = ck; out["optimizer_snapshots"] = opt
-    result = {k: v for k, v in meta.items() if k not in ("out", "parameter_names")}; result["out"] = out
+    result = {k: v for k, v in meta.items() if k not in ("out", "parameter_names", "optimizer_state_keys", "optimizer_param_group")}; result["out"] = out
     return result
 
 
@@ -2646,7 +2698,7 @@ def replay_interval_from_snapshot(
     optimizers = build_relu_optimizers(model, config)
     for optimizer, st in zip(optimizers, _as_optimizer_state_list(out["optimizer_snapshots"][epoch_start])):
         optimizer.load_state_dict(copy.deepcopy(st))
-    lr_hist = out.get("lr_history") or out.get("lr_history_by_group", {}).get("sgd")
+    lr_hist = out.get("lr_history") or next(iter(out.get("lr_history_by_group", {}).values()), None)
     masks = _parameter_update_masks(model=model, config=config, device=dev)
     proj = _first_layer_projection_vector(model=model, config=config, device=dev)
     criterion = torch.nn.BCEWithLogitsLoss()
@@ -2655,7 +2707,7 @@ def replay_interval_from_snapshot(
     rec = {"step": [], "epoch": [], "batch_loss": [], "grad_rows": [], "update_rows": [], "full_grad_rows": [], "params_rows": [], "lr": []}
     step = 0
     for epoch in range(epoch_start, epoch_end):
-        if lr_hist is not None:
+        if lr_hist is not None and not np.isnan(lr_hist[epoch]):
             for optimizer in optimizers:
                 for g in optimizer.param_groups:
                     g["lr"] = float(lr_hist[epoch])
@@ -2682,7 +2734,9 @@ def replay_interval_from_snapshot(
         if epoch_end in out["optimizer_snapshots"]:
             st_next = _as_optimizer_state_list(out["optimizer_snapshots"][epoch_end])[0]["state"]
             st_now = _state_dict_to_cpu(optimizers[0].state_dict())["state"]
-            verification["max_abs_momentum_diff"] = max(float((st_now[k]["momentum_buffer"].float() - st_next[k]["momentum_buffer"].float()).abs().max()) for k in st_next if "momentum_buffer" in st_next[k])
+            diffs = [float((st_now[k][key].float() - val.float()).abs().max()) for k in st_next for key, val in st_next[k].items()
+                     if isinstance(val, torch.Tensor) and val.dtype.is_floating_point and k in st_now and key in st_now[k]]
+            verification["max_abs_momentum_diff"] = max(diffs) if diffs else 0.0      # all optimizer-state tensors (momentum, Adam moments, step)
     result = {"epoch_start": epoch_start, "epoch_end": epoch_end, "rows": rows, "num_steps": step, "verification": verification, "params_after": params_after,
               "step": np.array(rec["step"]), "epoch": np.array(rec["epoch"]), "lr": np.array(rec["lr"]), "batch_loss": np.array(rec["batch_loss"]),
               "grad_rows": np.stack(rec["grad_rows"]), "update_rows": np.stack(rec["update_rows"])}

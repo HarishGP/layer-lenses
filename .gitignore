@@ -58,3 +58,7 @@ results/designed_init/*
 # The replayable run needs its small metadata pickle (config, specs, tree, losses; 0.4 MB)
 !results/designed_init/hierarchy_replayable/replay/meta.pkl
 !results/designed_init/hierarchy_replayable_probe001/replay/meta.pkl
+!results/designed_init/hierarchy_branch750_sgd_frozenL1/
+!results/designed_init/hierarchy_branch750_adam_frozenL1/
+!results/designed_init/hierarchy_branch750_sgd_frozenL1/replay/meta.pkl
+!results/designed_init/hierarchy_branch750_adam_frozenL1/replay/meta.pkl

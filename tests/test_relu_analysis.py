@@ -594,7 +594,7 @@ def test_designed_run_save_load_and_interval_replay_are_exact(tmp_path) -> None:
     regen = regenerate_seed_result_data(sr)
     assert np.allclose(regen["x_train"], x) and np.array_equal(regen["y_train"], y) and regen["x_eval"].shape == (50, 12)
     folder = save_designed_run(sr, tmp_path / "run")
-    assert {p.name for p in folder.iterdir()} == {"weights.npz", "momentum.npz", "meta.pkl"}
+    assert {p.name for p in folder.iterdir()} == {"weights.npz", "optimizer_state.npz", "meta.pkl"}
     lo = load_designed_run(folder)
     assert sorted(lo["out"]["checkpoint_snapshots"]) == [0, 2, 4, 6, 8]
     for e in (0, 4, 8):
@@ -611,3 +611,39 @@ def test_designed_run_save_load_and_interval_replay_are_exact(tmp_path) -> None:
     assert rep2["epoch_end"] == 8 and rep2["verification"]["max_abs_param_diff_overall"] == 0.0
     with pytest.raises(ValueError):
         replay_interval_from_snapshot(lo, 8, data=regen)
+
+
+def test_resume_from_snapshot_reproduces_the_run_and_adam_runs_save_load_replay(tmp_path) -> None:
+    from layer_lenses.init_sweep import SweepRunSpec, build_data_chunked, build_tree
+    from layer_lenses.relu_analysis import (designed_run_seed_result, load_designed_run, replay_interval_from_snapshot, save_designed_run,
+                                            train_relu_mlp_with_optimizer_snapshots, checkpoint_model_from_state)
+    tree = build_tree(SweepRunSpec(tree_seed=5, data_seed=0, init_seed=0, batch_size=1, dim=12, depth=2))
+    x, y = build_data_chunked(SweepRunSpec(tree_seed=5, data_seed=7, init_seed=0, batch_size=1, dim=12, depth=2, n_train=600), tree, chunk_size=600)
+    data_spec = {"kind": "sweep_chunked", "tree_seed": 5, "data_seed": 7, "n_train": 600, "chunk_size": 600, "eval_seed": 99, "n_eval": 50, "dim": 12, "depth": 2}
+    torch.manual_seed(0); model = ReLUMLP(input_dim=12, hidden_dims=[6, 4], bias=False)
+    cfg = ReLUTrainConfig(epochs=8, lr=0.05, batch_size=100, seed=1, device="cpu", snapshot_epochs=(0, 2, 4, 6, 8), lr_scheduler_eta_min_ratio=0.1, optimizer="sgd", momentum=0.9)
+    full = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=cfg)
+    # resume at epoch 4 from the stored weights and momentum: identical to the original run from there on
+    m4 = checkpoint_model_from_state(full["model"], full["checkpoint_snapshots"][4])
+    res = train_relu_mlp_with_optimizer_snapshots(model=m4, x_train=x, y_train=y, config=cfg, start_epoch=4, initial_optimizer_states=full["optimizer_snapshots"][4])
+    assert res["start_epoch"] == 4 and sorted(res["checkpoint_snapshots"]) == [4, 6, 8] and len(res["epoch_losses"]) == 8 and np.isnan(res["epoch_losses"][:4]).all()
+    assert np.allclose(res["lr_history"][4:], full["lr_history"][4:]) and np.allclose(res["epoch_losses"][4:], full["epoch_losses"][4:])
+    for k, v in full["checkpoint_snapshots"][8].items():
+        assert torch.equal(res["checkpoint_snapshots"][8][k], v)
+    # a branch with a frozen first layer and a fresh AdamW optimizer from the same epoch; save / load / replay exactly
+    mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}; mask["hidden_layers.0.weight"][:] = 0.0
+    cfg_adam = ReLUTrainConfig(epochs=8, lr=1e-3, batch_size=100, seed=1, device="cpu", snapshot_epochs=(4, 6, 8), lr_scheduler_eta_min_ratio=0.1, optimizer="adamw", parameter_update_mask=mask)
+    m4b = checkpoint_model_from_state(full["model"], full["checkpoint_snapshots"][4])
+    adam = train_relu_mlp_with_optimizer_snapshots(model=m4b, x_train=x, y_train=y, config=cfg_adam, start_epoch=4)
+    assert torch.equal(adam["checkpoint_snapshots"][8]["hidden_layers.0.weight"], full["checkpoint_snapshots"][4]["hidden_layers.0.weight"])   # first layer frozen
+    sr = designed_run_seed_result(out=adam, train_config=cfg_adam, model_spec={"input_dim": 12, "hidden_dims": [6, 4], "bias": False}, data_spec=data_spec, tree=tree, tag="adam-branch")
+    folder = save_designed_run(sr, tmp_path / "adam"); lo = load_designed_run(folder)
+    assert {p.name for p in folder.iterdir()} == {"weights.npz", "optimizer_state.npz", "meta.pkl"}
+    st = lo["out"]["optimizer_snapshots"][6][0]["state"][1]; assert {"exp_avg", "exp_avg_sq", "step"} <= set(st)
+    rep = replay_interval_from_snapshot(lo, 6, data={"x_train": x, "y_train": y}, record_full_data_gradient=True, full_data_subsample=100, neuron_rows=[0, 1])
+    assert rep["epoch_end"] == 8 and rep["verification"]["max_abs_param_diff_overall"] == 0.0 and rep["verification"]["max_abs_momentum_diff"] == 0.0
+    assert np.all(rep["update_rows"] == 0.0)                                   # frozen first layer never moves
+    # the SGD run still round-trips through the new format
+    sr2 = designed_run_seed_result(out=full, train_config=cfg, model_spec={"input_dim": 12, "hidden_dims": [6, 4], "bias": False}, data_spec=data_spec, tree=tree, tag="sgd")
+    lo2 = load_designed_run(save_designed_run(sr2, tmp_path / "sgd"))
+    rep2 = replay_interval_from_snapshot(lo2, 2, data={"x_train": x, "y_train": y}); assert rep2["verification"]["max_abs_param_diff_overall"] == 0.0 and rep2["verification"]["max_abs_momentum_diff"] == 0.0
