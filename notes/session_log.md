@@ -4546,3 +4546,43 @@ The remaining sideways part rotates the off-span residue inside the orthogonal c
 changes cos(w, u_0) only at second order. The norm grows because the push's projection on the row
 (+0.0005) is positive: 0.85 x 0.00116 - 0.53 x 0.00089. So the row moves toward u_0 by adding
 u_0 and shedding its init component at the same time, not by a push along u_0.
+
+## 2026-10-05 — Run 12: run 11 with the probe rows scaled by 0.01 at init; run selector in the trajectory notebook
+
+### User prompts (verbatim)
+- "Ok, can you create a new run  12, with only one change from run 11, where the probe incoming weight vectors at initialisation are multiplied by 0.01? \n\nKeep the trajectory_analysis notebook flexible, i.e. should be able to choose at the beginning if I want to analyse run 11 or run 12 (or any future replayable run)."
+
+### Changes
+- `HierarchyDesignSpec.probe_scale` (default 1.0): multiplies the 30 probe rows at the very end of
+  the construction, after the row-norm rescale (otherwise the rescale would undo it). Test.
+- Script `results/designed_init/run_hierarchy_replayable_probe001.py` = run 11's script with
+  `probe_scale=0.01`; outputs tracked under `results/designed_init/hierarchy_replayable_probe001/`.
+- `notebooks/hierarchy_trajectory_analysis.ipynb`: `RUN_NAME` in the first code cell selects any
+  folder under `results/designed_init/` that holds a `replay/meta.pkl`; the available ones are
+  listed. Executed on run 11 (default). Runs notebook section 12 with a third-layer-death cell.
+
+### Results (run 12 vs run 11)
+- Faster first-layer capture: root pair at cosine 0.95 by step 5k (run 11: 15-16k), -u_1 / +u_2
+  at 17-19k (37k / 32k). Loss 0.3 at 41k (34k); then slower: 0.19 at 100k, 0.125 at 500k
+  (0.113, 0.065). 14/15 internal nodes on own probes at the intended pole from 100k (node 8
+  missed), 17/30 probes at the intended pole (24/30), 0 opposite, 31/31 covered; no path flips;
+  14 units dropped their probe entry (8).
+- Late collapse: third-layer units never active on 100k test points: 3 at 300k, 15 at 400k, 23 at
+  500k, 36/40 at the end (active fraction 1.0 -> 0.54 -> 0.05 -> 0); loss spikes at ~400k (0.73)
+  and a fully dead moment at ~600k (loss 0.693, 99.9% zero logits); settles into the half-dead
+  solution (zero logits on the negative class, loss 0.378, test error 50% default / 3.4% strict).
+  Run 11 never has a dead third-layer unit.
+- Difference in the representation: second-layer units active on ~74% of inputs throughout in
+  run 12 vs ~35% in run 11 (with the probes near zero the units are gated by the cue blocks
+  alone); |W2| 60 vs 47; |wo| shrinks to 6 mid-run and grows to 26 as the third layer dies.
+
+### Reading
+Scaling the probes down speeds the rotation of the probe rows (angular velocity ~ push/|w|) but
+removes the probe's role in gating its unit; the second layer becomes dense, and the third layer
+is then driven to death during the edge-of-stability phase. The design wants the probes small in
+the ODT span but not small as inputs to their units.
+
+### Current state / where to pick up
+- Trace the death of third-layer units step by step in the replay (steps 300k-600k), and test a
+  milder scale (0.1) or a probe scale applied only to the in-span part.
+- Not pushed; commit only.

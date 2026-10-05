@@ -1,0 +1,4 @@
+linear_frozen_kaiming_cosine_replayable_probe001_80_seed0: data (1000000, 100) float32; flipped units [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29], zero-path units [], logit rms 0.003
+trained in 25.6 min; snapshots 1001
+linear_frozen_kaiming_cosine_replayable_probe001_80_seed0: final epoch loss 0.3785, train log loss 0.3781, test error 0.5005 (strict 0.0335); epochs (of 100 steps) to 0.3/0.2/0.1/0.05: 415/817/-1/-1; nodes covered 31/31; on-target end [1.0, 0.75, 0.75, 0.44]; 25.7 min
+ALL DONE

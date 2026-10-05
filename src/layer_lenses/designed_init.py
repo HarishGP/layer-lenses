@@ -607,6 +607,9 @@ class HierarchyDesignSpec:
     # each output-sign group, so every third-layer row has exactly width2/2 ones.
     layer3_mode: str = "random"
     layer3_majority: int = 15
+    # Multiplies the 30 probe rows at the very end of the construction (after the row-norm
+    # rescale), so e.g. 0.01 starts the probes near the origin while cues keep their norm.
+    probe_scale: float = 1.0
     # If set, every row of every layer is rescaled to these norms (layers 1..4),
     # overriding eps and the layer scales, so the init has the row norms of a standard
     # scheme while keeping the sign structure. See `standard_row_norms`.
@@ -809,6 +812,9 @@ def build_hierarchy_weights(spec: HierarchyDesignSpec, tree: COBODTTree) -> tupl
             M = weights[key]
             norms = np.linalg.norm(M, axis=1, keepdims=True)
             weights[key] = np.where(norms > 0, M / np.maximum(norms, 1e-30) * target, 0.0)
+    if spec.probe_scale != 1.0:
+        weights["hidden_layers.0.weight"] = weights["hidden_layers.0.weight"].copy()
+        weights["hidden_layers.0.weight"][: spec.n_probes] *= spec.probe_scale
     meta = {"unit_probe": unit_probe, "labels": hierarchy_labels(spec), "targets": HIERARCHY_TARGETS,
             "cue_rows": list(range(spec.cue_first_row, spec.cue_first_row + 2 * NUM_LEVEL4)),
             "unit_path_sign": unit_path_sign, "flipped_units": flipped_units, "zero_path_units": [int(u) for u in np.nonzero(unit_path_sign == 0)[0]]}

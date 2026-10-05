@@ -45,6 +45,8 @@ results/designed_init/*
 !results/designed_init/hierarchy_kaiming_cosine_cueeq/
 !results/designed_init/hierarchy_kaiming_cosine_balpaths/
 !results/designed_init/hierarchy_replayable/
+!results/designed_init/hierarchy_replayable_probe001/
+!results/designed_init/hierarchy_replayable_probe001/replay/meta.pkl
 
 # Large model artifacts
 *.pt

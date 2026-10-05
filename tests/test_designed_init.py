@@ -421,3 +421,18 @@ def test_layer3_balanced_paths_gives_equal_alternating_unit_paths() -> None:
         build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", layer3_mode="balanced_paths"), tree)
     with pytest.raises(ValueError):
         build_hierarchy_weights(HierarchyDesignSpec(width1=62, width2=30, units_per_level=(1, 1, 1, 1), subset_mode="all", output_signs="balanced", layer3_mode="balanced_paths", layer3_majority=10), tree)
+
+
+def test_probe_scale_applies_after_the_row_rescale() -> None:
+    from layer_lenses.designed_init import build_hierarchy_weights, standard_scale_spec
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    base = dict(width1=80, width2=30, width3=40, units_per_level=(1, 1, 1, 1), subset_mode="all", cue_mode="linear", cue_offspan_ratio=0.2, seed=0,
+                output_signs="balanced", path_sign_cues=True, layer3_mode="balanced_paths", cue_block_scale="inv_sqrt")
+    w1 = build_hierarchy_weights(standard_scale_spec("kaiming", **base), tree)[0]
+    w2 = build_hierarchy_weights(standard_scale_spec("kaiming", **base, probe_scale=0.01), tree)[0]
+    A, B = w1["hidden_layers.0.weight"], w2["hidden_layers.0.weight"]
+    assert np.allclose(np.linalg.norm(A, axis=1), np.sqrt(2))
+    assert np.allclose(B[:30], 0.01 * A[:30]) and np.allclose(np.linalg.norm(B[:30], axis=1), 0.01 * np.sqrt(2))
+    assert np.array_equal(B[30:], A[30:])
+    for k in ("hidden_layers.1.weight", "hidden_layers.2.weight", "output_layer.weight"):
+        assert np.array_equal(w1[k], w2[k])
