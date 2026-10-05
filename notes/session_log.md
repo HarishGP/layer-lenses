@@ -4726,3 +4726,37 @@ first layer barely moves and its gate flips are rare and smooth.
 - Variants of the lock: snap to the target normal at the crossing; threshold 0.999; lock on
   rotation rate. Variants of run 15: Adam from epoch 0, or SGD->Adam at other epochs.
 - Not pushed; commit only.
+
+## 2026-10-05 — Is first-layer gate jitter the cause of the loss spikes? (per-step gate flips in runs 11, 13, 15, 16)
+
+### User prompts (verbatim)
+- "Thanks, I am not super keen on just getting the best loss possible. I have seen multiple 0.5% test error runs with Adam even with 1M training points and purely random inits. I am more keen to understand the parameter learning mechanism that gets to some coarse performance on the DOT data.\n\nNow, back to the task at hand. I guess it is fair to say that first layer neuron active region half spaces jittering over the ODT hyperplanes is the cause for the intermediate fluctuations? Run 11 epoch 600 to 1800, loss spikes almost twice as mush as the loss -- e.g. epoch 1750 loss spikes from 0.1 to 0.4 and back to 0.1).  \n\nRun 13 minimises these spikes, but still has some spikes with about 10% the magnitude.  Run 16 has even less spikes (except for one 10% spike around epoch 850). The main difference of these runs from run 11 is that layer 1 neurons are frozen so that they never jitter around an ODT hyperplane. \n\nBut Run 14 and 15 also not having spikes is not explained by this though. In run 15 this first layer jitter can absolutely happen, but still I see no fluctuation. I guess it is possible that the adaptive step size of Adam purposefully ensures that all orthogonal movement of the neurons to its chosen ODT hyperplane are heavily penalised. But I am not able to wrap my head around how it could potentially do this. Maybe it is just an adaptive learning rate phenomenon. Either way, analysing Adam is beyond our scope right now, but it is something to log for study."
+
+### Measurement (exact replays, 20k training points, 48 trainable first-layer rows; per-step gate flip = fraction of (point, row) ReLU gates that change sign between consecutive steps)
+| epochs | run | batch loss mean / max | gate flips per step (median / max) | per-step max-row rotation (median over steps) | net rotation over window (median / max row) |
+|---|---|---|---|---|---|
+| 1000-1010 | 11 | 0.112 / 0.186 | 0.013% / 0.016% | 0.052 deg | 0.28 / 1.09 deg |
+| 1000-1010 | 13 | 0.131 / 0.188 | 0 / 0 | noise floor (0.028 deg) | 0 |
+| 1000-1010 | 15 | 0.078 / 0.093 | 0.023% / 0.028% | 0.084 deg | 0.30 / 3.67 deg |
+| 1000-1010 | 16 | 0.154 / 0.232 | 0.007% / 0.009% | 0.052 deg | 0.02 / 2.50 deg |
+| 1740-1760 | 11 | 0.098 / 2.235 (spike at epoch 1759) | 0.012% / 0.032% | 0.048 deg | 0.19 / 1.69 deg |
+| 1740-1760 | 15 | 0.063 / 0.084 | 0.017% / 0.022% | 0.079 deg | 0.31 / 5.78 deg |
+| 1740-1760 | 16 | 0.136 / 0.182 | 0.005% / 0.008% | 0.048 deg | 0.01 / 0.87 deg |
+| 2500-2510 | 11 / 15 / 16 | 0.087/0.160, 0.055/0.076, 0.130/0.153 | 0.011%, 0.014%, 0.004% | 0.048, 0.063, 0.044 deg | — |
+- Within run 11's spike the flips rise from 0.016% to 0.032% and the max-row rotation from 0.07
+  to 0.2 degrees only at the peak steps (correlation of flips with |loss change| 0.42): the first
+  layer is kicked by the blown-up gradient, it does not lead.
+- Run 13's nonzero "rotation" of 0.028 degrees with a frozen first layer is the float32 noise
+  floor of arccos near 1; run 11's per-step rotations are barely above it.
+
+### Reading
+- Jitter of first-layer gates across the ODT hyperplanes is not the cause: run 15 (AdamW, free
+  first layer) flips about twice as many gates per step as run 11 and rotates its rows more, with
+  no spikes; runs 13 and 16 flip none or half as many, also with no spikes. The spikes are the
+  heavy-ball instability of layers 2-3 at lr*lambda ~ 3.8 (positive feedback: larger gradient ->
+  larger fixed-lr step -> larger loss), for which slow first-layer drift is the trigger that keeps
+  pushing the oscillation over the edge; with the first layer fixed or direction-locked the
+  oscillation stays bounded (run 13's residual ~10% spikes are that oscillation).
+- Adam needs no mechanism that "penalises orthogonal movement": its per-coordinate update is
+  bounded by ~lr whatever the gradient size, so the feedback loop cannot start, even though the
+  first layer moves more. Logged for later study (adaptive edge of stability), out of scope now.
