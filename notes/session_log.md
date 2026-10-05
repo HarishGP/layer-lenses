@@ -4599,3 +4599,28 @@ the ODT span but not small as inputs to their units.
   the alignment series; the default-node choice uses the last snapshot inside the window; an empty
   window raises with the stored epoch range. Setup cell edited in place, not re-executed (re-run it
   in the live kernel). Checked in a dry run on run 11 with epochs 100-600.
+
+## 2026-10-05 — Do the loss fluctuations start because aligned first-layer rows sweep across decision boundaries? (Q&A, measured)
+
+### User prompts (verbatim)
+- "In run 11, I see a curious thing. The loss fluctuations start around 600 eopochs, the exact time around where all the first layer neurons capture all the ODT hyperplanes. \n\nDo you think the following is a feasible explanation? The loss is smooth as longs as the (non-frozen) first layer neurons are far from the ODT hyperplanes. Once they all get close to the ODT hyperplanes any rotation in them sweeps across a decision boundary in the data causing swift whiplash as ReLU units switch on and off for points they were not supposed to and thereby causing huge gradient changes."
+
+### Measurements (run 11, 200k training points)
+- Timeline: own-probe nodes 1 / 2 / 13 / 14 / 15 at steps 20k / 30k / 40k / 50k / 80k; lambda_max
+  11 / 66 / 256 / 369 / 369 and lr*lambda 0.11 / 0.66 / 2.55 / 3.66 / 3.64 (limit 3.8); loss std
+  over the following 10k steps 0.057 (escape) -> 0.011 at 40k -> 0.026-0.042 from 60k on. The
+  fluctuations begin when lr*lambda reaches the limit, which happens as the capture completes.
+- Where the sharpness lives: the top eigenvector has 0.3-0.7% of its energy in layer 1, 72% in
+  layer 2 and 26% in layer 3 at step 60k. Curvature along a random rotation of all free first-layer
+  rows is 0.23, along a random layer-2 direction 0.41, against lambda_max 362.
+- Sweeping test at step 60k: rotating every free row by 1 degree flips 0.33% of (point, row) gates
+  (23% of points have some flipped gate among 48 free rows) and raises the loss from 0.145 to 0.160,
+  smoothly; the probe rows actually rotate 0.27 degrees (median, max 1.25) per 1000 steps then.
+
+### Reading
+Timing right, location wrong: capture does trigger the fluctuations, but not through first-layer
+rotations sweeping boundaries. Once the first layer presents the hyperplane indicators, the loss
+becomes stiff in the weights that combine them (layers 2-3; curvature w.r.t. W2 scales with the
+second moments of the now label-aligned features), lr*lambda hits the heavy-ball limit, and the
+run oscillates across that valley (period 2) with layer-2/3 ReLU units switching each step. The
+first layer barely moves and its gate flips are rare and smooth.
