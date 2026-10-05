@@ -1,0 +1,17 @@
+{
+  "branch_of": "linear_frozen_kaiming_cosine_replayable_80_seed0",
+  "branch_epoch": 750,
+  "first_layer_frozen": false,
+  "cues": "frozen",
+  "optimizer": {
+    "optimizer": "adamw",
+    "lr": 0.001,
+    "momentum": 0.0,
+    "weight_decay": 0.0
+  },
+  "optimizer_state_continued": false,
+  "epochs": 10000,
+  "snapshot_every_epochs": 10,
+  "eta_min_ratio": 0.05,
+  "batch": 10000
+}

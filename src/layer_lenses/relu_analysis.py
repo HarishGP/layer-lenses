@@ -36,6 +36,7 @@ from layer_lenses.relu_training import (
     optimizer_parameter_names,
     primary_optimizer_index,
     relu_training_step,
+    rotation_lock_state,
     train_relu_mlp,
 )
 from layer_lenses.training import set_seed
@@ -1494,6 +1495,7 @@ def train_relu_mlp_with_optimizer_snapshots(
     shuffle_each_epoch: bool = False,
     start_epoch: int = 0,
     initial_optimizer_states: list[dict[str, Any]] | None = None,
+    initial_rotation_lock: dict[str, np.ndarray] | None = None,
 ) -> dict[str, object]:
     """Train like ``train_relu_mlp`` but also snapshot optimizer / LR / RNG state.
 
@@ -1511,7 +1513,11 @@ def train_relu_mlp_with_optimizer_snapshots(
     - ``optimizer_snapshots[e]``: ``optimizer.state_dict()`` on CPU (Adam moments
       and step counts, or SGD momentum buffers, plus the current ``lr``),
     - ``permutation_generator_snapshots[e]``: state of the CPU generator that
-      draws the mini-batch permutation (only when ``shuffle_each_epoch``).
+      draws the mini-batch permutation (only when ``shuffle_each_epoch``),
+    - ``rotation_lock_snapshots[e]``: the first-layer rotation-lock state (which rows are
+      locked, their locked directions, the step each locked at) when
+      ``config.first_layer_rotation_lock`` is set; ``initial_rotation_lock`` restores such a
+      snapshot when resuming. ``rotation_lock_final`` is the state at the end.
 
     With ``shuffle_each_epoch=False`` (the default, matching the current
     ``train_relu_mlp``) the permutation is the identity in every epoch.
@@ -1538,6 +1544,8 @@ def train_relu_mlp_with_optimizer_snapshots(
     primary_index = primary_optimizer_index(config)
     if not 0 <= start_epoch <= config.epochs:
         raise ValueError(f"start_epoch must be in [0, {config.epochs}], got {start_epoch}")
+    steps_per_epoch = -(-x.shape[0] // config.batch_size)
+    rotation_lock = rotation_lock_state(model=model, config=config, device=device, snapshot=initial_rotation_lock, step=start_epoch * steps_per_epoch)
     if initial_optimizer_states is not None:
         states = _as_optimizer_state_list(initial_optimizer_states)
         if len(states) != len(optimizers):
@@ -1565,6 +1573,7 @@ def train_relu_mlp_with_optimizer_snapshots(
     checkpoint_snapshots: dict[int, dict[str, torch.Tensor]] = {}
     optimizer_snapshots: dict[int, list[dict[str, Any]]] = {}
     permutation_generator_snapshots: dict[int, torch.Tensor] = {}
+    rotation_lock_snapshots: dict[int, dict[str, np.ndarray]] = {}
 
     epoch_iter = range(start_epoch, config.epochs + 1)
     if config.show_progress:
@@ -1582,6 +1591,8 @@ def train_relu_mlp_with_optimizer_snapshots(
             ]
             if permutation_generator is not None:
                 permutation_generator_snapshots[epoch] = permutation_generator.get_state().clone()
+            if rotation_lock is not None:
+                rotation_lock_snapshots[epoch] = rotation_lock.snapshot()
 
         if epoch == config.epochs:
             break
@@ -1606,6 +1617,7 @@ def train_relu_mlp_with_optimizer_snapshots(
                 y_batch_bin=y_bin[idx],
                 first_layer_projection_vector=first_layer_projection_vector,
                 parameter_update_masks=parameter_update_masks,
+                rotation_lock=rotation_lock,
             )
             batch_n = end - start
             running_loss += float(loss.cpu()) * batch_n
@@ -1632,6 +1644,8 @@ def train_relu_mlp_with_optimizer_snapshots(
         "permutation_generator_snapshots": permutation_generator_snapshots,
         "shuffle_each_epoch": shuffle_each_epoch,
         "start_epoch": start_epoch,
+        "rotation_lock_snapshots": rotation_lock_snapshots,
+        "rotation_lock_final": rotation_lock.snapshot() if rotation_lock is not None else None,
     }
 
 
@@ -2575,9 +2589,11 @@ def save_designed_run(seed_result: dict[str, Any], folder: str | Path) -> Path:
     ``weights.npz``: ``epochs`` and one ``w__<param>`` stack per parameter;
     ``optimizer_state.npz``: every tensor of the optimizer state at the same epochs, one
     stack per (state key, parameter) as ``s__<key>__<param>`` (SGD: ``momentum_buffer``;
-    AdamW: ``exp_avg``, ``exp_avg_sq``, ``step``); ``meta.pkl``: everything else (config,
-    specs, tree, design, losses, lr history, final model state, the optimizer's param-group
-    template) without the snapshots. `load_designed_run` reverses this.
+    AdamW: ``exp_avg``, ``exp_avg_sq``, ``step``); ``rotation_lock.npz`` (only for runs with a
+    first-layer rotation lock): the locked mask at every snapshot epoch plus the locked
+    directions and lock steps, which never change once set; ``meta.pkl``: everything else
+    (config, specs, tree, design, losses, lr history, final model state, the optimizer's
+    param-group template) without the snapshots. `load_designed_run` reverses this.
     """
     folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
     out = seed_result["out"]; ck = out["checkpoint_snapshots"]; epochs = sorted(ck)
@@ -2601,7 +2617,11 @@ def save_designed_run(seed_result: dict[str, Any], folder: str | Path) -> Path:
                 stacks.setdefault(f"s__{k}__{n}", []).append(val.detach().cpu().float().numpy())
     np.savez(folder / "optimizer_state.npz", epochs=np.array(epochs), **{k: np.stack(v) for k, v in stacks.items()})
     template = {k: v for k, v in _as_optimizer_state_list(opt[epochs[-1]])[0]["param_groups"][0].items() if k != "params"}
-    light_out = {k: v for k, v in out.items() if k not in ("checkpoint_snapshots", "optimizer_snapshots", "permutation_generator_snapshots")}
+    if out.get("rotation_lock_snapshots"):
+        rl = out["rotation_lock_snapshots"]; fin = out["rotation_lock_final"] if out.get("rotation_lock_final") is not None else rl[epochs[-1]]
+        np.savez(folder / "rotation_lock.npz", epochs=np.array(epochs), locked=np.stack([rl[e]["locked"] for e in epochs]), step=np.array([int(rl[e]["step"]) for e in epochs]),
+                 direction=np.asarray(fin["direction"]), lock_step=np.asarray(fin["lock_step"]))
+    light_out = {k: v for k, v in out.items() if k not in ("checkpoint_snapshots", "optimizer_snapshots", "permutation_generator_snapshots", "rotation_lock_snapshots")}
     light_out["model_state_final"] = {k: v.detach().cpu().clone() for k, v in out["model"].state_dict().items()}
     light_out.pop("model", None)
     meta = {k: v for k, v in seed_result.items() if k != "out"}; meta["out"] = light_out; meta["parameter_names"] = names
@@ -2644,6 +2664,10 @@ def load_designed_run(folder: str | Path) -> dict[str, Any]:
     model = ReLUMLP(input_dim=spec["input_dim"], hidden_dims=list(spec["hidden_dims"]), bias=spec.get("bias", False), activation=spec.get("activation", "relu"))
     model.load_state_dict(meta["out"]["model_state_final"])
     out = dict(meta["out"]); out["model"] = model; out["checkpoint_snapshots"] = ck; out["optimizer_snapshots"] = opt
+    if (folder / "rotation_lock.npz").exists():
+        rl = np.load(folder / "rotation_lock.npz"); direction = rl["direction"]; lock_step = rl["lock_step"]
+        out["rotation_lock_snapshots"] = {e: {"locked": rl["locked"][i].copy(), "direction": np.where(rl["locked"][i][:, None], direction, 0.0).astype(direction.dtype),
+                                              "lock_step": np.where(rl["locked"][i], lock_step, -1), "step": np.int64(rl["step"][i])} for i, e in enumerate(epochs)}
     result = {k: v for k, v in meta.items() if k not in ("out", "parameter_names", "optimizer_state_keys", "optimizer_param_group")}; result["out"] = out
     return result
 
@@ -2672,7 +2696,9 @@ def replay_interval_from_snapshot(
     ``record_full_data_gradient``, the gradient of the mean loss over the first
     ``full_data_subsample`` training points (all of them if None) on those rows. With
     ``record_params`` the first-layer rows before every step are kept too. Returns the
-    step records as stacked arrays, step-indexed from the start of ``epoch_start``.
+    step records as stacked arrays, step-indexed from the start of ``epoch_start``. For a
+    run with a first-layer rotation lock the lock state is restored from the snapshot and
+    ``locked_rows`` (per step, before the step) and ``lock_step`` (per row) are returned.
     """
     out = seed_result["out"]; config: ReLUTrainConfig = seed_result["train_config"]
     if epoch_start not in out["optimizer_snapshots"]:
@@ -2701,10 +2727,15 @@ def replay_interval_from_snapshot(
     lr_hist = out.get("lr_history") or next(iter(out.get("lr_history_by_group", {}).values()), None)
     masks = _parameter_update_masks(model=model, config=config, device=dev)
     proj = _first_layer_projection_vector(model=model, config=config, device=dev)
+    lock = None
+    if config.first_layer_rotation_lock is not None:
+        if epoch_start not in out.get("rotation_lock_snapshots", {}):
+            raise KeyError(f"epoch {epoch_start} has no rotation-lock snapshot although the run uses a rotation lock")
+        lock = rotation_lock_state(model=model, config=config, device=dev, snapshot=out["rotation_lock_snapshots"][epoch_start])
     criterion = torch.nn.BCEWithLogitsLoss()
     rows = list(range(model.hidden_layers[0].weight.shape[0])) if neuron_rows is None else list(neuron_rows)
     W1 = model.hidden_layers[0].weight
-    rec = {"step": [], "epoch": [], "batch_loss": [], "grad_rows": [], "update_rows": [], "full_grad_rows": [], "params_rows": [], "lr": []}
+    rec = {"step": [], "epoch": [], "batch_loss": [], "grad_rows": [], "update_rows": [], "full_grad_rows": [], "params_rows": [], "lr": [], "locked_rows": []}
     step = 0
     for epoch in range(epoch_start, epoch_end):
         if lr_hist is not None and not np.isnan(lr_hist[epoch]):
@@ -2719,8 +2750,10 @@ def replay_interval_from_snapshot(
             if record_full_data_gradient:
                 fg = log_loss_gradients(model=model, x=x_full, y=y_full, device=str(dev)); model.train()
                 rec["full_grad_rows"].append(fg["hidden_layers.0.weight"][rows].numpy())
+            if lock is not None:
+                rec["locked_rows"].append(lock.locked[rows].cpu().numpy().copy())
             loss = relu_training_step(model=model, optimizers=optimizers, criterion=criterion, x_batch=x[idx], y_batch_bin=y_bin[idx],
-                                      first_layer_projection_vector=proj, parameter_update_masks=masks)
+                                      first_layer_projection_vector=proj, parameter_update_masks=masks, rotation_lock=lock)
             rec["grad_rows"].append(W1.grad.detach()[rows].cpu().numpy().copy())
             rec["update_rows"].append((W1.detach()[rows].cpu() - before).numpy())
             rec["batch_loss"].append(float(loss.cpu())); rec["step"].append(step); rec["epoch"].append(epoch); rec["lr"].append(float(optimizers[0].param_groups[0]["lr"]))
@@ -2737,6 +2770,8 @@ def replay_interval_from_snapshot(
             diffs = [float((st_now[k][key].float() - val.float()).abs().max()) for k in st_next for key, val in st_next[k].items()
                      if isinstance(val, torch.Tensor) and val.dtype.is_floating_point and k in st_now and key in st_now[k]]
             verification["max_abs_momentum_diff"] = max(diffs) if diffs else 0.0      # all optimizer-state tensors (momentum, Adam moments, step)
+        if lock is not None and epoch_end in out.get("rotation_lock_snapshots", {}):
+            verification["locked_rows_mismatch"] = int((lock.locked.cpu().numpy() != out["rotation_lock_snapshots"][epoch_end]["locked"]).sum())
     result = {"epoch_start": epoch_start, "epoch_end": epoch_end, "rows": rows, "num_steps": step, "verification": verification, "params_after": params_after,
               "step": np.array(rec["step"]), "epoch": np.array(rec["epoch"]), "lr": np.array(rec["lr"]), "batch_loss": np.array(rec["batch_loss"]),
               "grad_rows": np.stack(rec["grad_rows"]), "update_rows": np.stack(rec["update_rows"])}
@@ -2744,4 +2779,6 @@ def replay_interval_from_snapshot(
         result["full_grad_rows"] = np.stack(rec["full_grad_rows"]); result["full_data_subsample"] = n_full
     if record_params:
         result["params_rows"] = np.stack(rec["params_rows"])
+    if lock is not None:
+        result["locked_rows"] = np.stack(rec["locked_rows"]); result["lock_step"] = lock.lock_step.cpu().numpy().copy()
     return result

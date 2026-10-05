@@ -4672,3 +4672,57 @@ first layer barely moves and its gate flips are rare and smooth.
 - Freeze later (e.g. epoch 3000, after the random rows have settled) to separate the two effects;
   or freeze only the probes and cues, leaving the random rows free.
 - Not pushed; commit only.
+
+## 2026-10-05 — Runs 15 and 16: AdamW on all layers from epoch 750; first-layer rotation lock at |cos| 0.99
+
+### User prompts (verbatim)
+- "I am slightly confused by the epoch index. Am I right in understanding that runs 13 and 14 do not have epochs 0 to 750 at all? I know that they have to match run 11 till 750, but e.g. does epoch 800 in run 13 correspond to epoch 800 in run 11 or epoch 1550 in run 11?"
+- "Ok.  Do two more runs with same init as run 11.\n\nFirstly, Same config/protocol as run 11 till epoch 750 and after that run with Adam. No freezing of layers.\n\nSecondly, run  from init with SGD momentum the following dynamic freezing for first layer neurons. Neurons train freely till they hit a cosine of 0.99 with an ODT vector. Once that happens a switch flips and all rotation is disallowed, they can still move along their radial direction. i.e. project the update along its radial direction only."
+
+### Changes
+- Answered the epoch question: the branches keep run 11's absolute epoch numbering (epoch 800 of
+  run 13 = epoch 800 of run 11 = step 80k); epochs 0-749 are not stored (NaN losses, no snapshots).
+- `FirstLayerRotationLock(targets, threshold, rows)` config on `ReLUTrainConfig`
+  (`first_layer_rotation_lock`), `RotationLockState` + `rotation_lock_state()` in
+  `relu_training.py`; `relu_training_step(..., rotation_lock=)` projects every locked row back
+  onto its lock-time unit direction after the optimizer step (radial update only) and then locks
+  free eligible rows whose |cos| with some target reaches the threshold (rows past it at the
+  start lock at once). The trainer stores `rotation_lock_snapshots[e]`, `save_designed_run`
+  writes `rotation_lock.npz` (locked mask per epoch; directions and lock steps once),
+  `load_designed_run` restores it, `replay_interval_from_snapshot` restores the lock state and
+  returns `locked_rows` per step and `lock_step`; verification adds `locked_rows_mismatch`.
+  Tests: step-level lock semantics; a run with a mid-run lock event saves, loads and replays
+  bitwise. Suite 109 passing.
+- Scripts `results/designed_init/run_hierarchy_branch750_adam_all.py` (run 15) and
+  `run_hierarchy_rotlock.py` (run 16); tracked outputs under
+  `results/designed_init/hierarchy_branch750_adam_all/` and `hierarchy_rotlock099/`
+  (lock times in `lock_table_*.csv`). Regeneration script now lists runs 8-16. Runs notebook
+  sections 15-16 and a five-run comparison cell (added unexecuted; the user's kernel was live).
+
+### Results (epochs of 100 steps; loss mean / std over 500-epoch windows)
+| epochs | run 11 | 13 SGD frozen L1 | 14 AdamW frozen L1 | 15 AdamW free | 16 rotation lock |
+|---|---|---|---|---|---|
+| 750-1250 | 0.126 / 0.041 | 0.131 / 0.003 | 0.110 / 0.004 | 0.083 / 0.014 | 0.155 / 0.006 |
+| 1000-1500 | 0.114 / 0.043 | 0.128 / 0.002 | 0.106 / 0.001 | 0.070 / 0.003 | 0.146 / 0.004 |
+| 2000-2500 | 0.090 / 0.002 | 0.118 / 0.002 | 0.102 / 0.0003 | 0.057 / 0.001 | 0.132 / 0.001 |
+| end (test err) | 0.037 (1.6%) | 0.094 (3.9%) | 0.092 (3.85%) | 0.019 (1.0%) | 0.112 (4.7%) |
+- Run 15: no catapults after the branch; same first-layer motion and end assignment as run 11
+  (31 nodes from epoch 760), larger norms (probes 6.7, random rows 5.9, |W2| 267, |W3| 77).
+- Run 16: 35/48 rows locked at the end (26/30 probes; 11 by epoch 500, 25 by 750, 33 by 2000);
+  no spikes after 750 although 13 rows still rotate; loss floor 0.112 (never below 0.1); same
+  substitutes as run 11 (3->-u_1, 5->+u_0, 8->+u_1, 14->u_16, 29->u_29) plus row 2 locked onto
+  -u_0 at epoch 2041, node 0 with 8 rows, node 9 never covered (probe pair stalls at 0.95 / 0.94).
+- Snapping rows onto the normals post hoc raises the loss in every run (layers 2-4 co-adapt to the
+  exact directions), so it cannot isolate the 8.1-degree tilt that the 0.99 lock freezes in.
+
+### Reading
+- Adam after the capture phase removes the spikes without freezing anything and reaches the best
+  end point: the first-layer refinement is kept, and the heavy-ball limit that run 11 oscillates
+  at is not what Adam is bound by.
+- The rotation lock also kills the spikes (rotation of captured rows is what the catapults need),
+  but at the price of rows pinned 8 degrees off their hyperplanes and of mis-locks onto u_0.
+
+### Current state / where to pick up
+- Variants of the lock: snap to the target normal at the crossing; threshold 0.999; lock on
+  rotation rate. Variants of run 15: Adam from epoch 0, or SGD->Adam at other epochs.
+- Not pushed; commit only.

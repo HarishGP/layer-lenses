@@ -62,3 +62,7 @@ results/designed_init/*
 !results/designed_init/hierarchy_branch750_adam_frozenL1/
 !results/designed_init/hierarchy_branch750_sgd_frozenL1/replay/meta.pkl
 !results/designed_init/hierarchy_branch750_adam_frozenL1/replay/meta.pkl
+!results/designed_init/hierarchy_branch750_adam_all/
+!results/designed_init/hierarchy_rotlock099/
+!results/designed_init/hierarchy_branch750_adam_all/replay/meta.pkl
+!results/designed_init/hierarchy_rotlock099/replay/meta.pkl

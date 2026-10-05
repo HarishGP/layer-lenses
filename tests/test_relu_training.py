@@ -354,3 +354,50 @@ def test_evaluate_relu_mlp_reports_zero_logits_under_both_tie_rules() -> None:
     assert out["zero_logit_fraction"] == 0.5
     assert out["zero_one_loss"] == 0.5          # zero logits scored as +1: both negatives wrong
     assert out["zero_one_loss_strict"] == 0.0   # zero logits scored as -1: all right
+
+
+def test_first_layer_rotation_lock_freezes_direction_once_threshold_is_hit() -> None:
+    from layer_lenses.relu_training import FirstLayerRotationLock, _first_layer_projection_vector, _parameter_update_masks, relu_training_step, rotation_lock_state
+
+    torch.manual_seed(0)
+    model = ReLUMLP(input_dim=6, hidden_dims=[4, 3], bias=False)
+    with torch.no_grad():
+        W = model.hidden_layers[0].weight
+        W[0] = 0.0; W[0, 0] = 2.0                                   # already on target e_0: locks at the start
+        W[3] = 0.0; W[3, 1] = 1.5                                   # on target e_1 but not eligible: never locks
+    lock = FirstLayerRotationLock(targets=np.eye(6), threshold=0.99, rows=(0, 1, 2))
+    cfg = ReLUTrainConfig(epochs=1, lr=0.1, batch_size=16, optimizer="sgd", momentum=0.9, first_layer_rotation_lock=lock)
+    dev = torch.device("cpu")
+    state = rotation_lock_state(model=model, config=cfg, device=dev)
+    assert state.locked.tolist() == [True, False, False, False] and state.lock_step.tolist() == [0, -1, -1, -1]
+    assert torch.allclose(state.direction[0], torch.eye(6)[0])
+    optimizers = build_relu_optimizers(model, cfg); criterion = torch.nn.BCEWithLogitsLoss()
+    x = torch.randn(64, 6); y = (torch.randn(64) > 0).float()
+    w1_before = W.detach()[1].clone(); norm0_before = float(W.detach()[0].norm())
+    for i in range(10):
+        relu_training_step(model=model, optimizers=optimizers, criterion=criterion, x_batch=x[(i % 4) * 16:(i % 4 + 1) * 16], y_batch_bin=y[(i % 4) * 16:(i % 4 + 1) * 16],
+                           first_layer_projection_vector=_first_layer_projection_vector(model=model, config=cfg, device=dev),
+                           parameter_update_masks=_parameter_update_masks(model=model, config=cfg, device=dev), rotation_lock=state)
+    W = model.hidden_layers[0].weight.detach()
+    assert state.step == 10
+    assert abs(float(W[0, 0]) / float(W[0].norm())) > 1 - 1e-6 and float(W[0, 1:].abs().max()) < 1e-6   # direction kept exactly
+    assert abs(float(W[0].norm()) - norm0_before) > 1e-4                                                  # but the norm moved
+    assert not state.locked[3] and float(torch.cosine_similarity(W[1], w1_before, dim=0)) < 1 - 1e-6     # free rows rotate
+    # a free eligible row that reaches the threshold locks permanently, from the step after it got there
+    with torch.no_grad():
+        model.hidden_layers[0].weight[2] = 0.0; model.hidden_layers[0].weight[2, 4] = -0.7                 # -e_4 counts (|cos|)
+    relu_training_step(model=model, optimizers=optimizers, criterion=criterion, x_batch=x[:16], y_batch_bin=y[:16],
+                       first_layer_projection_vector=None, parameter_update_masks={}, rotation_lock=state)
+    assert state.locked.tolist() == [True, False, True, False]
+    assert state.lock_step[2] == 11
+    for i in range(5):
+        relu_training_step(model=model, optimizers=optimizers, criterion=criterion, x_batch=x[16:32], y_batch_bin=y[16:32],
+                           first_layer_projection_vector=None, parameter_update_masks={}, rotation_lock=state)
+    W = model.hidden_layers[0].weight.detach()
+    d2 = state.direction[2]                                  # the direction the row had right after the step on which it crossed the threshold
+    assert abs(float(d2[4])) >= 0.99 and float(d2[4]) < 0 and abs(float(torch.cosine_similarity(W[2], d2, dim=0))) > 1 - 1e-6
+    snap = state.snapshot(); assert snap["locked"].tolist() == [True, False, True, False] and int(snap["step"]) == 16
+    restored = rotation_lock_state(model=model, config=cfg, device=dev, snapshot=snap)
+    assert restored.step == 16 and torch.equal(restored.direction, state.direction) and torch.equal(restored.lock_step, state.lock_step)
+    with pytest.raises(ValueError):
+        rotation_lock_state(model=model, config=ReLUTrainConfig(first_layer_rotation_lock=FirstLayerRotationLock(targets=np.eye(5))), device=dev)

@@ -5,7 +5,7 @@
 #
 # Requirements: a CUDA GPU with >= 8 GB free memory (the 10M-point runs hold the whole dataset on
 # the GPU, 3.7 GB), >= 8 GB free host RAM, and the project environment (`uv sync`).
-# Runtime on an RTX 5060 Ti: about 25 min per run, 7 runs, ~3 hours in total. Each script is
+# Runtime on an RTX 5060 Ti: about 25 min per run, 16 runs, ~7 hours in total. Each script is
 # independent; comment out the ones you do not need. Run from the repository root.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -16,6 +16,14 @@ $PY $S/hierarchy_kaiming_cosine/run_hierarchy_kaiming_cosine.py           # runs
 $PY $S/hierarchy_kaiming_cosine_big/run_hierarchy_kaiming_cosine_big.py   # run 3:    62-30-40, 10M/10k, frozen (~25 min)
 $PY $S/hierarchy_kaiming_cosine_isolate/run_hierarchy_kaiming_cosine_isolate.py  # runs 4-5: 62-30-40 at 1M/1k, 80-30-40 at 10M/10k (~50 min)
 $PY $S/hierarchy_kaiming_cosine_balanced/run_hierarchy_kaiming_cosine_balanced.py  # runs 6-7: balanced output, 62 and 80 rows, 10M/10k (~50 min)
+$PY $S/hierarchy_kaiming_cosine_pathsign/run_hierarchy_kaiming_cosine_pathsign.py  # run 8:    path-sign-aware cues (~25 min)
+$PY $S/hierarchy_kaiming_cosine_cueeq/run_hierarchy_kaiming_cosine_cueeq.py        # run 9:    + inv_sqrt cue blocks (~25 min)
+$PY $S/hierarchy_kaiming_cosine_balpaths/run_hierarchy_kaiming_cosine_balpaths.py  # run 10:   + balanced +-10-quanta third-layer paths (~25 min)
+$PY $S/hierarchy_replayable/run_hierarchy_replayable.py                            # run 11:   replayable version of run 10 (1M/10k, lr 0.01; ~26 min)
+$PY $S/hierarchy_replayable_probe001/run_hierarchy_replayable_probe001.py          # run 12:   run 11 with probe rows x0.01 (~26 min)
+$PY $S/hierarchy_branch750/run_hierarchy_branch750.py                              # runs 13-14: run 11 branched at epoch 750, first layer frozen (needs run 11's replay files; ~50 min)
+$PY $S/hierarchy_branch750_adam_all/run_hierarchy_branch750_adam_all.py            # run 15:   run 11 branched at epoch 750, all layers AdamW (needs run 11; ~26 min)
+$PY $S/hierarchy_rotlock099/run_hierarchy_rotlock.py                               # run 16:   run 11 with the first-layer rotation lock at |cos| 0.99 (~26 min)
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"

@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import pytest
 import torch
@@ -647,3 +648,50 @@ def test_resume_from_snapshot_reproduces_the_run_and_adam_runs_save_load_replay(
     sr2 = designed_run_seed_result(out=full, train_config=cfg, model_spec={"input_dim": 12, "hidden_dims": [6, 4], "bias": False}, data_spec=data_spec, tree=tree, tag="sgd")
     lo2 = load_designed_run(save_designed_run(sr2, tmp_path / "sgd"))
     rep2 = replay_interval_from_snapshot(lo2, 2, data={"x_train": x, "y_train": y}); assert rep2["verification"]["max_abs_param_diff_overall"] == 0.0 and rep2["verification"]["max_abs_momentum_diff"] == 0.0
+
+
+def test_rotation_lock_run_snapshots_save_load_and_replay_exactly(tmp_path) -> None:
+    from layer_lenses.init_sweep import SweepRunSpec, build_data_chunked, build_tree
+    from layer_lenses.relu_analysis import (designed_run_seed_result, load_designed_run, replay_interval_from_snapshot, save_designed_run,
+                                            train_relu_mlp_with_optimizer_snapshots)
+    from layer_lenses.relu_training import FirstLayerRotationLock
+    tree = build_tree(SweepRunSpec(tree_seed=5, data_seed=0, init_seed=0, batch_size=1, dim=12, depth=2))
+    x, y = build_data_chunked(SweepRunSpec(tree_seed=5, data_seed=7, init_seed=0, batch_size=1, dim=12, depth=2, n_train=600), tree, chunk_size=600)
+    data_spec = {"kind": "sweep_chunked", "tree_seed": 5, "data_seed": 7, "n_train": 600, "chunk_size": 600, "eval_seed": 99, "n_eval": 50, "dim": 12, "depth": 2}
+    base_cfg = dict(epochs=8, lr=0.5, batch_size=100, seed=1, device="cpu", snapshot_epochs=tuple(range(0, 9)), lr_scheduler_eta_min_ratio=0.1, optimizer="sgd", momentum=0.9)
+    torch.manual_seed(0); model = ReLUMLP(input_dim=12, hidden_dims=[6, 4], bias=False); init_state = copy.deepcopy(model.state_dict())
+    free = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=ReLUTrainConfig(**base_cfg))
+    # pick a threshold that one row crosses in the middle of the free run, so the locked run has a genuine lock event
+    def max_cos(state):
+        W = state["hidden_layers.0.weight"].numpy(); return np.abs(W / np.linalg.norm(W, axis=1, keepdims=True) @ tree.w_list.T).max(1)
+    c = np.stack([max_cos(free["checkpoint_snapshots"][e]) for e in range(9)])          # (epochs, rows)
+    row = int((c.max(0) - c[0]).argmax()); thr = float(0.5 * (c[0, row] + c[:, row].max()))
+    assert c[:, row].max() > c[0, row] + 1e-3
+    model.load_state_dict(init_state)
+    cfg = ReLUTrainConfig(**base_cfg, first_layer_rotation_lock=FirstLayerRotationLock(targets=tree.w_list, threshold=thr, rows=tuple(range(6))))
+    out = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=cfg)
+    rl = out["rotation_lock_snapshots"]; assert sorted(rl) == list(range(9)) and out["rotation_lock_final"]["locked"][row]
+    lock_step = int(out["rotation_lock_final"]["lock_step"][row]); assert 0 < lock_step < 48
+    e_lock = lock_step // 6 + 1                                                           # first snapshot epoch at which the row is locked
+    assert not rl[e_lock - 1]["locked"][row] or lock_step % 6 == 0
+    d = out["rotation_lock_final"]["direction"][row]
+    for e in range(e_lock, 9):                                                            # locked: direction fixed to 1e-6, norm free
+        w = out["checkpoint_snapshots"][e]["hidden_layers.0.weight"].numpy()[row]
+        assert abs(abs(w @ d) / np.linalg.norm(w) - 1) < 1e-6
+    sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 12, "hidden_dims": [6, 4], "bias": False}, data_spec=data_spec, tree=tree, tag="lock")
+    folder = save_designed_run(sr, tmp_path / "lock"); assert (folder / "rotation_lock.npz").exists()
+    lo = load_designed_run(folder)
+    for e in range(9):
+        assert np.array_equal(lo["out"]["rotation_lock_snapshots"][e]["locked"], rl[e]["locked"])
+        assert np.array_equal(lo["out"]["rotation_lock_snapshots"][e]["lock_step"], rl[e]["lock_step"])
+        assert np.array_equal(lo["out"]["rotation_lock_snapshots"][e]["direction"], rl[e]["direction"])
+    # replay the interval that contains the lock event (and the one after it): bitwise exact, lock state reproduced
+    for e0 in (max(0, e_lock - 1), e_lock):
+        rep = replay_interval_from_snapshot(lo, e0, data={"x_train": x, "y_train": y}, neuron_rows=[row])
+        assert rep["verification"]["max_abs_param_diff_overall"] == 0.0 and rep["verification"]["max_abs_momentum_diff"] == 0.0 and rep["verification"]["locked_rows_mismatch"] == 0
+        assert rep["locked_rows"].shape == (6, 1) and int(rep["lock_step"][row]) == lock_step
+    rep = replay_interval_from_snapshot(lo, e_lock, data={"x_train": x, "y_train": y}, neuron_rows=[row])
+    assert rep["locked_rows"].all()
+    W0 = lo["out"]["checkpoint_snapshots"][e_lock]["hidden_layers.0.weight"].numpy()[row]
+    for upd in rep["update_rows"][:, 0]:                                                  # every update of a locked row is radial
+        assert np.linalg.norm(upd - (upd @ d) * d) < 1e-6 * max(1.0, np.linalg.norm(W0))

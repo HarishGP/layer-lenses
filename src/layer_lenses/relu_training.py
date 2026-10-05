@@ -17,6 +17,22 @@ ParameterUpdateMask = dict[str, np.ndarray | torch.Tensor]
 
 
 @dataclass(frozen=True)
+class FirstLayerRotationLock:
+    """Per-row rotation lock for the first hidden layer (see `relu_training_step`).
+
+    A row in ``rows`` (every row if None) trains freely until ``|cos(row, t)| >= threshold``
+    for some row ``t`` of ``targets`` (for instance the ODT normals). From that moment on
+    its direction is fixed for good: after every optimizer step the row is projected back
+    onto the unit direction it had when it locked, so only its norm (radial coordinate)
+    can still change. Rows already past the threshold at the start lock immediately.
+    """
+
+    targets: np.ndarray | torch.Tensor
+    threshold: float = 0.99
+    rows: tuple[int, ...] | None = None
+
+
+@dataclass(frozen=True)
 class ReLUTrainConfig:
     """Training config for single-phase ReLU MLP experiments."""
 
@@ -44,6 +60,7 @@ class ReLUTrainConfig:
     sgd_weight_decay: float | None = None
     first_layer_grad_orthogonal_to: tuple[float, ...] | np.ndarray | None = None
     parameter_update_mask: ParameterUpdateMask | None = None
+    first_layer_rotation_lock: FirstLayerRotationLock | None = None
 
 
 def _labels_pm1_to_binary(y: torch.Tensor) -> torch.Tensor:
@@ -221,6 +238,111 @@ def _restore_frozen_parameter_values(
             param.copy_(param * mask + frozen_parameter_values[name] * (1 - mask))
 
 
+@dataclass
+class RotationLockState:
+    """Runtime state of a `FirstLayerRotationLock` (one entry per first-layer row).
+
+    ``locked`` says which rows are locked, ``direction`` holds each locked row's unit
+    direction at lock time (zeros for free rows), ``lock_step`` the global step count at
+    which the row locked (-1 if free; ``lock_step == s`` means the update of step ``s`` was
+    the first one projected) and ``step`` the number of steps taken so far.
+    """
+
+    targets: torch.Tensor
+    threshold: float
+    eligible: torch.Tensor
+    locked: torch.Tensor
+    direction: torch.Tensor
+    lock_step: torch.Tensor
+    step: int
+
+    def snapshot(self) -> dict[str, np.ndarray]:
+        """Return the per-row state as numpy arrays (enough to resume or replay exactly)."""
+        return {"locked": self.locked.cpu().numpy().copy(), "direction": self.direction.cpu().numpy().copy(),
+                "lock_step": self.lock_step.cpu().numpy().copy(), "step": np.int64(self.step)}
+
+
+def rotation_lock_state(
+    *,
+    model: ReLUMLP,
+    config: ReLUTrainConfig,
+    device: torch.device,
+    snapshot: dict[str, np.ndarray] | None = None,
+    step: int = 0,
+) -> RotationLockState | None:
+    """Build the lock state for ``config.first_layer_rotation_lock`` (None when unset).
+
+    Without ``snapshot`` the state is fresh and rows already past the threshold lock at
+    once (with ``lock_step = step``); with a snapshot (from `RotationLockState.snapshot`,
+    e.g. a stored run's ``rotation_lock_snapshots[e]``) the stored state is restored.
+    """
+    lock = config.first_layer_rotation_lock
+    if lock is None:
+        return None
+    weight = model.hidden_layers[0].weight.detach()
+    n_rows, input_dim = weight.shape
+    targets = torch.as_tensor(np.asarray(lock.targets), dtype=torch.float32, device=device)
+    if targets.ndim != 2 or targets.shape[1] != input_dim:
+        raise ValueError(f"rotation lock targets must have shape (K, {input_dim}), got {tuple(targets.shape)}")
+    if not 0.0 < lock.threshold <= 1.0:
+        raise ValueError(f"rotation lock threshold must be in (0, 1], got {lock.threshold}")
+    targets = targets / targets.norm(dim=1, keepdim=True).clamp_min(1e-12)
+    eligible = torch.zeros(n_rows, dtype=torch.bool, device=device)
+    if lock.rows is None:
+        eligible[:] = True
+    else:
+        eligible[list(lock.rows)] = True
+    if snapshot is None:
+        state = RotationLockState(targets=targets, threshold=float(lock.threshold), eligible=eligible,
+                                  locked=torch.zeros(n_rows, dtype=torch.bool, device=device),
+                                  direction=torch.zeros(n_rows, input_dim, dtype=weight.dtype, device=device),
+                                  lock_step=torch.full((n_rows,), -1, dtype=torch.int64, device=device), step=int(step))
+        _update_rotation_lock(state, weight)
+        return state
+    return RotationLockState(targets=targets, threshold=float(lock.threshold), eligible=eligible,
+                             locked=torch.as_tensor(np.asarray(snapshot["locked"]), dtype=torch.bool, device=device),
+                             direction=torch.as_tensor(np.asarray(snapshot["direction"]), dtype=weight.dtype, device=device),
+                             lock_step=torch.as_tensor(np.asarray(snapshot["lock_step"]), dtype=torch.int64, device=device),
+                             step=int(snapshot.get("step", step)))
+
+
+def _update_rotation_lock(state: RotationLockState, weight: torch.Tensor) -> None:
+    """Lock every free eligible row whose |cosine| with some target reaches the threshold."""
+    free = state.eligible & ~state.locked
+    if not bool(free.any()):
+        return
+    rows = free.nonzero().squeeze(1)
+    w = weight[rows]
+    cos = (w / w.norm(dim=1, keepdim=True).clamp_min(1e-12)) @ state.targets.T
+    hit = cos.abs().amax(dim=1) >= state.threshold
+    if not bool(hit.any()):
+        return
+    idx = rows[hit]
+    state.locked[idx] = True
+    state.direction[idx] = w[hit] / w[hit].norm(dim=1, keepdim=True).clamp_min(1e-12)
+    state.lock_step[idx] = state.step
+
+
+def _project_locked_rows(model: ReLUMLP, state: RotationLockState) -> None:
+    """Put every locked first-layer row back on its locked direction (keeps only the radial part of the update)."""
+    if not bool(state.locked.any()):
+        return
+    with torch.no_grad():
+        weight = model.hidden_layers[0].weight
+        idx = state.locked.nonzero().squeeze(1)
+        d = state.direction[idx]
+        weight[idx] = (weight[idx] * d).sum(dim=1, keepdim=True) * d
+
+
+def _advance_rotation_lock(model: ReLUMLP, state: RotationLockState | None) -> None:
+    """After an optimizer step: project the locked rows, count the step, lock newly aligned rows."""
+    if state is None:
+        return
+    _project_locked_rows(model, state)
+    state.step += 1
+    _update_rotation_lock(state, model.hidden_layers[0].weight.detach())
+
+
 ADAM_OPTIMIZER_NAMES = frozenset({"adamw", "adam"})
 SGD_OPTIMIZER_NAMES = frozenset({"sgd", "gd"})
 HYBRID_OPTIMIZER_NAMES = frozenset({"sgd_adam", "sgd-adam", "sgdadam"})
@@ -395,13 +517,16 @@ def relu_training_step(
     y_batch_bin: torch.Tensor,
     first_layer_projection_vector: torch.Tensor | None,
     parameter_update_masks: dict[str, torch.Tensor],
+    rotation_lock: RotationLockState | None = None,
 ) -> torch.Tensor:
     """Run one mini-batch update and return the detached batch loss.
 
     This is the single definition of a training step: `train_relu_mlp` and the
     replay helpers in `relu_analysis` both call it, so they cannot drift apart.
     Leaves ``param.grad`` populated (after projection and masking) so callers can
-    record the gradient the optimizers actually consumed.
+    record the gradient the optimizers actually consumed. With ``rotation_lock`` the
+    locked first-layer rows keep only the radial part of this step's update, and rows
+    that reach the lock threshold after the step are locked (see `FirstLayerRotationLock`).
     """
     for optimizer in optimizers:
         optimizer.zero_grad()
@@ -414,6 +539,7 @@ def relu_training_step(
     for optimizer in optimizers:
         optimizer.step()
     _restore_frozen_parameter_values(model, parameter_update_masks, frozen_parameter_values)
+    _advance_rotation_lock(model, rotation_lock)
     return loss.detach()
 
 
