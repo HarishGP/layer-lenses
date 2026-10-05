@@ -1,0 +1,10 @@
+branching run 11 at epoch 750 (step 75000); data (1000000, 100)
+/home/harish/researchcodes/layer-lenses/src/layer_lenses/relu_analysis.py:1554: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  scheduler.step()
+linear_frozen_kaiming_cosine_branch750_sgd_frozenL1_seed0: trained epochs 750..10000 in 23.6 min; snapshots 926
+linear_frozen_kaiming_cosine_branch750_sgd_frozenL1_seed0: final loss 0.0945, test error 0.0393 (strict 0.0393, zero-logit 0.000); epochs to 0.1/0.05/0.03: 5565/-1/-1; loss std over epochs 1000-3000: 0.0055; 23.6 min
+/home/harish/researchcodes/layer-lenses/src/layer_lenses/relu_analysis.py:1554: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  scheduler.step()
+linear_frozen_kaiming_cosine_branch750_adam_frozenL1_seed0: trained epochs 750..10000 in 25.6 min; snapshots 926
+linear_frozen_kaiming_cosine_branch750_adam_frozenL1_seed0: final loss 0.0924, test error 0.0385 (strict 0.0385, zero-logit 0.000); epochs to 0.1/0.05/0.03: 3457/-1/-1; loss std over epochs 1000-3000: 0.0019; 25.6 min
+ALL DONE

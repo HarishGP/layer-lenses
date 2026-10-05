@@ -4624,3 +4624,51 @@ becomes stiff in the weights that combine them (layers 2-3; curvature w.r.t. W2 
 second moments of the now label-aligned features), lr*lambda hits the heavy-ball limit, and the
 run oscillates across that valley (period 2) with layer-2/3 ReLU units switching each step. The
 first layer barely moves and its gate flips are rare and smooth.
+
+## 2026-10-05 — Runs 13 and 14: branches of run 11 at epoch 750 with the first layer frozen (SGD continued / AdamW)
+
+### User prompts (verbatim)
+- "Ok. How about the following ideas for some new runs:\n\n1. Same as run 11 till epoch 750, and after that the first layer weights are frozen.\n2. Same as run 11 till epoch 750, after that the first layer weights are frozen and the other layers are optimized using Adam instead of SGD with momentum."
+
+### Changes
+- `train_relu_mlp_with_optimizer_snapshots(..., start_epoch=, initial_optimizer_states=)`: resumes
+  the cosine schedule at an epoch (base lr restored before advancing the recursive scheduler) and
+  optionally continues a stored optimizer state exactly; losses / lr history keep length
+  `config.epochs` with NaN before the start. `save_designed_run` / `load_designed_run` now store
+  every optimizer-state tensor (`optimizer_state.npz`: SGD momentum, or AdamW moments + step;
+  the old `momentum.npz` files still load); interval replay verifies all state tensors. Test:
+  resuming at epoch 4 reproduces a run to the bit; an AdamW branch with frozen first layer
+  round-trips and replays exactly.
+- Script `results/designed_init/run_hierarchy_branch750.py`; tracked outputs under
+  `results/designed_init/hierarchy_branch750_{sgd,adam}_frozenL1/`. Runs notebook sections 13-14
+  and a three-run comparison cell.
+
+### Results (per-epoch loss mean / std over 500-epoch windows; epochs of 100 steps)
+| epochs | run 11 | 13: SGD, frozen L1 | 14: AdamW, frozen L1 |
+|---|---|---|---|
+| 750-1250 | 0.126 / 0.041 | 0.131 / 0.003 | 0.110 / 0.004 |
+| 1000-1500 | 0.114 / 0.043 | 0.128 / 0.002 | 0.106 / 0.001 |
+| 2000-2500 | 0.090 / 0.002 | 0.118 / 0.002 | 0.102 / 0.0003 |
+| end | 0.037 (test 1.6%) | 0.094 (test 3.9%) | 0.092 (test 3.85%) |
+- Sharpness is unchanged by the freeze: lr*lambda 3.3-3.6 with the top eigenvector in layers 2-3
+  in both run 11 and run 13 at epochs 800-3000; run 14 tolerates raw lambda up to 1570.
+- Run 11's first-layer motion after 750 is in the random rows (63, 69, 77 rotate 74-91 degrees,
+  recruited to level-4 nodes; probes 2-6 degrees); per-10-epoch first-layer movement vs loss std
+  has rank correlation 0.74 (max row rotation) / 0.77 (||dW1||); random row 69 is the fastest
+  row in most of the spikiest windows.
+- Both branches replay exactly (params and optimizer state diff 0).
+
+### Reading
+- The loss spikes need a trainable first layer: with it frozen the period-2 oscillation in
+  layers 2-3 persists (same lr*lambda) but the catapults vanish. The spikes are driven by
+  first-layer rows (mostly random rows being recruited to level-4 hyperplanes) moving across
+  data boundaries on top of the stiff layer-2/3 landscape, which is close to the user's
+  sweeping hypothesis, with the stiffness supplying the amplification.
+- The late first-layer refinement is also what buys the final loss: frozen at 750, both
+  optimizers plateau near 0.093 (node 9 at cosine 0.93, random rows not yet recruited); run 11
+  gets to 0.037 by recruiting random rows and growing probe norms x1.8.
+
+### Current state / where to pick up
+- Freeze later (e.g. epoch 3000, after the random rows have settled) to separate the two effects;
+  or freeze only the probes and cues, leaving the random rows free.
+- Not pushed; commit only.

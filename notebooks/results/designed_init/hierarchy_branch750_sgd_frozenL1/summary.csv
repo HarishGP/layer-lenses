@@ -1,0 +1,2 @@
+tag,branch_of,branch_epoch,optimizer,lr,final_epoch_loss,min_epoch_loss,train_log_loss_end,test_error_end,test_error_strict_end,zero_logit_frac_end,epoch_to_0.1,epoch_to_0.05,epoch_to_0.03,loss_std_1000_3000,nodes_covered_end,wall_min
+linear_frozen_kaiming_cosine_branch750_sgd_frozenL1_seed0,linear_frozen_kaiming_cosine_replayable_80_seed0,750,sgd,0.01,0.0944962228834629,0.0944962228834629,0.09451095014810562,0.03934499993920326,0.03934499993920326,0.0,5565,-1,-1,0.0054883753078087015,30,23.60567231973012
