@@ -46,7 +46,6 @@ results/designed_init/*
 !results/designed_init/hierarchy_kaiming_cosine_balpaths/
 !results/designed_init/hierarchy_replayable/
 !results/designed_init/hierarchy_replayable_probe001/
-!results/designed_init/hierarchy_replayable_probe001/replay/meta.pkl
 
 # Large model artifacts
 *.pt
@@ -58,3 +57,4 @@ results/designed_init/*
 *.joblib
 # The replayable run needs its small metadata pickle (config, specs, tree, losses; 0.4 MB)
 !results/designed_init/hierarchy_replayable/replay/meta.pkl
+!results/designed_init/hierarchy_replayable_probe001/replay/meta.pkl
