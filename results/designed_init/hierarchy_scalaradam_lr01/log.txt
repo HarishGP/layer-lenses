@@ -1,0 +1,4 @@
+linear_frozen_kaiming_const_scalaradam01_80_seed0: data (1000000, 100) float32; flipped units [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29], zero-path units [], logit rms 0.124
+trained in 35.3 min; snapshots 1001
+linear_frozen_kaiming_const_scalaradam01_80_seed0: final epoch loss 0.0718, train log loss 0.0707, test error 0.0286 (strict 0.0286); epochs to 0.3/0.2/0.1/0.05/0.03: 322/661/4192/-1/-1; nodes covered 31/31; max lr_eff*lambda 18.67 (max lambda 3922); loss std 1000-3000 0.0150; on-target end [1.0, 0.5, 0.88, 0.88]; 35.4 min
+ALL DONE

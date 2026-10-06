@@ -26,6 +26,7 @@ $PY $S/hierarchy_branch750_adam_all/run_hierarchy_branch750_adam_all.py         
 $PY $S/hierarchy_rotlock099/run_hierarchy_rotlock.py                               # run 16:   run 11 with the first-layer rotation lock at |cos| 0.99 (~26 min)
 $PY $S/hierarchy_scalaradam/run_hierarchy_scalaradam.py                            # run 17:   run 11 trained with ScalarAdam (normalised step, lr 0.001; ~30 min)
 $PY $S/hierarchy_scalaradam_lr003/run_hierarchy_scalaradam_lr003.py              # run 18:   ScalarAdam, lr 0.003 constant (~32 min)
+$PY $S/hierarchy_scalaradam_lr01/run_hierarchy_scalaradam_lr01.py                # run 19:   ScalarAdam, lr 0.01 constant (~40 min)
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"

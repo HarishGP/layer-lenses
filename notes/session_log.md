@@ -4875,3 +4875,34 @@ Progressive sharpening continues unconstrained (lambda 0.4 -> 2068), which locat
 ### Current state / where to pick up
 - A larger base lr (0.01, still under a tenth of the limit at the end) or more epochs would cover
   run 11's late refinement. Not pushed; commit only.
+
+## 2026-10-06 — Run 19: ScalarAdam, base lr 0.01, constant
+
+### User prompts (verbatim)
+- "Launch run 19 with base lr 0.01, constant"
+
+### Changes
+- Script `results/designed_init/run_hierarchy_scalaradam_lr01.py`; tracked outputs under
+  `results/designed_init/hierarchy_scalaradam_lr01/`; runs notebook section 19 with a cell comparing
+  runs 17-19 against run 11 (loss, lr_eff * lambda_max vs the limit, nearest run 11 epoch).
+
+### Results
+- Smooth (detrended residual std 0.0000, max one-epoch change 0.009); lr_eff * lambda_max up to 18.7
+  (limit 38); lambda_max 3922 at the end, 82% W2; the sharpening does not slow down.
+- Capture at run 11's pace (internal nodes at epochs 230-570; 31/31 by 3760, node 9 last), same
+  substitutes; end loss 0.072 / test error 2.9% (run 18: 0.096; run 11: 0.037).
+- Path: matches run 11 through capture (first-layer distance 0.2 at run 11's epoch 220, 1.0 at 400),
+  then diverges: nearest run 11 epoch saturates at ~900, distance to it grows to 6.5, distance to run
+  11's end stays 16.6; different random rows recruited late (71, 72, 73, 77 vs run 11's 62, 63, 64,
+  76, 77); |W2| 26 vs 47.
+
+### Reading
+Across runs 17-19 the capture phase is the same path at three speeds, with no instabilities, and
+progressive sharpening runs unconstrained (lambda_max 312, 2068, 3922). Run 11's late refinement is
+not on that path: the normalised runs level off at loss 0.07-0.1 where run 11, kicked by its
+catapults (W1 displacement ~0.6 per spike), recruits different random rows and grows its norms to
+reach 0.037. Whether the late phase needs the kicks or just more time at a larger step is open; base
+lr 0.03 would likely put ScalarAdam on its own edge.
+
+### Current state / where to pick up
+- Not pushed; commit only.
