@@ -4925,3 +4925,35 @@ lr 0.03 would likely put ScalarAdam on its own edge.
   multiplier, and splits the update into carried and fresh parts for SGD and ScalarAdam (note for
   AdamW). Test added (three optimizers; the ScalarAdam update is reproduced from the recorded state).
   Suite 113 passing. Re-executed section 5 for runs 11 and 19 headlessly.
+
+## 2026-10-06 — Run 20: ScalarAdam, base lr 0.03, constant
+
+### User prompts (verbatim)
+- "Launch run 20 with base lr 0.03, constant"
+
+### Changes
+- Script `results/designed_init/run_hierarchy_scalaradam_lr03.py`; tracked outputs under
+  `results/designed_init/hierarchy_scalaradam_lr03/`; runs notebook section 20 with a four-run
+  comparison cell (loss, lr_eff * lambda_max, rms gradient norm, nearest run 11 epoch).
+
+### Results
+- Loss 0.047 / test error 1.9% (run 11: 0.037 / 1.6%); 31/31 nodes by epoch 290 (run 11: 760).
+- At its own edge without catapults: lr_eff * lambda_max 33 of 38 by epoch 9800; step-level replay
+  gives lr_eq * lambda 2.6 (epoch 2000) -> 3.3 (9900) against 3.8, half of the update along the top
+  eigenvector with sign flips at 60% of steps; rms|g| grows 1.6 -> 3.3 and lr_eq falls 0.0017 ->
+  0.0008 as the oscillation grows (the normaliser's answer); at epoch 10000 rms|g| 3.9 and
+  lambda_max 4051 -> 3660. Largest one-epoch loss change 0.009, detrended residual 0.0000 / 0.0003.
+- Off run 11's path from the start (first-layer distance 1.6 at epoch 100, 13.8 at the end):
+  different capture order and substitutes (row 8 on its own +u_4; rows 17, 21, 26 off), more random
+  rows recruited; |W2| 31, |W3| 29.
+
+### Reading
+Progressive sharpening ends where the step size stops it (lambda_max 312 / 2068 / 3922 / 4051 for
+base lr 0.001 / 0.003 / 0.01 / 0.03) and ScalarAdam stops it by a bounded oscillation regulated by
+the normaliser, not by catapults. A step of 0.03 leaves the flow regime: the trajectory is a
+different, faster one that still reaches run 11's quality. Together with runs 17-19: the capture
+phase is one flow path at any sufficiently small step; what differs between optimizers is only how
+the step size meets the sharpening.
+
+### Current state / where to pick up
+- Not pushed; commit only.

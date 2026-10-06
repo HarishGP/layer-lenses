@@ -72,3 +72,5 @@ results/designed_init/*
 !results/designed_init/hierarchy_scalaradam_lr003/replay/meta.pkl
 !results/designed_init/hierarchy_scalaradam_lr01/
 !results/designed_init/hierarchy_scalaradam_lr01/replay/meta.pkl
+!results/designed_init/hierarchy_scalaradam_lr03/
+!results/designed_init/hierarchy_scalaradam_lr03/replay/meta.pkl
