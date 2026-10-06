@@ -4906,3 +4906,22 @@ lr 0.03 would likely put ScalarAdam on its own edge.
 
 ### Current state / where to pick up
 - Not pushed; commit only.
+
+## 2026-10-06 — Trajectory notebook with the ScalarAdam runs
+
+### User prompts (verbatim)
+- "Runs 17,18, and 19 use adam, does the trajectory_analysis notebook work for these too? and replay correctly?"
+
+### Changes
+- Verified headlessly with `RUN_NAME = "hierarchy_scalaradam_lr01"`: sections 1-4 run unchanged and
+  the interval replay is exact (parameter and optimizer-state diffs 0.0). Section 5 had two
+  SGD-specific spots: the carried-momentum line read `momentum_buffer` (absent for ScalarAdam) and
+  the stability columns used the base lr and `config.momentum` (0 for scalar_adam), giving a
+  meaningless lr*lambda of 10.5 for run 19.
+- `replay_steps_full` is now optimizer-aware: returns `optimizer` (kind), `beta1` (SGD momentum /
+  ScalarAdam or AdamW beta1), `optimizer_state_before` (all state tensors per parameter) and
+  `lr_sgd_equiv` per step (SGD: lr; ScalarAdam: lr (1 - beta1) / ((1 - beta1^t) (sqrt(v_hat) + eps));
+  AdamW: NaN). Section 5 uses `lr_sgd_equiv` and `beta1` for lr_eq * lambda and the heavy-ball
+  multiplier, and splits the update into carried and fresh parts for SGD and ScalarAdam (note for
+  AdamW). Test added (three optimizers; the ScalarAdam update is reproduced from the recorded state).
+  Suite 113 passing. Re-executed section 5 for runs 11 and 19 headlessly.

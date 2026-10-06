@@ -33,6 +33,7 @@ from layer_lenses.relu_training import (
     checkpoint_model_from_state,
     evaluate_relu_mlp,
     optimizer_group_names,
+    normalized_optimizer_name,
     optimizer_parameter_names,
     primary_optimizer_index,
     relu_training_step,
@@ -2820,6 +2821,14 @@ def replay_steps_full(
     step), ``probe_loss`` (mean loss on the first ``probe_points`` training points, before the
     step; None disables it), ``lr`` and ``batch_index``. ``params_after`` / ``momentum_after``
     are the state after the last recorded step.
+
+    Works for every optimizer the config can name. ``optimizer_state_before`` holds all
+    optimizer-state tensors per parameter (SGD: ``momentum_buffer``; AdamW / ScalarAdam:
+    ``exp_avg``, ``exp_avg_sq``, ``step``), ``momentum_before`` only SGD's buffers. ``beta1`` is the
+    momentum coefficient (SGD ``momentum``, ScalarAdam / AdamW beta1) and ``lr_sgd_equiv`` the
+    learning rate of the plain heavy-ball step the optimizer's step amounts to: ``lr`` for SGD,
+    ``lr (1 - beta1) / ((1 - beta1^t) (sqrt(v_hat) + eps))`` for ScalarAdam (so the stability
+    products ``lr_sgd_equiv * lambda`` compare with ``2 (1 + beta1)``), NaN for AdamW.
     """
     out = seed_result["out"]; config: ReLUTrainConfig = seed_result["train_config"]
     if epoch_start not in out["optimizer_snapshots"]:
@@ -2846,15 +2855,33 @@ def replay_steps_full(
     if config.first_layer_rotation_lock is not None:
         lock = rotation_lock_state(model=model, config=config, device=dev, snapshot=out["rotation_lock_snapshots"][epoch_start])
     criterion = torch.nn.BCEWithLogitsLoss(); names = [nm for nm, _ in model.named_parameters()]
+    kind = normalized_optimizer_name(config)
+    beta1 = float(config.momentum) if kind == "sgd" else float(config.adam_betas[0]) if kind == "scalar_adam" else 0.9
     def momentum_now() -> dict[str, np.ndarray]:
         st = optimizers[0].state_dict()["state"]
         return {nm: st[i]["momentum_buffer"].detach().cpu().numpy().copy() for i, nm in enumerate(names) if i in st and st[i].get("momentum_buffer") is not None}
+    def optimizer_state_now() -> dict[str, dict[str, np.ndarray]]:
+        st = optimizers[0].state_dict()["state"]
+        return {nm: {k: v.detach().cpu().numpy().copy() for k, v in st[i].items() if isinstance(v, torch.Tensor)} for i, nm in enumerate(names) if i in st}
+    def lr_sgd_equiv_now() -> float:
+        # the learning rate of the plain heavy-ball step (b = beta b + g; p -= lr_eq b) that this optimizer's next step amounts to
+        lr_now = float(optimizers[0].param_groups[0]["lr"])
+        if kind == "sgd":
+            return lr_now
+        if kind == "scalar_adam":
+            st = optimizers[0].state_dict()["state"]
+            if 0 not in st or "exp_avg_sq" not in st[0]:
+                return float("nan")
+            t = float(st[0]["step"]) + 1.0; b1, b2 = config.adam_betas; eps = float(optimizers[0].param_groups[0]["eps"])
+            v_next_floor = float(st[0]["exp_avg_sq"]) * b2 / (1 - b2 ** t)          # the bias-corrected v the step will use, before this step's |g|^2 is added
+            return lr_now * (1 - b1) / ((1 - b1 ** t) * (np.sqrt(v_next_floor) + eps))
+        return float("nan")
     def probe_loss() -> float | None:
         if probe_points is None:
             return None
         with torch.no_grad():
             return float(criterion(model(x[:probe_points]), y_bin[:probe_points]).cpu())
-    rec: dict[str, list] = {k: [] for k in ("step", "epoch", "batch_index", "lr", "batch_loss", "probe_loss", "params_before", "momentum_before", "grads", "updates")}
+    rec: dict[str, list] = {k: [] for k in ("step", "epoch", "batch_index", "lr", "lr_sgd_equiv", "batch_loss", "probe_loss", "params_before", "momentum_before", "optimizer_state_before", "grads", "updates")}
     for t in range(step_to):
         epoch = epoch_start + t // steps_per_epoch; b = t % steps_per_epoch
         if b == 0 and lr_hist is not None and not np.isnan(lr_hist[epoch]):
@@ -2865,18 +2892,19 @@ def replay_steps_full(
         record = t >= step_from
         if record:
             before = {nm: p.detach().cpu().numpy().copy() for nm, p in model.named_parameters()}
-            rec["params_before"].append(before); rec["momentum_before"].append(momentum_now()); rec["probe_loss"].append(probe_loss())
+            rec["params_before"].append(before); rec["momentum_before"].append(momentum_now()); rec["optimizer_state_before"].append(optimizer_state_now()); rec["probe_loss"].append(probe_loss())
+            rec["lr_sgd_equiv"].append(lr_sgd_equiv_now())
         loss = relu_training_step(model=model, optimizers=optimizers, criterion=criterion, x_batch=x[idx], y_batch_bin=y_bin[idx],
                                   first_layer_projection_vector=proj, parameter_update_masks=masks, rotation_lock=lock)
         if record:
             rec["grads"].append({nm: (p.grad.detach().cpu().numpy().copy() if p.grad is not None else np.zeros(tuple(p.shape), dtype=np.float32)) for nm, p in model.named_parameters()})
             rec["updates"].append({nm: p.detach().cpu().numpy() - before[nm] for nm, p in model.named_parameters()})
             rec["batch_loss"].append(float(loss.cpu())); rec["step"].append(t); rec["epoch"].append(epoch); rec["batch_index"].append(b); rec["lr"].append(float(optimizers[0].param_groups[0]["lr"]))
-    result: dict[str, Any] = {k: (np.array(v) if k in ("step", "epoch", "batch_index", "lr", "batch_loss") else v) for k, v in rec.items()}
+    result: dict[str, Any] = {k: (np.array(v) if k in ("step", "epoch", "batch_index", "lr", "lr_sgd_equiv", "batch_loss") else v) for k, v in rec.items()}
     result["probe_loss"] = np.array([np.nan if v is None else v for v in rec["probe_loss"]])
     result["params_after"] = {nm: p.detach().cpu().numpy().copy() for nm, p in model.named_parameters()}; result["momentum_after"] = momentum_now()
     result["probe_loss_after"] = probe_loss(); result["epoch_start"] = epoch_start; result["steps_per_epoch"] = steps_per_epoch; result["probe_points"] = probe_points
-    result["momentum"] = float(config.momentum); result["parameter_names"] = names
+    result["momentum"] = beta1; result["beta1"] = beta1; result["optimizer"] = kind; result["parameter_names"] = names
     return result
 
 

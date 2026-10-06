@@ -756,3 +756,31 @@ def test_scalar_adam_run_saves_loads_and_replays_exactly(tmp_path) -> None:
     # every step moves the parameters by at most ~lr (normalised step) once the normaliser is warm
     rep = replay_interval_from_snapshot(lo, 6, data={"x_train": x, "y_train": y}); W = lo["out"]["checkpoint_snapshots"]
     assert np.linalg.norm(rep["update_rows"].reshape(rep["num_steps"], -1), axis=1).max() <= 1.05 * out["lr_history"][6]
+
+
+def test_replay_steps_full_reports_sgd_equivalent_rate_for_scalar_adam() -> None:
+    from layer_lenses.init_sweep import SweepRunSpec, build_data_chunked, build_tree
+    from layer_lenses.relu_analysis import designed_run_seed_result, replay_steps_full, train_relu_mlp_with_optimizer_snapshots
+    tree = build_tree(SweepRunSpec(tree_seed=5, data_seed=0, init_seed=0, batch_size=1, dim=12, depth=2))
+    x, y = build_data_chunked(SweepRunSpec(tree_seed=5, data_seed=7, init_seed=0, batch_size=1, dim=12, depth=2, n_train=600), tree, chunk_size=600)
+    data_spec = {"kind": "sweep_chunked", "tree_seed": 5, "data_seed": 7, "n_train": 600, "chunk_size": 600, "eval_seed": 99, "n_eval": 50, "dim": 12, "depth": 2}
+    for kind, extra in (("scalar_adam", dict(adam_betas=(0.8, 0.99))), ("sgd", dict(momentum=0.7)), ("adamw", {})):
+        torch.manual_seed(0); model = ReLUMLP(input_dim=12, hidden_dims=[6, 4], bias=False)
+        cfg = ReLUTrainConfig(epochs=4, lr=0.02, batch_size=100, seed=1, device="cpu", snapshot_epochs=(0, 2, 4), lr_scheduler_eta_min_ratio=1.0, optimizer=kind, **extra)
+        out = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=cfg)
+        sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 12, "hidden_dims": [6, 4], "bias": False}, data_spec=data_spec, tree=tree, tag=kind)
+        R = replay_steps_full(sr, 2, step_from=2, step_to=6, data={"x_train": x, "y_train": y}, probe_points=100)
+        assert R["optimizer"] == kind and len(R["optimizer_state_before"]) == 4
+        if kind == "sgd":
+            assert R["beta1"] == 0.7 and np.allclose(R["lr_sgd_equiv"], 0.02) and set(R["optimizer_state_before"][0]["hidden_layers.0.weight"]) == {"momentum_buffer"}
+        elif kind == "scalar_adam":
+            assert R["beta1"] == 0.8 and set(R["optimizer_state_before"][0]["hidden_layers.0.weight"]) == {"step", "exp_avg", "exp_avg_sq"}
+            st = R["optimizer_state_before"][1]["hidden_layers.0.weight"]; t = float(st["step"]) + 1; g2 = sum((g ** 2).sum() for g in R["grads"][1].values())
+            v_hat = (0.99 * float(st["exp_avg_sq"]) + 0.01 * g2) / (1 - 0.99 ** t)
+            # the update equals -lr_eq * (beta1 * m_prev + (1 - beta1) g) / (1 - beta1) with the true v (the reported rate uses v before this step's |g|^2 is added, hence approx)
+            names = R["parameter_names"]; mprev = np.concatenate([R["optimizer_state_before"][1][n]["exp_avg"].ravel() for n in names]); g = np.concatenate([R["grads"][1][n].ravel() for n in names])
+            upd = np.concatenate([R["updates"][1][n].ravel() for n in names]); pred = -0.02 * (0.8 * mprev + 0.2 * g) / ((1 - 0.8 ** t) * (np.sqrt(v_hat) + 1e-8))
+            assert np.allclose(upd, pred, atol=1e-6)
+            lr_eq_true = 0.02 * 0.2 / ((1 - 0.8 ** t) * (np.sqrt(v_hat) + 1e-8)); assert abs(R["lr_sgd_equiv"][1] / lr_eq_true - 1) < 0.05
+        else:
+            assert R["beta1"] == 0.9 and np.isnan(R["lr_sgd_equiv"]).all()
