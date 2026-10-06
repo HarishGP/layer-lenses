@@ -4840,3 +4840,38 @@ lr 0.001 constant for ~30k epochs.
 
 ### Current state / where to pick up
 - Not pushed; commit only.
+
+## 2026-10-06 — Run 18: ScalarAdam, base lr 0.003, constant
+
+### User prompts (verbatim)
+- "Launch run 18 with base lr 0.003 and no cosine decay"
+
+### Changes
+- Script `results/designed_init/run_hierarchy_scalaradam_lr003.py` (run 17 with LR 0.003, eta_min
+  ratio 1.0 = constant schedule, verified); tracked outputs under
+  `results/designed_init/hierarchy_scalaradam_lr003/`; runs notebook section 18 and a three-run
+  comparison cell (loss vs epoch; nearest run 11 epoch per ScalarAdam checkpoint).
+- Correction to the run 17 entry and section: `lr_eff = lr / rms|g|` is NOT the SGD-equivalent
+  learning rate. ScalarAdam's `m` is the (1 - beta1)-scaled form of SGD's momentum buffer, so the
+  SGD-equivalent rate is `0.1 * lr_eff` and the heavy-ball limit reads `lr_eff * lambda < 38`.
+  Run 17's peak lr_eff * lambda of 0.35 is 0.035 in SGD units; the lr choice was even safer than stated.
+
+### Results (run 18)
+- Smooth throughout (detrended residual std 0.0000, max one-epoch change 0.003) while
+  lr_eff * lambda_max rises 0.24 -> 5.85 (15% of the limit); lambda_max 2068 at the end (83% W2).
+- Same path as run 11: internal nodes captured at epochs 760-1760 in run 11's order, 31/31 by 7460
+  (node 9 last); first layer within 0.1-0.4 of run 11's nearest checkpoint to epoch 2000 (run 11's
+  420), drifting to 3.4 by the end (run 11's 760) after travelling 24.
+- Clock: 2.5x slower than run 11 through capture and decelerating (rms|g| 0.04 -> 1.06, lr_eff
+  0.067 -> 0.0028); end loss 0.096 / test error 3.9%, run 11's late refinement (first-layer distance
+  19 further) not reached.
+
+### Reading
+The normalised-step runs reproduce run 11's trajectory without any of its instabilities, so run
+11's path is the gradient-flow-like path and the spikes are purely an artefact of the step size.
+Progressive sharpening continues unconstrained (lambda 0.4 -> 2068), which locates run 11's edge
+(lambda ~380 at lr 0.01) as the point where that intrinsic sharpening meets the step size.
+
+### Current state / where to pick up
+- A larger base lr (0.01, still under a tenth of the limit at the end) or more epochs would cover
+  run 11's late refinement. Not pushed; commit only.
