@@ -4802,3 +4802,41 @@ Nothing special happens at "the previous step": the spike is the linear instabil
 along the top eigendirection in layers 2-3, armed by progressive sharpening (marginal all epoch) and
 triggered when the sharpness along that direction edges past 3.8/lr; the amplitude then grows
 geometrically for six steps and the loss follows the square of the amplitude.
+
+## 2026-10-06 — Run 17: run 11 with ScalarAdam (SGD-momentum direction, scalar-normalised step)
+
+### User prompts (verbatim)
+- "Ok, can you start a new run with same init as run 11. But using a scalar learning rate version of Adam. I want an SGD momentum run but with an arbitrarily small learning rate to keep these stability phenomenon away.  This might be a good way to emulate it in reasonable time, don't you think?"
+
+### Changes
+- `ScalarAdam` optimizer in `relu_training.py` (one shared second-moment scalar; `m` per parameter;
+  bias-corrected; decoupled weight decay; state keys exp_avg / exp_avg_sq (0-dim) / step so it saves
+  and loads like Adam); `optimizer="scalar_adam"` with `adam_betas` on `ReLUTrainConfig`.
+  `save_designed_run` fills a missing (fresh) optimizer state with zeros of the key's eventual shape.
+  Tests: step formula, direction = momentum direction, bitwise save/load/replay. Suite 112 passing.
+- Script `results/designed_init/run_hierarchy_scalaradam.py` (run 17; per-epoch lr_eff and rms|g|
+  from the optimizer state, lambda_max every 100 epochs); tracked outputs under
+  `results/designed_init/hierarchy_scalaradam/`; runs notebook section 17 with a path-proximity cell.
+- Learning-rate choice: along run 11's own path lr_eff * lambda_max for base lr 0.001 is 0.02-0.34
+  (max at epoch 400); rms|g| is 0.022 at init, 0.3 at epoch 300, 2-3.5 in the capture phase, 1.3 at the end.
+
+### Results
+- No stability phenomena: max lr_eff * lambda_max 0.35; detrended loss residual std 0.0000 over epochs
+  500-3000 (run 11 0.026); largest one-epoch loss change 0.001 (run 11 0.31).
+- Same path as run 11: first-layer distance to run 11's nearest checkpoint 0.06-0.39 throughout (travelled
+  up to 17.4); same capture order (0, 6, 4, 2/14, 3/5, 7, 12, 10, 13, 1, 11, 8, 9) and substitutes.
+- Slow clock: epoch 10 000 of run 17 = epoch ~400 of run 11; loss 0.22 (test error 9.2%), 30/31 nodes
+  (node 9 at 0.83 / 0.88), capture phase at epochs 2300-7900 instead of 300-760; |W2| 16 (run 11: 47).
+  Cause: the normalised step is capped at lr while run 11's step grows with the gradient during the
+  plateau escape (0.0016 -> 0.005 -> 0.018), and the cosine decay brings lr_eff to 1e-4 by the end.
+- lambda_max rises 0.4 -> 312 (83% in W2) with no learning-rate constraint acting: the lambda ~300-400
+  of run 11's edge is the geometry of the captured solution.
+
+### Reading
+The scalar-normalised step does what was hoped (run 11's trajectory without its instabilities, in
+32 min), but at base lr 0.001 with the cosine schedule it only covers the first ~400 epochs' worth of
+run 11. Next: base lr 0.003 (lr_eff * lambda_max at most ~1 along run 11's path) without decay, or
+lr 0.001 constant for ~30k epochs.
+
+### Current state / where to pick up
+- Not pushed; commit only.
