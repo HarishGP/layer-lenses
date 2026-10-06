@@ -401,3 +401,29 @@ def test_first_layer_rotation_lock_freezes_direction_once_threshold_is_hit() -> 
     assert restored.step == 16 and torch.equal(restored.direction, state.direction) and torch.equal(restored.lock_step, state.lock_step)
     with pytest.raises(ValueError):
         rotation_lock_state(model=model, config=ReLUTrainConfig(first_layer_rotation_lock=FirstLayerRotationLock(targets=np.eye(5))), device=dev)
+
+
+def test_scalar_adam_step_matches_formula_and_keeps_the_momentum_direction() -> None:
+    from layer_lenses.relu_training import ScalarAdam, normalized_optimizer_name, optimizer_group_names
+
+    torch.manual_seed(0)
+    model = ReLUMLP(input_dim=5, hidden_dims=[4, 3], bias=False); x = torch.randn(32, 5); y = (torch.randn(32) > 0).float()
+    opt = ScalarAdam(model.parameters(), lr=0.01, betas=(0.9, 0.999)); crit = torch.nn.BCEWithLogitsLoss()
+    names = [n for n, _ in model.named_parameters()]; m = {n: torch.zeros_like(p) for n, p in model.named_parameters()}; v = torch.zeros(())
+    for t in range(1, 6):
+        before = {n: p.detach().clone() for n, p in model.named_parameters()}
+        opt.zero_grad(); crit(model(x), y).backward(); g = {n: p.grad.detach().clone() for n, p in model.named_parameters()}
+        opt.step()
+        v = 0.999 * v + 0.001 * sum((gi ** 2).sum() for gi in g.values())
+        for n in names:
+            m[n] = 0.9 * m[n] + 0.1 * g[n]
+            expected = before[n] - 0.01 * (m[n] / (1 - 0.9 ** t)) / (torch.sqrt(v / (1 - 0.999 ** t)) + 1e-8)
+            assert torch.allclose(dict(model.named_parameters())[n].detach(), expected, atol=1e-6)
+        upd = torch.cat([(dict(model.named_parameters())[n].detach() - before[n]).ravel() for n in names]); mm = torch.cat([m[n].ravel() for n in names])
+        assert float(torch.cosine_similarity(upd, -mm, dim=0)) > 1 - 1e-5                    # direction = SGD-momentum direction (EMA form)
+        assert float(upd.norm()) <= 0.01 * float(mm.norm()) / float(torch.sqrt(v / (1 - 0.999 ** t))) * (1 + 1e-5) / (1 - 0.9 ** t)
+    st = opt.state_dict()["state"]; assert {"step", "exp_avg", "exp_avg_sq"} <= set(st[0]) and st[0]["exp_avg_sq"].ndim == 0 and float(st[0]["exp_avg_sq"]) == float(st[1]["exp_avg_sq"])
+    # a gradient 100x larger moves the parameters by at most ~lr * (gain of the slowly adapting normaliser), not 100x more
+    cfg = ReLUTrainConfig(optimizer="scalar_adam", lr=0.01, adam_betas=(0.9, 0.999)); assert normalized_optimizer_name(cfg) == "scalar_adam" and optimizer_group_names(cfg) == ["scalar_adam"]
+    with pytest.raises(ValueError):
+        ScalarAdam(model.parameters(), lr=0.01, betas=(1.0, 0.999))

@@ -734,3 +734,25 @@ def test_step_anatomy_helpers_replay_curvature_and_ablation(tmp_path) -> None:
     assert abs(ev["lambda_max"] - fd) < 0.15 * max(1.0, abs(fd))
     with pytest.raises(ValueError):
         replay_steps_full(sr, 2, step_from=5, step_to=5, data=d)
+
+
+def test_scalar_adam_run_saves_loads_and_replays_exactly(tmp_path) -> None:
+    from layer_lenses.init_sweep import SweepRunSpec, build_data_chunked, build_tree
+    from layer_lenses.relu_analysis import designed_run_seed_result, load_designed_run, replay_interval_from_snapshot, save_designed_run, train_relu_mlp_with_optimizer_snapshots
+    tree = build_tree(SweepRunSpec(tree_seed=5, data_seed=0, init_seed=0, batch_size=1, dim=12, depth=2))
+    x, y = build_data_chunked(SweepRunSpec(tree_seed=5, data_seed=7, init_seed=0, batch_size=1, dim=12, depth=2, n_train=600), tree, chunk_size=600)
+    data_spec = {"kind": "sweep_chunked", "tree_seed": 5, "data_seed": 7, "n_train": 600, "chunk_size": 600, "eval_seed": 99, "n_eval": 50, "dim": 12, "depth": 2}
+    torch.manual_seed(0); model = ReLUMLP(input_dim=12, hidden_dims=[6, 4], bias=False)
+    mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}; mask["hidden_layers.0.weight"][2:4] = 0.0
+    cfg = ReLUTrainConfig(epochs=8, lr=0.01, batch_size=100, seed=1, device="cpu", snapshot_epochs=(0, 2, 4, 6, 8), lr_scheduler_eta_min_ratio=0.1, optimizer="scalar_adam", adam_betas=(0.9, 0.999), parameter_update_mask=mask)
+    out = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=cfg)
+    assert out["optimizer_group_names"] == ["scalar_adam"] and len(out["checkpoint_snapshots"]) == 5
+    sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 12, "hidden_dims": [6, 4], "bias": False}, data_spec=data_spec, tree=tree, tag="scalar")
+    lo = load_designed_run(save_designed_run(sr, tmp_path / "scalar"))
+    st = lo["out"]["optimizer_snapshots"][4][0]["state"]; assert {"exp_avg", "exp_avg_sq", "step"} <= set(st[0]) and st[0]["exp_avg_sq"].ndim == 0 and float(st[0]["step"]) == 24
+    for e0 in (0, 2, 6):
+        rep = replay_interval_from_snapshot(lo, e0, data={"x_train": x, "y_train": y}, neuron_rows=[0, 2])
+        assert rep["verification"]["max_abs_param_diff_overall"] == 0.0 and rep["verification"]["max_abs_momentum_diff"] == 0.0 and np.all(rep["update_rows"][:, 1] == 0.0)
+    # every step moves the parameters by at most ~lr (normalised step) once the normaliser is warm
+    rep = replay_interval_from_snapshot(lo, 6, data={"x_train": x, "y_train": y}); W = lo["out"]["checkpoint_snapshots"]
+    assert np.linalg.norm(rep["update_rows"].reshape(rep["num_steps"], -1), axis=1).max() <= 1.05 * out["lr_history"][6]

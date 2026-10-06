@@ -61,6 +61,8 @@ class ReLUTrainConfig:
     first_layer_grad_orthogonal_to: tuple[float, ...] | np.ndarray | None = None
     parameter_update_mask: ParameterUpdateMask | None = None
     first_layer_rotation_lock: FirstLayerRotationLock | None = None
+    # "scalar_adam" only: (beta1, beta2) of the momentum and of the scalar second-moment estimate.
+    adam_betas: tuple[float, float] = (0.9, 0.999)
 
 
 def _labels_pm1_to_binary(y: torch.Tensor) -> torch.Tensor:
@@ -346,10 +348,11 @@ def _advance_rotation_lock(model: ReLUMLP, state: RotationLockState | None) -> N
 ADAM_OPTIMIZER_NAMES = frozenset({"adamw", "adam"})
 SGD_OPTIMIZER_NAMES = frozenset({"sgd", "gd"})
 HYBRID_OPTIMIZER_NAMES = frozenset({"sgd_adam", "sgd-adam", "sgdadam"})
+SCALAR_ADAM_OPTIMIZER_NAMES = frozenset({"scalar_adam", "scalar-adam", "scalaradam"})
 
 
 def normalized_optimizer_name(config: ReLUTrainConfig) -> str:
-    """Return "adamw", "sgd", or "sgd_adam" for a config's optimizer string."""
+    """Return "adamw", "sgd", "sgd_adam", or "scalar_adam" for a config's optimizer string."""
     name = config.optimizer.strip().lower()
     if name in ADAM_OPTIMIZER_NAMES:
         return "adamw"
@@ -357,8 +360,10 @@ def normalized_optimizer_name(config: ReLUTrainConfig) -> str:
         return "sgd"
     if name in HYBRID_OPTIMIZER_NAMES:
         return "sgd_adam"
+    if name in SCALAR_ADAM_OPTIMIZER_NAMES:
+        return "scalar_adam"
     raise ValueError(
-        'optimizer must be "adamw", "sgd", or "sgd_adam", '
+        'optimizer must be "adamw", "sgd", "sgd_adam", or "scalar_adam", '
         f"got {config.optimizer!r}"
     )
 
@@ -412,13 +417,63 @@ def primary_optimizer_index(config: ReLUTrainConfig) -> int:
     return names.index("adamw") if "adamw" in names else 0
 
 
+class ScalarAdam(torch.optim.Optimizer):
+    """Adam with ONE scalar second-moment estimate shared by every parameter.
+
+    Per step, with ``g`` the gradient of all parameters and ``t`` the step count::
+
+        m_t = beta1 * m_{t-1} + (1 - beta1) * g            (per parameter)
+        v_t = beta2 * v_{t-1} + (1 - beta2) * |g|^2        (one scalar, |g| over all parameters)
+        p  -= lr * (m_t / (1 - beta1^t)) / (sqrt(v_t / (1 - beta2^t)) + eps)
+
+    So the update direction is that of SGD with momentum ``beta1`` (in its EMA form) and only the
+    step length is normalised, by the running RMS of the gradient norm: the step is at most about
+    ``lr`` in parameter space, whatever the gradient scale. Weight decay is decoupled (as in AdamW).
+    The state stores ``exp_avg`` per parameter and the shared ``exp_avg_sq`` and ``step`` as 0-dim
+    tensors in every parameter's state, so it saves and loads like Adam's.
+    """
+
+    def __init__(self, params, lr: float = 1e-3, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-8, weight_decay: float = 0.0):
+        if lr < 0 or eps < 0 or not (0 <= betas[0] < 1 and 0 <= betas[1] < 1) or weight_decay < 0:
+            raise ValueError(f"invalid ScalarAdam hyperparameters lr={lr}, betas={betas}, eps={eps}, weight_decay={weight_decay}")
+        super().__init__(params, dict(lr=lr, betas=tuple(betas), eps=eps, weight_decay=weight_decay))
+
+    @torch.no_grad()
+    def step(self, closure=None):  # noqa: D401 - torch API
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+        with_grad = [(group, p) for group in self.param_groups for p in group["params"] if p.grad is not None]
+        if not with_grad:
+            return loss
+        sq = sum((p.grad * p.grad).sum() for _, p in with_grad)
+        for group, p in with_grad:
+            st = self.state[p]
+            if len(st) == 0:
+                st["step"] = torch.zeros((), dtype=torch.float32, device=p.device)
+                st["exp_avg"] = torch.zeros_like(p)
+                st["exp_avg_sq"] = torch.zeros((), dtype=torch.float32, device=p.device)
+            beta1, beta2 = group["betas"]
+            st["step"] += 1
+            st["exp_avg"].mul_(beta1).add_(p.grad, alpha=1 - beta1)
+            st["exp_avg_sq"].mul_(beta2).add_(sq.to(st["exp_avg_sq"].dtype), alpha=1 - beta2)
+            t = st["step"]
+            bc1 = 1 - beta1 ** t; bc2 = 1 - beta2 ** t
+            denom = (st["exp_avg_sq"] / bc2).sqrt() + group["eps"]
+            if group["weight_decay"] != 0:
+                p.mul_(1 - group["lr"] * group["weight_decay"])
+            p.add_(st["exp_avg"] / (bc1 * denom), alpha=-group["lr"])
+        return loss
+
+
 def build_relu_optimizers(
     model: ReLUMLP,
     config: ReLUTrainConfig,
 ) -> list[torch.optim.Optimizer]:
     """Build the optimizer(s) for a config, as a list in `optimizer_group_names` order.
 
-    ``"adamw"`` and ``"sgd"`` return a single optimizer over all parameters.
+    ``"adamw"``, ``"sgd"`` and ``"scalar_adam"`` (`ScalarAdam`) return a single optimizer over all parameters.
     ``"sgd_adam"`` returns ``[SGD over early layers, AdamW over the rest]``, split by
     ``config.sgd_adam_split_layer``.
 
@@ -453,6 +508,8 @@ def build_relu_optimizers(
                 nesterov=False,
             )
         ]
+    if kind == "scalar_adam":
+        return [ScalarAdam(model.parameters(), lr=config.lr, betas=tuple(config.adam_betas), weight_decay=config.weight_decay)]
 
     sgd_named, adam_named = split_named_parameters_sgd_adam(
         model, config.sgd_adam_split_layer

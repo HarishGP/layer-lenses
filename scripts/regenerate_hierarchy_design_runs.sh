@@ -24,6 +24,7 @@ $PY $S/hierarchy_replayable_probe001/run_hierarchy_replayable_probe001.py       
 $PY $S/hierarchy_branch750/run_hierarchy_branch750.py                              # runs 13-14: run 11 branched at epoch 750, first layer frozen (needs run 11's replay files; ~50 min)
 $PY $S/hierarchy_branch750_adam_all/run_hierarchy_branch750_adam_all.py            # run 15:   run 11 branched at epoch 750, all layers AdamW (needs run 11; ~26 min)
 $PY $S/hierarchy_rotlock099/run_hierarchy_rotlock.py                               # run 16:   run 11 with the first-layer rotation lock at |cos| 0.99 (~26 min)
+$PY $S/hierarchy_scalaradam/run_hierarchy_scalaradam.py                            # run 17:   run 11 trained with ScalarAdam (normalised step, lr 0.001; ~30 min)
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"

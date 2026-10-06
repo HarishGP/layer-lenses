@@ -2606,6 +2606,16 @@ def save_designed_run(seed_result: dict[str, Any], folder: str | Path) -> Path:
     if not state_keys:
         last = _as_optimizer_state_list(opt[epochs[-1]])[0]
         state_keys = sorted({k for st in last["state"].values() for k, v in st.items() if isinstance(v, torch.Tensor)})
+    # a fresh optimizer has an empty state at epoch 0: fill with zeros of the shape the key has once it exists
+    # (per-parameter for momentum / Adam moments, 0-dim for "step" and ScalarAdam's shared second moment)
+    ref_shape: dict[tuple[str, str], tuple[int, ...]] = {}
+    for e in epochs:
+        state = _as_optimizer_state_list(opt[e])[0]["state"]
+        for i, n in enumerate(names):
+            for k in state_keys:
+                val = state.get(i, {}).get(k)
+                if val is not None and (k, n) not in ref_shape:
+                    ref_shape[(k, n)] = tuple(val.shape)
     stacks: dict[str, list[np.ndarray]] = {}
     for e in epochs:
         state = _as_optimizer_state_list(opt[e])[0]["state"]
@@ -2613,7 +2623,7 @@ def save_designed_run(seed_result: dict[str, Any], folder: str | Path) -> Path:
             for k in state_keys:
                 val = state.get(i, {}).get(k)
                 if val is None:
-                    val = torch.zeros((), dtype=torch.float32) if k == "step" else torch.zeros_like(ck[e][n])
+                    val = torch.zeros(ref_shape.get((k, n), () if k == "step" else tuple(ck[e][n].shape)), dtype=torch.float32)
                 stacks.setdefault(f"s__{k}__{n}", []).append(val.detach().cpu().float().numpy())
     np.savez(folder / "optimizer_state.npz", epochs=np.array(epochs), **{k: np.stack(v) for k, v in stacks.items()})
     template = {k: v for k, v in _as_optimizer_state_list(opt[epochs[-1]])[0]["param_groups"][0].items() if k != "params"}
