@@ -4957,3 +4957,40 @@ the step size meets the sharpening.
 
 ### Current state / where to pick up
 - Not pushed; commit only.
+
+## 2026-10-09 — Run 21: run 11 without the 18 random rows (the value of the spare neurons)
+
+### User prompts (verbatim)
+- "Back to analysing run 11. I want to check the value of the 18 spare neurons in light of the extra changes we made going form run 6 to run 11 (mainly the balancing of weights connecting hidden layer 2 to hidden layer 3). \n\nCan you start another run that mirrors run 11, except for just having 62 neurons in layer 1, without the random neurons."
+
+### Changes
+- Script `results/designed_init/run_hierarchy_replayable_62.py`: run 11's script with width1=62. A
+  fresh 62-row build reproduces run 11's rows 0-61 and W2[:, :62] exactly but draws a different
+  third-layer 0/1 pattern (the RNG state differs after the random rows), so the script copies W3 and
+  the output layer from run 11's stored init (asserted) to make the random rows the only difference.
+  Tracked outputs under `results/designed_init/hierarchy_replayable_62/`; runs notebook section 21
+  with a row-fate comparison cell.
+
+### Results
+- Loss 0.166 / test error 7.0% / 27 of 31 nodes (run 11: 0.037 / 1.6% / 31); nodes 7, 8, 9, 14 (all
+  of level 3) never covered; loss never below 0.1. Run 6 (62 rows, balanced output only, 10M points,
+  lr 0.02) had reached 0.081 with 30 nodes.
+- Mechanism: the eight level-3 probes rise to 0.72-0.86 on their own nodes by epoch 230-280, then
+  are pulled onto level-4 nodes at epochs 440-1150 (14 -> u_16, 15 -> u_15, 18 -> u_20, 19 -> u_19,
+  28 -> u_30, 29 -> u_29; 16, 17 at 0.92 with u_17, u_18), ending with norms 1.6-3.0 and fan-out
+  1.8-3.1 (others ~5-6). In run 11 the random rows take those level-4 jobs (63, 64, 65, 67, 68, 75,
+  76, 77, 79, from zero fan-out, epochs 410-4500) and the level-3 probes reach 1.00.
+- No spikes (max one-epoch change 0.009) although lr * lambda_max is 3.6-3.8 from epoch 500 to
+  5000 (eigenvector 55-75% W2), like run 11.
+
+### Reading
+- The spare rows are a sink for the pull toward the level-4 normals: free rows absorb it; without
+  them the least committed probes (level 3) are diverted and their nodes are lost. The run-6-to-11
+  design changes did not remove that pull.
+- Catapult trigger narrowed: at the same edge, probes defecting (run 21) does not set spikes off;
+  random rows being recruited (a W2 column growing from zero while the row rotates) does, consistent
+  with runs 13 and 16.
+
+### Current state / where to pick up
+- Not pushed; commit only. Open: what the level-4 pull wants that the frozen cues do not provide
+  (trainable copies of the level-4 detectors, or just the label-correlated gradient on free rows).
