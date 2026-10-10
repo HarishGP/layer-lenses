@@ -42,24 +42,31 @@ Use notebooks for exploratory analysis, especially:
 ## Designed-init hierarchy runs (`notebooks/hierarchy_design_runs.ipynb`)
 
 The notebook has one section per training run from a hand-designed initialisation
-(30 probe neurons, 32 cue neurons). It reads parameter trajectories (all four weight
-matrices every 10 epochs), summaries and per-epoch tables from `results/designed_init/`.
-The four run folders it needs are committed (about 30 MB, the only tracked content under
-`results/`), so the notebook runs on a fresh clone without a GPU:
+(30 probe neurons, 32 cue neurons, optionally 18 random neurons). It reads parameter
+trajectories (all four weight matrices every 10 epochs), summaries and per-epoch tables from
+`results/designed_init/`. The trajectories of runs 1-11 and 15-21 are committed (about 850 MB
+in total; the replayable runs 11 and 15-21 also carry their optimizer state so
+`notebooks/hierarchy_trajectory_analysis.ipynb` can replay any interval exactly), so those
+sections run on a fresh clone without a GPU. The replay files of runs 12-14 (`hierarchy_replayable_probe001`,
+`hierarchy_branch750_sgd_frozenL1`, `hierarchy_branch750_adam_frozenL1`) are left out to keep the
+repository under 1 GB; their summaries and per-epoch tables are committed, and the scripts below
+regenerate them (runs 13-14 need run 11's replay files, which are committed). Sections 12-14 of the
+notebook need those files.
 
 ```bash
 cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb
 ```
 
 To regenerate the runs from scratch instead (CUDA GPU with at least 8 GB free, about 8 GB
-of host RAM, roughly three hours; each script is independent if you only want some runs):
+of host RAM, roughly 9 hours for all 21 runs; the scripts are independent except that the
+branches of run 11 need its replay files):
 
 ```bash
 scripts/regenerate_hierarchy_design_runs.sh
 ```
 
-This runs the four scripts kept under `notebooks/results/designed_init/*/run_*.py`, the
-same files that produced the committed outputs. Then execute the notebook as above. Runs are bitwise reproducible on the same GPU/driver (fixed seeds, fixed batch order);
+This runs the scripts kept under `notebooks/results/designed_init/*/run_*.py` (one per run or
+pair of runs, listed in the script with their runtimes), the same files that produced the committed outputs. Then execute the notebook as above. Runs are bitwise reproducible on the same GPU/driver (fixed seeds, fixed batch order);
 on other hardware expect the same qualitative outcome with different per-probe fates.
 The library code behind the design and the plots is in `src/layer_lenses/designed_init.py`
 and `src/layer_lenses/relu_analysis.py`; the narrative is in `notes/session_log.md`
