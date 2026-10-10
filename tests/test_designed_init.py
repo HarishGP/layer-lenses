@@ -436,3 +436,24 @@ def test_probe_scale_applies_after_the_row_rescale() -> None:
     assert np.array_equal(B[30:], A[30:])
     for k in ("hidden_layers.1.weight", "hidden_layers.2.weight", "output_layer.weight"):
         assert np.array_equal(w1[k], w2[k])
+
+
+def test_node_lineage_and_probe_deviation_lineage() -> None:
+    from layer_lenses.designed_init import HIERARCHY_TARGETS, lineage_chance, node_ancestors, node_lineage, probe_deviation_lineage
+    from layer_lenses.init_sweep import SweepRunSpec, build_tree
+
+    assert node_ancestors(0) == [] and node_ancestors(2) == [0] and node_ancestors(16) == [7, 3, 1, 0]
+    assert node_lineage(3, 3)["relation"] == "same"
+    assert node_lineage(3, 1) == {"relation": "ancestor", "level_gap": -1, "side": "-"}         # node 3 is the left (negative-side) child of node 1
+    assert node_lineage(4, 1) == {"relation": "ancestor", "level_gap": -1, "side": "+"}
+    assert node_lineage(1, 16) == {"relation": "descendant", "level_gap": 3, "side": "-"}       # 16 is under 7, under 3, the negative child of 1
+    assert node_lineage(1, 20) == {"relation": "descendant", "level_gap": 3, "side": "+"}       # 20 is under 9, under 4, the positive child of 1
+    assert node_lineage(3, 4)["relation"] == "unrelated" and node_lineage(7, 16)["relation"] == "descendant" and node_lineage(7, 30)["relation"] == "unrelated"
+    assert lineage_chance(0) == 1.0 and lineage_chance(1) == 15 / 30 and lineage_chance(3) == 8 / 30 and lineage_chance(7) == 5 / 30
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    W1 = np.zeros((62, 100)); W1[:30] = np.array([pole * tree.w_list[node] for node, pole in HIERARCHY_TARGETS])
+    W1[2] = -tree.w_list[0]; W1[14] = tree.w_list[16]; W1[8] = 0.5 * tree.w_list[4] + 0.5 * tree.w_list[1]           # a deviation up, one down (16 = 2*7+2 is the positive-side child of 7), one undecided
+    t = probe_deviation_lineage(W1, tree)
+    assert len(t) == 30 and t.deviated.sum() == 2 and t.relation[t.probe == 2].item() == "ancestor" and t.relation[t.probe == 14].item() == "descendant"
+    assert t.side[t.probe == 14].item() == "+" and t.level_gap[t.probe == 14].item() == 1 and t.relation[t.probe == 8].item() == "none" and not t.captured[t.probe == 8].item()
+    assert t.end_cos[t.probe == 2].item() < -0.99 and (t[~t.deviated & t.captured].relation == "same").all()

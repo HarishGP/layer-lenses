@@ -4994,3 +4994,31 @@ the step size meets the sharpening.
 ### Current state / where to pick up
 - Not pushed; commit only. Open: what the level-4 pull wants that the frozen cues do not provide
   (trainable copies of the level-4 detectors, or just the label-correlated gradient on free rows).
+
+## 2026-10-10 — Probe deviations go to ancestors or descendants of their target (runs 1-21)
+
+### User prompts (verbatim)
+- "I have noticed something even more subtle. When the probe nodes deviate from their intended goal, they always seem to deviate to either an ancestor or descendant of the intended ODT direction. Can you check the validity of this across all the runs?"
+
+### Changes
+- `designed_init.py`: `node_ancestors`, `node_in_subtree`, `node_lineage(target, other)` (relation,
+  level gap, side), `lineage_chance`, `probe_deviation_lineage(W1, tree)`; test. Suite 114 passing.
+- Table of every probe's end state in runs 1-21: `results/designed_init/probe_deviation_lineage_runs1-21.csv`
+  (tracked). Runs notebook section 22 recomputes it from the loaded runs (end state and along the
+  trajectories).
+
+### Results (end state, |cos| >= 0.95, 630 probes in 21 runs, 145 deviations)
+- Runs 10-21 (balanced third-layer paths onward): 66 deviations, 35 ancestor + 31 descendant, 0
+  unrelated (chance 27%); descendants always a direct child, ancestors the parent (33) or the root (2,
+  run 12); no unrelated capture at any checkpoint either.
+- Runs 1-9: 79 deviations, 61% lineage-related (chance 29%), 31 unrelated (run 2: 9, run 4: 7).
+- Ancestor deviations take the ancestor's pole on the side containing the target: 45/45 overall.
+- Descendant deviations sit in the subtree on the probe's own pole side: 25/31 (runs 10-21), 20/38 (1-9).
+- The deviating rows of runs 10-21 are the same few (5, 14, 29 in 11 runs each; 8 in 8; 2 in 6):
+  init- and data-determined, independent of the optimizer.
+
+### Reading
+The observation is exact under the current design and a strong tendency under the earlier ones.
+A probe never leaves its lineage: it either climbs to the parent as the coarser gate of the same
+region (pole = the side containing its target) or descends to a child, mostly on its own pole's
+side. The unrelated captures all belong to the designs with one-quantum or sign-flipping unit paths.

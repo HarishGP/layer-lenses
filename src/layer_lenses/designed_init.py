@@ -970,3 +970,68 @@ def probe_gradient_stats(grad_W1: np.ndarray, W1: np.ndarray, tree: COBODTTree) 
             "push_top": f"{'+' if c[top] > 0 else '-'}u{top}", "row_cos_target": float(pole * (U[node] @ W[p]) / max(np.linalg.norm(W[p]), 1e-300)),
         })
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------------------------
+# Lineage of probe deviations in the ODT tree (heap indexing: children of node i are 2i+1, 2i+2;
+# the split at node i sends x with w_i . x > 0 to the right child 2i+2)
+# ---------------------------------------------------------------------------------------------
+
+
+def node_ancestors(node: int) -> list[int]:
+    """Ancestors of ``node`` from its parent up to the root (empty for the root)."""
+    out = []
+    while node > 0:
+        node = (node - 1) // 2
+        out.append(node)
+    return out
+
+
+def node_in_subtree(node: int, root: int, n_nodes: int) -> bool:
+    """True if ``node`` lies in the subtree rooted at ``root`` (root included)."""
+    return node == root or root in node_ancestors(node)
+
+
+def node_lineage(target: int, other: int, n_nodes: int = 31) -> dict[str, Any]:
+    """Relation of ``other`` to ``target`` in the heap-indexed complete tree.
+
+    ``relation`` is ``same``, ``ancestor`` (``other`` is above ``target``), ``descendant`` (below) or
+    ``unrelated``; ``level_gap`` is the level difference (positive = ``other`` deeper); ``side`` says,
+    for a descendant, whether it lies in the target's positive-side subtree (``+``: the child
+    reached when w_target . x > 0) or the negative one (``-``), and, for an ancestor, on which side
+    of ``other`` the target lies.
+    """
+    if target == other:
+        return {"relation": "same", "level_gap": 0, "side": ""}
+    if other in node_ancestors(target):
+        side = "+" if node_in_subtree(target, 2 * other + 2, n_nodes) else "-"
+        return {"relation": "ancestor", "level_gap": int(NODE_LEVEL[other] - NODE_LEVEL[target]), "side": side}
+    if target in node_ancestors(other):
+        side = "+" if node_in_subtree(other, 2 * target + 2, n_nodes) else "-"
+        return {"relation": "descendant", "level_gap": int(NODE_LEVEL[other] - NODE_LEVEL[target]), "side": side}
+    return {"relation": "unrelated", "level_gap": int(NODE_LEVEL[other] - NODE_LEVEL[target]), "side": ""}
+
+
+def lineage_chance(target: int, n_nodes: int = 31) -> float:
+    """Fraction of the other nodes that are ancestors or descendants of ``target`` (the chance level for a deviation to be lineage-related)."""
+    related = sum(node_lineage(target, o, n_nodes)["relation"] in ("ancestor", "descendant") for o in range(n_nodes) if o != target)
+    return related / (n_nodes - 1)
+
+
+def probe_deviation_lineage(W1: np.ndarray, tree: COBODTTree, threshold: float = 0.95) -> pd.DataFrame:
+    """Where each probe row ended and how that node relates to its designed target.
+
+    One row per probe (rows 0-29 of ``W1``): ``target``, ``pole``, ``end_node`` (the ODT node with the
+    largest |cosine|), ``end_cos`` (signed), ``captured`` (|cosine| >= threshold), ``deviated``
+    (captured on another node), ``relation`` / ``level_gap`` / ``side`` from `node_lineage`, and
+    ``chance`` (the fraction of other nodes on the target's lineage).
+    """
+    n_nodes = tree.w_list.shape[0]
+    C = (W1[: len(HIERARCHY_TARGETS)] / np.maximum(np.linalg.norm(W1[: len(HIERARCHY_TARGETS)], axis=1, keepdims=True), 1e-12)) @ tree.w_list.T
+    rows = []
+    for p, (node, pole) in enumerate(HIERARCHY_TARGETS):
+        j = int(np.abs(C[p]).argmax()); c = float(C[p, j]); captured = abs(c) >= threshold
+        rel = node_lineage(node, j, n_nodes)
+        rows.append({"probe": p, "target": node, "target_level": int(NODE_LEVEL[node]), "pole": pole, "end_node": j, "end_cos": c, "captured": captured, "deviated": captured and j != node,
+                     "relation": rel["relation"] if captured else "none", "level_gap": rel["level_gap"], "side": rel["side"], "chance": lineage_chance(node, n_nodes)})
+    return pd.DataFrame(rows)

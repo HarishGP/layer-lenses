@@ -76,3 +76,4 @@ results/designed_init/*
 !results/designed_init/hierarchy_scalaradam_lr03/replay/meta.pkl
 !results/designed_init/hierarchy_replayable_62/
 !results/designed_init/hierarchy_replayable_62/replay/meta.pkl
+!results/designed_init/probe_deviation_lineage_runs1-21.csv
