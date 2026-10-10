@@ -5102,3 +5102,40 @@ level-4 vetoes. Proposed test (run 23): run 22 with W2's cue block zeroed at ini
 ### Current state / where to pick up
 - Not pushed; commit only. Later-layer phase: unit anatomy over time (when the vetoes form, in which
   order of levels), the third layer's role, and run 23.
+
+## 2026-10-10 — Run 23: run 22 with W2's cue block zeroed; the W2 sign structure at init picks the solution family
+
+### User prompts (verbatim)
+- "Launch run 23 with the W2 cue block zeroed at init"
+
+### Changes
+- Script `results/designed_init/run_hierarchy_idealL1_zerocue.py`. First launch was dead: the design
+  wires each unit's probe with weight -1 (a veto against the cues), so with the cue block zeroed every
+  unit had a non-positive pre-activation everywhere (zero logits, zero gradients, loss 0.693); killed
+  and relaunched with the probe weights set to +1 (unit 2j = relu(u_j . x) at init, logit rms 0.45).
+  Outputs tracked under `results/designed_init/hierarchy_idealL1_zerocue/`; runs notebook section 23
+  with anatomy and development cells.
+
+### Results
+- Loss 0.182 / test error 7.0% (run 22: 0.152; run 11: 0.037). The cues are recruited with positive
+  weights (37 entries > 1, 3 < -1), not as vetoes.
+- Second layer in a different family: 28/30 units active on 96% of inputs with +5..+10 weights on the
+  correct-side detectors of one root-to-leaf path (additive leaf score); run 22's units were sparse
+  vetoes (4% active). The only difference at init is W2's sign structure (probe -1 + positive cues vs
+  probe +1 alone); the family never changes afterwards (weights do not cross zero).
+- Catapults with a frozen first layer: 497 spiky epochs between 2108 and 6863, jumps to 1.43 (5639)
+  and 0.87 (6386), lr * lambda_max 3.7-3.9 from epoch 500 to 5000 (75% W2). Run 22 stayed at
+  lambda_max <= 132 with no spikes.
+
+### Reading
+- Hypothesis "a free level-4 row to recruit as a veto is the limiting resource" is refuted: given free
+  cues the units took them additively. What decides the second layer's solution is the sign pattern
+  of W2 at init; run 11's quality comes from mixing families (7 veto leaf units with a random-row
+  level-4 veto and 23 broad units).
+- Correction to the catapult story of runs 13 / 16 / 21: catapults need the sharpness along the top
+  W2/W3 direction to cross the heavy-ball limit; a dense additive second layer reaches it with the
+  first layer frozen, so first-layer motion was one trigger in run 11, not a requirement.
+
+### Current state / where to pick up
+- Not pushed; commit only. Later-layer phase: track unit family over time (sparsity, vetoes) in runs
+  11 / 22 / 23 with the replay tools; relate family to sharpness.

@@ -79,3 +79,5 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/probe_deviation_lineage_runs1-21.csv
 !results/designed_init/hierarchy_idealL1/
 !results/designed_init/hierarchy_idealL1/replay/meta.pkl
+!results/designed_init/hierarchy_idealL1_zerocue/
+!results/designed_init/hierarchy_idealL1_zerocue/replay/meta.pkl
