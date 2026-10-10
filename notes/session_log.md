@@ -5040,3 +5040,27 @@ side. The unrelated captures all belong to the designs with one-quantum or sign-
   also copied to `~/researchcodes/layer-lenses-replay-backup/`.
 - Pushed `main` (166b876 -> e33c3a3). GitHub warned about files above its 50 MB recommendation
   (82 MB at most), under the 100 MB limit.
+
+## 2026-10-10 — Why output-layer weights rarely flip sign (Q&A with a cross-run check)
+
+### User prompts (verbatim)
+- "Do we have any intuitive reason for why the output layer weights rarely flip sign?"
+
+### Check (output weights at every stored checkpoint)
+- Runs 10, 11, 15, 16, 20, 21 (balanced output signs and balanced paths): 0 sign changes of any of
+  the 40 output weights at any checkpoint; closest approach to zero |w| = 0.076 (run 11, from 0.22).
+- Runs 6-9 (balanced output, earlier path designs): 1-2 flips each. Runs 1-3 (all-ones output):
+  10-21 of the 40 weights end with the opposite sign, i.e. the flips were forced by an init with no
+  negative votes.
+- |w_k| and the incoming W3 row norm grow together (run 11: correlation 0.99 over neurons at the end,
+  both x10-15); 73% of checkpoint intervals increase |w_k|. The gradient-flow invariant
+  w_k^2 - |W3[k,:]|^2 drifts under heavy-ball SGD (up to 45 in run 11, 120 in run 7) but is nearly
+  conserved in the normalised-step run 20 (drift 0.66).
+
+### Reading
+dL/dw_k = E[(p - y) h_k] with h_k >= 0, and dL/dW3[k,:] = w_k E[(p - y) 1[active] h2]: the sign of
+w_k decides which class the neuron learns to fire for, and that feature then correlates with the
+residual in the sign that grows |w_k|. Flipping needs the neuron to be anti-correlated with its own
+vote for long enough to drive w_k through zero while its upstream weights are being trained to
+prevent exactly that; at w_k = 0 the whole branch has zero gradient (a dead-branch saddle). Hence
+polarity is fixed at init unless the init cannot represent a class (runs 1-3).
