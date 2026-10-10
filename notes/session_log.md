@@ -5022,3 +5022,21 @@ The observation is exact under the current design and a strong tendency under th
 A probe never leaves its lineage: it either climbs to the parent as the coarser gate of the same
 region (pole = the side containing its target) or descends to a child, mostly on its own pole's
 side. The unrelated captures all belong to the designs with one-quantum or sign-flipping unit paths.
+
+## 2026-10-10 — Commit and push under a 1 GB repository budget
+
+### User prompts (verbatim)
+- "Commit everything and push to remote. Ensure the repo size stays below 1 GB. Ensure no file exceeds 100 MB. If you have to choose files to upload, defintely upload the trajectory of run 11. And after that prioritise the trajectory saves from latest runs."
+
+### Changes
+- All tracked content was 1121 MiB (largest file 82 MB), so the replay files of runs 12, 13 and 14
+  (`hierarchy_replayable_probe001`, `hierarchy_branch750_sgd_frozenL1`,
+  `hierarchy_branch750_adam_frozenL1`; 297 MB) were dropped: the 34 unpushed commits were rewritten
+  with `git filter-branch` to remove those three `replay/` folders (summaries, per-epoch tables,
+  manifests and trees stay tracked), `.gitignore` now ignores them, and README / notebook sections
+  12-14 say they must be regenerated with their scripts. Tracked content is now 825 MiB; every
+  replayable run from 15 on and run 11 are in git. The pre-rewrite history is kept locally on
+  branch `backup-pre-filter-20261010`; the three replay folders are still on disk (untracked) and
+  also copied to `~/researchcodes/layer-lenses-replay-backup/`.
+- Pushed `main` (166b876 -> e33c3a3). GitHub warned about files above its 50 MB recommendation
+  (82 MB at most), under the 100 MB limit.
