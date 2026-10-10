@@ -457,3 +457,23 @@ def test_node_lineage_and_probe_deviation_lineage() -> None:
     assert len(t) == 30 and t.deviated.sum() == 2 and t.relation[t.probe == 2].item() == "ancestor" and t.relation[t.probe == 14].item() == "descendant"
     assert t.side[t.probe == 14].item() == "+" and t.level_gap[t.probe == 14].item() == 1 and t.relation[t.probe == 8].item() == "none" and not t.captured[t.probe == 8].item()
     assert t.end_cos[t.probe == 2].item() < -0.99 and (t[~t.deviated & t.captured].relation == "same").all()
+
+
+def test_leaf_wrong_side_detectors_and_unit_leaf_anatomy() -> None:
+    from layer_lenses.designed_init import leaf_wrong_side_detectors, unit_leaf_anatomy
+    from layer_lenses.init_sweep import SweepRunSpec, build_tree
+
+    assert leaf_wrong_side_detectors(0) == [(0, 1), (1, 1), (3, 1), (7, 1), (15, 1)]           # leftmost leaf: every split went left (w.x <= 0), so +u is the wrong side
+    assert leaf_wrong_side_detectors(31) == [(0, -1), (2, -1), (6, -1), (14, -1), (30, -1)]
+    assert leaf_wrong_side_detectors(30) == [(0, -1), (2, -1), (6, -1), (14, -1), (30, 1)]
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1)); U = tree.w_list
+    rng = np.random.default_rng(0); x = rng.standard_normal((4000, 100)); x /= np.linalg.norm(x, axis=1, keepdims=True)
+    # first layer: +-u_j detectors for all 31 nodes (62 rows); a unit that vetoes leaf 30's four internal wrong-side detectors and reads -u30 positively
+    W1 = np.array([s * U[j] for j in range(31) for s in (1, -1)]); row = {(j, s): 2 * j + (0 if s > 0 else 1) for j in range(31) for s in (1, -1)}
+    W2 = np.zeros((2, 62)); 
+    for n, s in leaf_wrong_side_detectors(30)[:4]: W2[0, row[(n, s)]] = -5.0
+    W2[0, row[(30, -1)]] = 0.1; W2[1, row[(0, 1)]] = 1.0                                    # unit 1: fires on the whole right half
+    W3 = np.ones((3, 2)); Wout = np.array([1.0, -1.0, 2.0])
+    t = unit_leaf_anatomy(W1, W2, W3, Wout, tree, x)
+    assert t.top_leaf[0] == 30 and t.share[0] > 0.9 and t.vetoes_on_chain[0] == 4 and t.veto_levels[0] == "0123" and t.positive_inputs[0] == "-u30:0.10" and abs(t.active[0] - 1 / 32) < 0.02
+    assert abs(t.active[1] - 0.5) < 0.05 and t.n_veto[1] == 0 and t.vetoes_on_chain[1] <= 1 and t.path[1] == 2.0

@@ -1,0 +1,2 @@
+tag,n_train,batch,epochs,steps_per_epoch,steps,lr,logit_rms_init,final_epoch_loss,min_epoch_loss,train_log_loss_end,test_error_end,test_error_strict_end,zero_logit_frac_end,epoch_to_0.3,epoch_to_0.2,epoch_to_0.1,epoch_to_0.05,on_target_L0_end,on_target_L1_end,on_target_L2_end,on_target_L3_end,nodes_covered_end,wall_min
+linear_frozen_kaiming_cosine_idealL1_62_seed0,1000000,10000,10000,100,1000000,0.01,0.1571258306503296,0.15160177603363992,0.15160177603363992,0.1511172205209732,0.06277500092983246,0.06277500092983246,0.0,235,1093,-1,-1,1.0,1.0,1.0,1.0,31,25.755590295791627

@@ -1035,3 +1035,52 @@ def probe_deviation_lineage(W1: np.ndarray, tree: COBODTTree, threshold: float =
         rows.append({"probe": p, "target": node, "target_level": int(NODE_LEVEL[node]), "pole": pole, "end_node": j, "end_cos": c, "captured": captured, "deviated": captured and j != node,
                      "relation": rel["relation"] if captured else "none", "level_gap": rel["level_gap"], "side": rel["side"], "chance": lineage_chance(node, n_nodes)})
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------------------------
+# Anatomy of second-layer units as leaf / region detectors
+# ---------------------------------------------------------------------------------------------
+
+
+def leaf_wrong_side_detectors(leaf: int, depth: int = 5) -> list[tuple[int, int]]:
+    """For leaf ``leaf`` (0-based, left to right), the (node, pole) detector that is OFF on the leaf's side at each ancestor, root first.
+
+    At an ancestor reached through its right child (w . x > 0 on the leaf) the wrong-side detector is -u; through
+    the left child, +u. A unit that gives these detectors large negative weights fires only inside the leaf.
+    """
+    n = leaf + (2 ** depth - 1); out = []
+    while n > 0:
+        parent = (n - 1) // 2; out.append((parent, -1 if n == 2 * parent + 2 else +1)); n = parent
+    return out[::-1]
+
+
+def unit_leaf_anatomy(W1: np.ndarray, W2: np.ndarray, W3: np.ndarray, Wout: np.ndarray, tree: COBODTTree, x: np.ndarray, *,
+                      align_threshold: float = 0.9, veto_threshold: float = -1.0, positive_threshold: float = 0.05) -> pd.DataFrame:
+    """One row per second-layer unit: where it fires, and how its fan-in from the first layer builds that region.
+
+    Columns: ``active`` (fraction of ``x`` where the unit is on), ``top_leaf`` and ``share`` (the leaf that holds most of
+    its activity and that leaf's share), ``n_veto`` (first-layer rows with weight below ``veto_threshold``),
+    ``vetoes_on_chain`` (how many of the top leaf's five wrong-side detectors are among the vetoed rows),
+    ``veto_levels`` (levels of the vetoed detectors), ``positive_inputs`` (rows with weight above
+    ``positive_threshold``, as detector labels), ``path`` (|W3[:, u] . Wout|). A first-layer row counts as the
+    detector of node j with pole s when |cos(row, u_j)| >= ``align_threshold``.
+    """
+    U = tree.w_list; depth = int(np.log2(U.shape[0] + 1))
+    node = np.zeros(len(x), dtype=int)
+    for _ in range(depth):
+        node = 2 * node + 1 + (np.einsum("nd,nd->n", x, U[node]) > 0).astype(int)
+    leaf = node - (2 ** depth - 1); n_leaves = 2 ** depth
+    C1 = (W1 / np.maximum(np.linalg.norm(W1, axis=1, keepdims=True), 1e-12)) @ U.T
+    det = [(int(np.abs(c).argmax()), int(np.sign(c[np.abs(c).argmax()]))) if np.abs(c).max() >= align_threshold else None for c in C1]
+    h1 = np.maximum(x @ W1.T, 0.0); h2 = np.maximum(h1 @ W2.T, 0.0)
+    rows = []
+    for u in range(W2.shape[0]):
+        act = h2[:, u] > 0; cnt = np.bincount(leaf[act], minlength=n_leaves) if act.any() else np.zeros(n_leaves)
+        top = int(cnt.argmax()) if act.any() else -1; chain = leaf_wrong_side_detectors(top, depth) if top >= 0 else []
+        neg = [t for t in np.argsort(W2[u]) if W2[u, t] < veto_threshold]; pos = [t for t in np.argsort(-W2[u]) if W2[u, t] > positive_threshold]
+        neg_det = [det[t] for t in neg if det[t] is not None]
+        rows.append({"unit": u, "active": float(act.mean()), "top_leaf": top, "share": float(cnt.max() / act.sum()) if act.any() else np.nan, "n_veto": len(neg),
+                     "vetoes_on_chain": int(sum(1 for v in chain if v in neg_det)), "veto_levels": "".join(str(int(NODE_LEVEL[n])) for n, _ in sorted(neg_det, key=lambda z: NODE_LEVEL[z[0]])),
+                     "positive_inputs": ", ".join((f"{'+' if det[t][1] > 0 else '-'}u{det[t][0]}" if det[t] else f"row{t}") + f":{W2[u, t]:.2f}" for t in pos[:5]),
+                     "path": float(abs(W3[:, u] @ np.asarray(Wout).ravel()))})
+    return pd.DataFrame(rows)

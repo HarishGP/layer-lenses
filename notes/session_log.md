@@ -5064,3 +5064,41 @@ residual in the sign that grows |w_k|. Flipping needs the neuron to be anti-corr
 vote for long enough to drive w_k through zero while its upstream weights are being trained to
 prevent exactly that; at w_k = 0 the whole branch has zero gradient (a dead-branch saddle). Hence
 polarity is fixed at init unless the init cannot represent a class (runs 1-3).
+
+## 2026-10-10 — Run 22: frozen ideal first layer; the second layer builds leaf detectors by vetoes
+
+### User prompts (verbatim)
+- "I think we can start another part of the analysis, where we analyse later layer trajectories mainly. The first layer analysis is at a much better state when compared to the latter layers. \n\nTo this end, start a run similar to run 21, where first layer weights are frozen and the probes are also set to their desired targets. \n\nAlso, move Section 22 in the runs notebook elsewhere. I want to keep the sectioning structure of each section corresponding to a run in the runs notebook."
+
+### Changes
+- Cross-run analyses moved to `notebooks/hierarchy_cross_run_analysis.ipynb` (light loader of the
+  weight stacks of every run via `RUN_INDEX`; the lineage section is its section 1); the runs
+  notebook keeps one section per run. README updated.
+- Script `results/designed_init/run_hierarchy_idealL1.py` (run 22): run 21's build, the 30 probes
+  replaced by +-u_j at row norm sqrt(2), the whole first layer frozen; outputs tracked under
+  `results/designed_init/hierarchy_idealL1/`.
+- `designed_init.py`: `leaf_wrong_side_detectors(leaf)` and `unit_leaf_anatomy(W1, W2, W3, Wout,
+  tree, x)` (per second-layer unit: active fraction, top leaf and share, vetoes and whether they are
+  the leaf's ancestors' wrong-side detectors, positive inputs, path to the logit); test. Suite 115.
+- Runs notebook section 22 with an anatomy cell comparing runs 22 and 11, and W2 block norms.
+
+### Results
+- Run 22: loss 0.152 / test error 6.3% (run 21: 0.166 / 7.0%; run 11: 0.037 / 1.6%); smooth, far
+  from the edge (lr * lambda_max 1.06 at epoch 3000, 90% W2).
+- Second layer at the end: 27/30 units are single-leaf detectors (active ~4%, top-leaf share
+  0.7-0.8) built from four vetoes of -5..-8 on exactly the wrong-side detectors of the leaf's four
+  internal ancestors; the only positive input is the leaf's level-4 cue at 0.05-0.10; paths
+  |W3 . Wout| 240-440. W2's cue block shrinks 5.5 -> 1.6 while the probe block grows 5.5 -> 53.
+- Run 11's leaf units (7/30 single-leaf; others cover ~4 leaves of one label) veto with a recruited
+  random row at level 4 (-5) and use ancestor correct-side detectors as positive inputs (+1..+3).
+
+### Reading
+Without biases, an AND of half-spaces is a NOR of the complementary detectors: the second layer
+turns the +-u_j pairs into region detectors by vetoes, which is why the design needs both poles.
+The cues' designed wiring (all level-4 descendants, positive path signs) is the wrong structure for
+that and can only be shrunk, not flipped; run 11's zero-fan-out random rows are recruitable as
+level-4 vetoes. Proposed test (run 23): run 22 with W2's cue block zeroed at init.
+
+### Current state / where to pick up
+- Not pushed; commit only. Later-layer phase: unit anatomy over time (when the vetoes form, in which
+  order of levels), the third layer's role, and run 23.
