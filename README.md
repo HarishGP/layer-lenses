@@ -68,6 +68,9 @@ scripts/regenerate_hierarchy_design_runs.sh
 This runs the scripts kept under `notebooks/results/designed_init/*/run_*.py` (one per run or
 pair of runs, listed in the script with their runtimes), the same files that produced the committed outputs. Then execute the notebook as above. Runs are bitwise reproducible on the same GPU/driver (fixed seeds, fixed batch order);
 on other hardware expect the same qualitative outcome with different per-probe fates.
+Analyses that cut across runs (for instance where deviating probes go in the ODT tree) are in
+`notebooks/hierarchy_cross_run_analysis.ipynb`, which reads only the weight stacks of every run;
+step-level replays of one run are in `notebooks/hierarchy_trajectory_analysis.ipynb`.
 The library code behind the design and the plots is in `src/layer_lenses/designed_init.py`
 and `src/layer_lenses/relu_analysis.py`; the narrative is in `notes/session_log.md`
 (entries from 2026-09-28 on).

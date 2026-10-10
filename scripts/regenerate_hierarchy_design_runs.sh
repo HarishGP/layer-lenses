@@ -29,6 +29,7 @@ $PY $S/hierarchy_scalaradam_lr003/run_hierarchy_scalaradam_lr003.py             
 $PY $S/hierarchy_scalaradam_lr01/run_hierarchy_scalaradam_lr01.py                # run 19:   ScalarAdam, lr 0.01 constant (~40 min)
 $PY $S/hierarchy_scalaradam_lr03/run_hierarchy_scalaradam_lr03.py                # run 20:   ScalarAdam, lr 0.03 constant (~40 min)
 $PY $S/hierarchy_replayable_62/run_hierarchy_replayable_62.py                    # run 21:   run 11 without the 18 random rows (62-30-40; ~26 min)
+$PY $S/hierarchy_idealL1/run_hierarchy_idealL1.py                                # run 22:   run 21 with the first layer frozen and probes on their targets (~25 min)
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"
