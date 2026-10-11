@@ -1,0 +1,8 @@
+/home/harish/researchcodes/layer-lenses/results/designed_init/run_hierarchy_replayable_w2neg.py:25: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print("W2 negated: probe weights", [round(float(model.hidden_layers[1].weight[u, u]), 2) for u in range(3)], "| |W2|", round(float(model.hidden_layers[1].weight.norm()), 3), flush=True)
+W2 negated: probe weights [1.0, 1.0, 1.0] | |W2| 7.746
+linear_frozen_kaiming_cosine_w2neg_80_seed0: data (1000000, 100) float32; flipped units [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29], zero-path units [], logit rms 0.333
+trained in 36.0 min; snapshots 1001
+linear_frozen_kaiming_cosine_w2neg_80_seed0: final epoch loss 0.0606, train log loss 0.0597, test error 0.0235 (strict 0.0235); epochs (of 100 steps) to 0.3/0.2/0.1/0.05: 482/859/4258/-1; nodes covered 31/31; on-target end [1.0, 0.5, 0.88, 0.56]; 36.1 min
+ALL DONE

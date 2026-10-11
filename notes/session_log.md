@@ -5139,3 +5139,41 @@ level-4 vetoes. Proposed test (run 23): run 22 with W2's cue block zeroed at ini
 ### Current state / where to pick up
 - Not pushed; commit only. Later-layer phase: track unit family over time (sparsity, vetoes) in runs
   11 / 22 / 23 with the replay tools; relate family to sharpness.
+
+## 2026-10-11 — Runs 24 and 25: the sign rule of the probe push (probe weights +1; W2 negated)
+
+### User prompts (verbatim)
+- "Please do do two more runs that are variants of run 11. Same protocol (SGD Momentum with all except the cues frozen). Only change is the init:\n\n Run 24: Only the edge weights connecting the probes to units are positive instead of negative.\nRun 25: All the weights connecting hidden layer 1 and 2 are negated."
+
+### Changes
+- "Same protocol" read as run 11's (the 32 cue rows frozen, everything else trainable). Scripts
+  `run_hierarchy_replayable_probepos.py` (run 24: W2[u, u] = +1 for u < 30) and
+  `run_hierarchy_replayable_w2neg.py` (run 25: W2 -> -W2); outputs under
+  `results/designed_init/hierarchy_replayable_probepos/` and `.../hierarchy_replayable_w2neg/`.
+  Runs notebook sections 24-25 with pole / deviation / unit-family cells and a three-run comparison;
+  cross-run notebook's RUN_INDEX now lists runs 23-25.
+
+### Results
+| | run 11 | run 24 (probe +1) | run 25 (W2 negated) |
+|---|---|---|---|
+| loss / test error | 0.037 / 1.6% | 0.068 / 2.8% | 0.061 / 2.4% |
+| probes on own node: designed / opposite pole | 24 / 0 | 0 / 17 | 20 / 0 |
+| deviations (all lineage-related) | 5 | 13 | 8 |
+| second layer: median unit active fraction | 0.05 | 0.95 | 0.91 |
+| spiky epochs / largest jump | 45 / 0.31 | 69 / 0.13 | 293 / 1.49 |
+- Run 24 flips every captured probe to the opposite pole; run 25 (probe weight and cue block both
+  negated) restores the designed pole: pole = sign(probe weight) x unit activation side x path sign.
+- Positive probe weights put the second layer in the dense additive family (runs 23-25); the random
+  rows then serve as vetoes (W2 random block 33 vs 19, >100 entries below -1) and are recruited
+  mostly to internal nodes, several onto the root.
+- Lineage rule holds in both (0 unrelated deviations).
+
+### Reading
+The probe pole is a product of three signs, two of which live in W2's init; the family of the
+second-layer solution is set by the probe weight sign alone. Run 11's -1 probe weight is what seeds
+the sparse veto family, and its mixing of veto leaf units with broad units is the best configuration
+seen so far.
+
+### Current state / where to pick up
+- Not pushed. Tracked content is now ~1.16 GB (runs 22-25 added since the last push); the next push
+  needs two more replay folders dropped (priority: run 11, then the latest).

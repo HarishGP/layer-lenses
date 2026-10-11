@@ -1,0 +1,8 @@
+/home/harish/researchcodes/layer-lenses/results/designed_init/run_hierarchy_replayable_probepos.py:26: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print("W2 probe weights set to +1:", [round(float(model.hidden_layers[1].weight[u, u]), 2) for u in range(3)], flush=True)
+W2 probe weights set to +1: [1.0, 1.0, 1.0]
+linear_frozen_kaiming_cosine_probepos_80_seed0: data (1000000, 100) float32; flipped units [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29], zero-path units [], logit rms 0.333
+trained in 35.9 min; snapshots 1001
+linear_frozen_kaiming_cosine_probepos_80_seed0: final epoch loss 0.0677, train log loss 0.0664, test error 0.0278 (strict 0.0278); epochs (of 100 steps) to 0.3/0.2/0.1/0.05: 471/1052/6057/-1; nodes covered 31/31; on-target end [1.0, 0.5, 0.62, 0.5]; 36.0 min
+ALL DONE
