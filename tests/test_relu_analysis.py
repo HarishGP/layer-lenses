@@ -784,3 +784,23 @@ def test_replay_steps_full_reports_sgd_equivalent_rate_for_scalar_adam() -> None
             lr_eq_true = 0.02 * 0.2 / ((1 - 0.8 ** t) * (np.sqrt(v_hat) + 1e-8)); assert abs(R["lr_sgd_equiv"][1] / lr_eq_true - 1) < 0.05
         else:
             assert R["beta1"] == 0.9 and np.isnan(R["lr_sgd_equiv"]).all()
+
+
+def test_plot_layered_relu_graph_layer_orders_rearranges_positions_only() -> None:
+    from layer_lenses.relu_analysis import _layer_y_positions
+    from layer_lenses.init_sweep import SweepRunSpec, build_tree
+    tree = build_tree(SweepRunSpec(tree_seed=5, data_seed=0, init_seed=0, batch_size=1, dim=6, depth=2))
+    torch.manual_seed(0); model = ReLUMLP(input_dim=6, hidden_dims=[5, 3, 4], bias=False); sd = model.state_dict()
+    order3 = [0, 2, 1, 3]
+    _, edges_a, fig_a, ax_a = plot_layered_relu_graph(state_dict=sd, tree=tree, depth=2, epoch=0, edge_abs_threshold=0.0, figsize=(4, 4))
+    _, edges_b, fig_b, ax_b = plot_layered_relu_graph(state_dict=sd, tree=tree, depth=2, epoch=0, edge_abs_threshold=0.0, figsize=(4, 4), layer_orders={2: order3})
+    assert edges_a == edges_b                                                   # same edges, only drawn at other heights
+    # the third hidden layer's labels (texts "0".."3" at x = 1.6 * 2) sit at the slots given by the order
+    ys = _layer_y_positions(4); x3 = 1.6 * 2
+    pos = {t.get_text(): t.get_position()[1] for t in ax_b.texts if abs(t.get_position()[0] - x3) < 1e-9 and t.get_text() in {"0", "1", "2", "3"}}
+    assert all(abs(pos[str(n)] - ys[slot]) < 1e-9 for slot, n in enumerate(order3))
+    pos_a = {t.get_text(): t.get_position()[1] for t in ax_a.texts if abs(t.get_position()[0] - x3) < 1e-9 and t.get_text() in {"0", "1", "2", "3"}}
+    assert all(abs(pos_a[str(n)] - ys[n]) < 1e-9 for n in range(4))
+    with pytest.raises(ValueError):
+        plot_layered_relu_graph(state_dict=sd, tree=tree, depth=2, epoch=0, figsize=(4, 4), layer_orders={2: [0, 0, 1, 2]})
+    plt.close(fig_a); plt.close(fig_b)

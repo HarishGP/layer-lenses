@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 import pickle
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -443,12 +443,16 @@ def plot_layered_relu_graph(
     edge_abs_threshold: float = 0.2,
     figsize: tuple[float, float] = (14, 18),
     require_both_edge_endpoints_selected: bool = True,
+    layer_orders: dict[int, Sequence[int]] | None = None,
 ):
     """Plot a layered hidden-node graph with ODT labels on first-layer neurons.
 
     ``node_mask`` may be either a row-by-layer array or one one-dimensional
     boolean array per hidden layer. The latter supports layers with different
-    widths without padding.
+    widths without padding. ``layer_orders`` maps a hidden-layer index (0-based) to
+    the order, top to bottom, in which that layer's neurons are drawn (a permutation
+    of ``range(width)``); layers not listed keep the index order. Display only: the
+    labels still show the neuron indices.
     """
     alignment = first_layer_odt_alignment(state_dict=state_dict, tree=tree)
     hidden_weights, output_weight = _hidden_weights_from_state_dict(state_dict)
@@ -467,8 +471,13 @@ def plot_layered_relu_graph(
     node_pos = {}
     for layer_idx, width in enumerate(widths):
         ys = _layer_y_positions(width)
-        for node_idx, y in enumerate(ys):
-            node_pos[(layer_idx, node_idx)] = (x_positions[layer_idx], y)
+        order = list(range(width))
+        if layer_orders is not None and layer_idx in layer_orders:
+            order = [int(i) for i in layer_orders[layer_idx]]
+            if sorted(order) != list(range(width)):
+                raise ValueError(f"layer_orders[{layer_idx}] must be a permutation of range({width}), got {order}")
+        for slot, node_idx in enumerate(order):
+            node_pos[(layer_idx, node_idx)] = (x_positions[layer_idx], ys[slot])
 
     fig, ax = plt.subplots(figsize=figsize)
     edge_mats = [
