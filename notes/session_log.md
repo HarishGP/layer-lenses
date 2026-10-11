@@ -5314,3 +5314,31 @@ spare rows play no part with free cues (27 = 28).
 ### Current state / where to pick up
 - Runs 33-34 (data seed 6178) running, then 35-36 (probe seed 7), via the chain; analyse the six
   together with run 26. Not pushed; tracked content ~1.9 GB.
+
+## 2026-10-12 — Runs 33-36 finished: which random ingredient selects the probe fates
+
+### Results (62-row runs on run 26's protocol; all smooth, 0 spiky epochs, lr * lambda_max <= 3.5)
+| run | W3 | data seed | probe seed | loss / test err | nodes | probes own / deviated (unrelated) / uncaptured |
+|---|---|---|---|---|---|---|
+| 31 | run 26's | 5178 | 0 | 0.041 / 1.5% | 20 | 21 / 3 (2) / 6 |
+| 32 | seed 1 | 5178 | 0 | 0.021 / 0.9% | 27 | 21 / 7 (2) / 2 |
+| 33 | run 26's | 6178 | 0 | 0.033 / 1.2% | 25 | 15 / 7 (3) / 8 |
+| 34 | seed 1 | 6178 | 0 | 0.030 / 1.2% | 27 | 17 / 7 (0) / 6 |
+| 35 | run 26's | 5178 | 7 | 0.021 / 0.9% | 27 | 17 / 7 (1) / 6 |
+| 36 | seed 1 | 5178 | 7 | 0.0195 / 0.9% | 29 | 17 / 7 (2) / 6 |
+- Shared captured-probe fates: W3 redraw keeps 18-22 of 24-28 (31/32: 21, 33/34: 18, 35/36: 22);
+  new sample keeps 14-18 (31/33: 14, 32/34: 18); new probe directions keep 15 (31/35, 32/36).
+- Deterministic core: probes 0-8, 10, 11, 12, 24 (levels 0-1 entirely, six of eight level-2 probes)
+  reach their own node at the designed pole in all six runs; level 3 and probes 9, 13 are the fringe.
+- Cues end mostly on internal nodes in every run (17-19 of 32), 7-10 on their own normal.
+
+### Reading
+- No single random ingredient dominates the loss (0.02-0.04 across the six); W3's pattern changes
+  the fewest fates, the sample and the probe directions about the same number.
+- The random probe directions make the lower levels deterministic (compare runs 27-30: identical
+  probes, fates decided by the sample, spiky, 2.6x the loss); which random directions they are only
+  matters at level 3.
+
+### Current state / where to pick up
+- Runs notebook sections 33-36 with a seven-run comparison cell; cross-run index lists 31-36. Not
+  pushed; tracked content ~2.2 GB (a push needs about half the replay folders dropped).

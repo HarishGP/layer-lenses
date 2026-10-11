@@ -1,0 +1,5 @@
+W3 redrawn: 64% of the 0/1 entries agree with run 11's pattern; unit paths [1.0, -1.0, 1.0, -1.0, 1.0, -1.0] ...
+linear_free_kaiming_cosine_cuev_62_w3seed1_ps7: 62 rows, W3 = balanced-paths pattern redrawn with seed 1; probes = off-span random vectors from seed 7; data seed 5178 (1000000, 100); flipped units [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29], logit rms 0.034
+trained in 34.1 min; snapshots 1001
+linear_free_kaiming_cosine_cuev_62_w3seed1_ps7: final epoch loss 0.0195, test error 0.0087 (strict 0.0087); epochs to 0.3/0.2/0.1/0.05/0.03: 416/498/927/3183/6086; nodes covered 29/31; on-target end [1.0, 1.0, 0.88, 0.25]; 34.2 min
+ALL DONE
