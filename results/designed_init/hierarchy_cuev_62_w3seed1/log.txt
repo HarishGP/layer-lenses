@@ -1,0 +1,5 @@
+W3 redrawn: 64% of the 0/1 entries agree with run 11's pattern; unit paths [1.0, -1.0, 1.0, -1.0, 1.0, -1.0] ...
+linear_free_kaiming_cosine_cuev_62_w3seed1: 62 rows, W3 = balanced-paths pattern redrawn with seed 1; data (1000000, 100); flipped units [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29], logit rms 0.035
+trained in 34.2 min; snapshots 1001
+linear_free_kaiming_cosine_cuev_62_w3seed1: final epoch loss 0.0214, test error 0.0091 (strict 0.0091); epochs to 0.3/0.2/0.1/0.05/0.03: 461/587/1415/4081/6493; nodes covered 27/31; on-target end [1.0, 1.0, 1.0, 0.44]; 34.2 min
+ALL DONE

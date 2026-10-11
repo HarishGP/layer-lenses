@@ -5283,3 +5283,34 @@ spare rows play no part with free cues (27 = 28).
 ### Current state / where to pick up
 - Not pushed; tracked content ~1.6 GB, the next push must drop about seven replay folders (keep run
   11, then the latest).
+
+## 2026-10-11 — Runs 31-32 (run 26 without spare rows; W3 pattern redrawn); runs 33-36 queued
+
+### User prompts (verbatim)
+- "Two more runs:\nRun 31: Same as run 26 but without the spare rows in the first hidden layer.\nRun 32: Same as run 31, but with a different seed for the W_3 init."
+- "Once that is done, setup runs 33 and 34 which are same as runs 31 and 32, but with a different data seed (but same tree).\n\nThen after that runs 35 and 36 that are same as 31 and 32, but with the probe inits coming from a different seed. i.e. probe inits are still off-span vectors but are different from run 26 due to coming from a different seed.\n\nI am going to sleep. See you tomorrow."
+
+### Changes
+- `results/designed_init/run_hierarchy_cuev62.py` (62-row run 26; `--w3-seed` redraws the
+  balanced-paths pattern with the design's construction, `--data-seed`, `--probe-seed` draws fresh
+  off-span probe directions); folders `hierarchy_cuev_62{,_w3seed1}{,_ds2,_ps7}`;
+  `scripts/launch_runs_33_36.sh`; runs notebook sections 31-32 with a fate-overlap cell; cross-run
+  index lists 31-36.
+
+### Results
+| run | change vs run 26 | loss / test error | nodes | probes own / deviated (unrelated) / uncaptured | fates shared with 26 / 31 |
+|---|---|---|---|---|---|
+| 31 | no spare rows | 0.041 / 1.5% | 20 | 21 / 3 (2) / 6 | 18 / - |
+| 32 | + W3 pattern seed 1 (64% agreement) | 0.021 / 0.9% | 27 | 21 / 7 (2) / 2 | 18 / 21 |
+- Both smooth (0 spiky epochs, lr * lambda_max <= 2.9). Cues end mostly on internal nodes (19 and 18
+  of 32), 7-8 on their own normal.
+
+### Reading
+- With random probe directions the spare rows are worth a factor 2.5 (run 28 vs 27 with symmetric
+  probes showed none): the design is in the good family and the extra rows refine it.
+- W3's pattern changes the loss by a factor 2 and the fates of a few late probes and cues, not the
+  21 probes that reach their own node (21 of 24-28 captured fates identical between 31 and 32).
+
+### Current state / where to pick up
+- Runs 33-34 (data seed 6178) running, then 35-36 (probe seed 7), via the chain; analyse the six
+  together with run 26. Not pushed; tracked content ~1.9 GB.
