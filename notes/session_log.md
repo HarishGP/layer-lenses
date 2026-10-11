@@ -5252,3 +5252,34 @@ internal nodes included. Node coverage is not what the loss needs; recruitable r
 ### Current state / where to pick up
 - Relaunch runs 27-30, then: congruence of same-level probes, probe fates vs run 26, 27 vs 28 (spare
   rows), 27 vs 29 and 28 vs 30 (data seed); notebook sections 27-30; cross-run index. Not pushed.
+
+## 2026-10-11 — Runs 27-30 relaunched and finished: symmetric probes break the symmetry level by level and hand the fates to the sample
+
+### User prompts (verbatim)
+- "System is back up, relaunch runs 27-30."
+
+### Results (run 26 for reference: loss 0.016 / 1.0%, 0 spiky epochs)
+| run | rows / data seed | loss / test error | spiky epochs / max jump | probes own node / deviated (unrelated) | nodes |
+|---|---|---|---|---|---|
+| 27 | 80 / 5178 | 0.043 / 1.7% | 449 / 1.9 | 15 / 12 (5) | 28 |
+| 28 | 62 / 5178 | 0.042 / 1.5% | 328 / 1.9 | 15 / 13 (2) | 28 |
+| 29 | 80 / 6178 | 0.36 / 50% (dead third layer; 1.8% strict) | 178 / 1.8 | 12 / 13 (4) | 29 |
+| 30 | 62 / 6178 | 0.042 / 1.6% | 200 / 1.9 | 13 / 12 (3) | 26 |
+- Symmetry breaking among same-level probes (mean pairwise cosine < 0.9) at epochs 50-60 (level 0),
+  80 (1), 100-110 (2), 130 (3) in all four runs: root first, the top-down order, independent of spare
+  rows and data seed. Probe pairs reach cos -1 by epoch 300.
+- Fates: 2 -> -u_0 and 5 -> +u_0 in all four; otherwise 27 vs 28 (same data) share most, 27 vs 29
+  and 28 vs 30 (other data) share little: with identical probes the sample decides.
+- Run 29: loss 0.067 at epoch 4943 while the third layer dies (7/40 dead at 3000, 37/40 at 5000),
+  then the half-dead solution (39/40 dead, zero logits on 50%). Catapults killed the neurons.
+- All four in the dense additive second-layer family (0-2 single-leaf units).
+
+### Reading
+The probes' random off-span directions are a deterministic symmetry breaker that fixes the fates
+early and keeps the run smooth (run 26); without them the symmetry breaks slowly through W3 and the
+sample, the lineage rule weakens, the runs are spiky, one collapses, and the loss is 2.6x worse. The
+spare rows play no part with free cues (27 = 28).
+
+### Current state / where to pick up
+- Not pushed; tracked content ~1.6 GB, the next push must drop about seven replay folders (keep run
+  11, then the latest).
