@@ -38,6 +38,12 @@ $PY $S/hierarchy_symprobes_80/run_hierarchy_symprobes.py --width 80 --data-seed 
 $PY $S/hierarchy_symprobes_62/run_hierarchy_symprobes.py --width 62 --data-seed 5178 --out hierarchy_symprobes_62 --tag linear_free_kaiming_cosine_symprobes_62_seed0        # run 28 (~26 min)
 $PY $S/hierarchy_symprobes_80_ds2/run_hierarchy_symprobes.py --width 80 --data-seed 6178 --out hierarchy_symprobes_80_ds2 --tag linear_free_kaiming_cosine_symprobes_80_ds6178  # run 29 (~26 min)
 $PY $S/hierarchy_symprobes_62_ds2/run_hierarchy_symprobes.py --width 62 --data-seed 6178 --out hierarchy_symprobes_62_ds2 --tag linear_free_kaiming_cosine_symprobes_62_ds6178  # run 30 (~26 min)
+$PY $S/hierarchy_cuev_62/run_hierarchy_cuev62.py --out hierarchy_cuev_62 --tag linear_free_kaiming_cosine_cuev_62_seed0                              # run 31 (~26 min)
+$PY $S/hierarchy_cuev_62_w3seed1/run_hierarchy_cuev62.py --out hierarchy_cuev_62_w3seed1 --tag linear_free_kaiming_cosine_cuev_62_w3seed1 --w3-seed 1   # run 32 (~26 min)
+$PY $S/hierarchy_cuev_62_ds2/run_hierarchy_cuev62.py --out hierarchy_cuev_62_ds2 --tag linear_free_kaiming_cosine_cuev_62_ds6178 --data-seed 6178                                  # run 33
+$PY $S/hierarchy_cuev_62_w3seed1_ds2/run_hierarchy_cuev62.py --out hierarchy_cuev_62_w3seed1_ds2 --tag linear_free_kaiming_cosine_cuev_62_w3seed1_ds6178 --w3-seed 1 --data-seed 6178   # run 34
+$PY $S/hierarchy_cuev_62_ps7/run_hierarchy_cuev62.py --out hierarchy_cuev_62_ps7 --tag linear_free_kaiming_cosine_cuev_62_ps7 --probe-seed 7                                          # run 35
+$PY $S/hierarchy_cuev_62_w3seed1_ps7/run_hierarchy_cuev62.py --out hierarchy_cuev_62_w3seed1_ps7 --tag linear_free_kaiming_cosine_cuev_62_w3seed1_ps7 --w3-seed 1 --probe-seed 7      # run 36
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"
