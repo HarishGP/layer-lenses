@@ -5177,3 +5177,33 @@ seen so far.
 ### Current state / where to pick up
 - Not pushed. Tracked content is now ~1.16 GB (runs 22-25 added since the last push); the next push
   needs two more replay folders dropped (priority: run 11, then the latest).
+
+## 2026-10-11 — Run 26: cues set to pole x (v + u_j) and free
+
+### User prompts (verbatim)
+- "New run 26 with the main difference from run 11 being the cues. Let v= u_15+u_16+...+u_30. The cue vectors change at init from u_j  to v+u_j and change from -u_j to -v-u_j. The cue vectors are then renormalised to have same norm as before.  The cue vectors are not frozen any more and are also free to be learned."
+
+### Changes
+- Script `results/designed_init/run_hierarchy_replayable_cuev.py` (cue rows -> pole x (v + u_j) at the
+  old norm, dropping the design's off-span part; no first-layer row frozen); outputs under
+  `results/designed_init/hierarchy_replayable_cuev/`; runs notebook section 26 (cue-row trajectories,
+  end assignment, comparison with run 11); cross-run index updated.
+
+### Results
+- Loss 0.016 / test error 1.0% (run 11: 0.037 / 1.6%), the best SGD run; 0.05 at epoch 2828; zero
+  spiky epochs, largest jump 0.011; lr * lambda_max at most 3.4.
+- Cues: on v until epoch ~100, lean to their own normals by 300, split by 500: 11 end on their own
+  level-4 normal, 13 on other nodes (mostly level 3: +u_7, -u_8, -u_9, -u_10, -u_11, +u_12, -u_13,
+  +u_14, and +u_6), 8 unaligned; norms 1.4 -> 4.6.
+- Probes: 20 on their own node at the designed pole; 4 level-3 probes go down to level-4 children
+  (9, 16, 20, 22) as cues take their nodes; one unrelated deviation (18: +u_9 -> -u_22), the first
+  since run 10; 5 not captured. 28/31 nodes covered. Random rows to the root and level 4.
+- Second layer mixed: 10 single-leaf veto units, median active 0.18; W2 cue block 20.
+
+### Reading
+Free cues that start almost identical (all on v) act as 32 extra recruitable rows with a small bias
+toward their own normal; symmetry breaking turns them into whatever the second layer needs, deeper
+internal nodes included. Node coverage is not what the loss needs; recruitable rows are.
+
+### Current state / where to pick up
+- Not pushed; tracked content ~1.25 GB, the next push needs three replay folders dropped.

@@ -33,6 +33,7 @@ $PY $S/hierarchy_idealL1/run_hierarchy_idealL1.py                               
 $PY $S/hierarchy_idealL1_zerocue/run_hierarchy_idealL1_zerocue.py                # run 23:   run 22 with the W2 cue block zeroed at init (~25 min)
 $PY $S/hierarchy_replayable_probepos/run_hierarchy_replayable_probepos.py          # run 24:   run 11 with probe->unit weights +1 (~26 min)
 $PY $S/hierarchy_replayable_w2neg/run_hierarchy_replayable_w2neg.py                # run 25:   run 11 with W2 negated (~26 min)
+$PY $S/hierarchy_replayable_cuev/run_hierarchy_replayable_cuev.py                  # run 26:   run 11 with cues pole*(v + u_j), free (~26 min)
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"

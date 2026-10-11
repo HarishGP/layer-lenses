@@ -85,3 +85,5 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/hierarchy_replayable_probepos/replay/meta.pkl
 !results/designed_init/hierarchy_replayable_w2neg/
 !results/designed_init/hierarchy_replayable_w2neg/replay/meta.pkl
+!results/designed_init/hierarchy_replayable_cuev/
+!results/designed_init/hierarchy_replayable_cuev/replay/meta.pkl
