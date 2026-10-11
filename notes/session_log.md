@@ -5227,3 +5227,28 @@ internal nodes included. Node coverage is not what the loss needs; recruitable r
   earlier, 10M vs 1M points gave the same deviations.
 - Proposed tests: (a) run 11 with another W3 pattern seed; (b) probes with a common off-span vector;
   (c) a short full-batch run from an equivariant init to confirm congruence.
+
+## 2026-10-11 — Runs 27-30 launched (symmetric probes, with / without spare rows, two data seeds), then terminated by a power failure
+
+### User prompts (verbatim)
+- "I agree on the W3 source of asymmetry. Not so sure about the role of off-span components however.\n\nFor run 27 use same protocol as 26 except the probe inits are all identical to same off-span vector in the 69-dimensional space. Also,  18-spare neurons are init to off-span vectors which are orthogonal to each other and also the probe init.\n\nFor run 28, just remove the 18 spare neurons in the first layer.\n\nAlso do runs 29 and 30 which are same as above, but with a different data seed (but same ODT)."
+- "Power failure. Terminate runs and save."
+
+### Changes
+- `results/designed_init/run_hierarchy_symprobes.py` (parametrised: --width 80|62, --data-seed, --out,
+  --tag): run 26's protocol with all 30 probes equal to one off-span vector e (probe 0's design init,
+  norm sqrt(2)); with 80 rows the 18 spare rows are mutually orthogonal off-span vectors orthogonal
+  to e; with 62 rows W3 / output come from run 11's init; the data seed changes only the training
+  set (tree seed 5178 and the 200k test set unchanged). Runs: 27 = 80 rows / seed 5178,
+  28 = 62 / 5178, 29 = 80 / 6178, 30 = 62 / 6178. `scripts/launch_runs_27_30.sh` runs them two at a
+  time; result folders `hierarchy_symprobes_{80,62}{,_ds2}` (gitignore negations and regeneration
+  lines added).
+- The symmetric init has logit exactly 0 at init (units 2j and 2j+1 produce identical activations,
+  complementary W3 subsets give every third-layer neuron the same pre-activation, alternating output
+  signs cancel) but nonzero gradients (W2 grad norm 0.046, as in run 26): not dead.
+- Runs 27 and 28 were ~15 min in when the power failure was announced; all four processes were
+  terminated. No run output exists yet; relaunch with `scripts/launch_runs_27_30.sh` (about 75 min).
+
+### Current state / where to pick up
+- Relaunch runs 27-30, then: congruence of same-level probes, probe fates vs run 26, 27 vs 28 (spare
+  rows), 27 vs 29 and 28 vs 30 (data seed); notebook sections 27-30; cross-run index. Not pushed.
