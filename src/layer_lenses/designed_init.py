@@ -1229,3 +1229,78 @@ def flip_equivariance_report(W1: np.ndarray, W2: np.ndarray, W3: np.ndarray, Wou
     gram = lambda W: (W @ Poff) @ (W @ Poff).T
     return {"in_span": float(np.abs(W1n @ Pin - W1 @ Pin).max()), "off_span_gram": float(np.abs(gram(W1n) - gram(W1)).max()),
             "w2": float(np.abs(W2n - W2).max()), "w3": float(np.abs(W3n - W3).max()), "wout": float(np.abs(Wout - Wout).max())}
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Coordinates on the symmetric subspace (population-gradient-flow analysis of the equivariant init)
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+def _side_of(ancestor: int, node: int, n_nodes: int = 31) -> int:
+    """+1 if ``node`` lies in ``ancestor``'s positive-side subtree (child 2a + 2), -1 if in the negative one."""
+    return +1 if node_in_subtree(node, 2 * ancestor + 2, n_nodes) else -1
+
+
+def _common_ancestor_level(a: int, b: int) -> int:
+    anc_a = [a] + node_ancestors(a); anc_b = set([b] + node_ancestors(b))
+    return int(NODE_LEVEL[next(n for n in anc_a if n in anc_b)])
+
+
+def symmetric_coordinates(W1: np.ndarray, tree: COBODTTree, *, cue_rows: list[int] | np.ndarray, n_probes: int = 30, cue_identity: dict[tuple[int, int], int] | None = None) -> pd.DataFrame:
+    """In-span coordinates of every first-layer row in the classes left free by the tree's symmetry group.
+
+    On the symmetric subspace a probe row of node ``j`` (level ``l``, pole ``p``) can only have: ``own`` (``p`` x coefficient on
+    ``u_j``), ``anc_g`` for ``g = 1..l`` (coefficient on the ancestor ``g`` levels up, signed by the side of ``j`` under it),
+    ``desc4_same`` / ``desc4_other`` (one common coefficient on the level-4 normals under ``j`` on the pole's side / the other side)
+    and ``unrel4_b{b}`` (one common coefficient on the level-4 normals whose deepest common ancestor with ``j`` is at level ``b``).
+    A cue row (level-4 node ``m``, pole ``q``) has ``own`` (coefficient on ``u_m``), ``anc_1..anc_4`` (side-signed) and
+    ``unrel4_b0..b3``. A spare row has only ``lvl4`` (one common coefficient on all 16 level-4 normals). Every other in-span
+    component, and any spread inside a common-coefficient class, has to vanish; its norm is ``residual``. Rows ``0..n_probes - 1``
+    are the probes in ``HIERARCHY_TARGETS`` order, ``cue_rows`` the cues, the rest spare. The cues' (node, pole) identities are read
+    from their in-span parts unless ``cue_identity`` (``(node, pole) -> row``, e.g. `cue_row_identity` at init) fixes them, which is
+    what a trajectory needs once cues move off their normals.
+    """
+    U = tree.w_list; n_nodes = U.shape[0]; cue_rows = [int(r) for r in cue_rows]; C = W1 @ U.T
+    lvl4 = [k for k in range(n_nodes) if NODE_LEVEL[k] == 4]
+    cue_id = {r: k for k, r in cue_identity.items()} if cue_identity is not None else {r: (int(np.abs(C[r]).argmax()), int(np.sign(C[r][np.abs(C[r]).argmax()]))) for r in cue_rows}
+    rows = []
+    for r in range(W1.shape[0]):
+        c = C[r]; pred = np.zeros(n_nodes); rec: dict[str, Any] = {"row": r}
+        if r < n_probes:
+            j, p = HIERARCHY_TARGETS[r]; l = int(NODE_LEVEL[j]); rec.update(kind="probe", node=j, pole=p, level=l, cls=f"probe_L{l}")
+            rec["own"] = p * c[j]; pred[j] = c[j]
+            for g, a in enumerate(node_ancestors(j), start=1):
+                rec[f"anc_{g}"] = c[a] * _side_of(a, j, n_nodes); pred[a] = c[a]
+            same = [k for k in lvl4 if node_in_subtree(k, j, n_nodes) and _side_of(j, k, n_nodes) == p]
+            other = [k for k in lvl4 if node_in_subtree(k, j, n_nodes) and _side_of(j, k, n_nodes) == -p]
+            rec["desc4_same"] = float(c[same].mean()); pred[same] = rec["desc4_same"]; rec["desc4_other"] = float(c[other].mean()); pred[other] = rec["desc4_other"]
+            for b in range(l):
+                ks = [k for k in lvl4 if not node_in_subtree(k, j, n_nodes) and _common_ancestor_level(j, k) == b]
+                rec[f"unrel4_b{b}"] = float(c[ks].mean()); pred[ks] = rec[f"unrel4_b{b}"]
+        elif r in cue_id:
+            m, q = cue_id[r]; rec.update(kind="cue", node=m, pole=q, level=4, cls=f"cue_{'+' if q > 0 else '-'}")
+            rec["own"] = c[m]; pred[m] = c[m]
+            for g, a in enumerate(node_ancestors(m), start=1):
+                rec[f"anc_{g}"] = c[a] * _side_of(a, m, n_nodes); pred[a] = c[a]
+            for b in range(4):
+                ks = [k for k in lvl4 if k != m and _common_ancestor_level(m, k) == b]
+                rec[f"unrel4_b{b}"] = float(c[ks].mean()); pred[ks] = rec[f"unrel4_b{b}"]
+        else:
+            rec.update(kind="spare", node=-1, pole=0, level=-1, cls="spare"); rec["lvl4"] = float(c[lvl4].mean()); pred[lvl4] = rec["lvl4"]
+        rec["residual"] = float(np.linalg.norm(c - pred)); rec["in_span_norm"] = float(np.linalg.norm(c)); rec["off_span_norm"] = float(np.sqrt(max(np.linalg.norm(W1[r]) ** 2 - np.linalg.norm(c) ** 2, 0.0)))
+        rows.append(rec)
+    return pd.DataFrame(rows)
+
+
+def symmetric_class_summary(coords: pd.DataFrame) -> pd.DataFrame:
+    """Per class (``cls``): the mean of every free coordinate, its spread (max - min) across the class members, and the mean residual.
+    On the symmetric subspace every spread and residual is zero."""
+    value_cols = [k for k in coords.columns if k not in ("row", "kind", "node", "pole", "level", "cls", "residual", "in_span_norm", "off_span_norm")]
+    out = []
+    for cls, g in coords.groupby("cls", sort=False):
+        rec = {"cls": cls, "n": len(g), "residual_mean": float(g.residual.mean()), "residual_max": float(g.residual.max()), "in_span_norm": float(g.in_span_norm.mean()), "off_span_norm": float(g.off_span_norm.mean())}
+        for k in value_cols:
+            if g[k].notna().all():
+                rec[k] = float(g[k].mean()); rec[f"{k}_spread"] = float(g[k].max() - g[k].min())
+        out.append(rec)
+    return pd.DataFrame(out)

@@ -531,3 +531,30 @@ def test_equivariant_quadruple_init_is_fixed_by_every_flip_and_the_30_unit_desig
     W3c = np.stack([W3[:, 0] if u % 2 == 0 else W3[:, 1] for u in range(30)], axis=1)      # common pattern: W3 passes, W2 still fails
     rep = flip_equivariance_report(W1o, W2, W3c, Wout, tree, 0, cue_rows=meta["cue_rows"], units_per_node=2)
     assert rep["w3"] < 1e-6 and rep["w2"] > 0.1
+
+
+def test_symmetric_coordinates_vanish_on_the_equivariant_init_and_flag_breaking() -> None:
+    from layer_lenses.designed_init import build_hierarchy_model, standard_scale_spec, equivariant_quadruple_weights, symmetric_coordinates, symmetric_class_summary
+    from layer_lenses.init_sweep import SweepRunSpec, build_tree
+
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1)); U = tree.w_list
+    design = dict(seed=0, cue_mode="linear", subset_mode="all", units_per_level=(1, 1, 1, 1), width1=80, width2=30, width3=40, cue_offspan_ratio=0.2,
+                  output_signs="balanced", path_sign_cues=True, layer3_mode="balanced_paths", layer3_majority=15, cue_block_scale="inv_sqrt")
+    model, meta = build_hierarchy_model(standard_scale_spec("kaiming", **design), tree)
+    W1 = model.hidden_layers[0].weight.detach().numpy().astype(np.float64).copy(); W2 = model.hidden_layers[1].weight.detach().numpy().astype(np.float64)
+    W3 = model.hidden_layers[2].weight.detach().numpy().astype(np.float64); Wout = model.output_layer.weight.detach().numpy().astype(np.float64)
+    v = U[15:31].sum(0)
+    for r in meta["cue_rows"]:
+        c = W1[r] / np.linalg.norm(W1[r]) @ U.T; m = int(np.abs(c).argmax()); pole = int(np.sign(c[m])); new = pole * (v + U[m]); W1[r] = new / np.linalg.norm(new) * np.linalg.norm(W1[r])
+    q = equivariant_quadruple_weights(W1, W2, W3, Wout, cue_rows=meta["cue_rows"], tree=tree, orth_seed=1)
+    co = symmetric_coordinates(q["W1"], tree, cue_rows=meta["cue_rows"]); summ = symmetric_class_summary(co)
+    assert co.residual.max() < 1e-6 and set(summ.cls) == {"probe_L0", "probe_L1", "probe_L2", "probe_L3", "cue_+", "cue_-", "spare"}
+    assert summ.filter(like="_spread").abs().max().max() < 1e-6
+    cue_plus = summ[summ.cls == "cue_+"].iloc[0]; assert cue_plus.own > 0 and abs(cue_plus.own - 2 * cue_plus.unrel4_b0) < 1e-6 and abs(cue_plus.anc_1) < 1e-6   # (v + u_m): own 2x the others, no ancestors
+    assert (co[co.kind == "probe"].in_span_norm < 1e-9).all() and abs(summ[summ.cls == "spare"].iloc[0].lvl4) < 1e-9
+    # the original design's random spare rows (in-span parts up to norm 1) are off the symmetric subspace; so is a probe with a component on an unrelated internal normal
+    co0 = symmetric_coordinates(W1, tree, cue_rows=meta["cue_rows"]); assert co0[co0.kind == "spare"].residual.max() > 0.1 and co0[co0.kind == "probe"].in_span_norm.max() < 1e-6
+    W1p = q["W1"].copy(); W1p[4] += 0.3 * U[2] + 0.2 * U[7]                      # probe of node 2 (+): u_2 is its own normal (free), u_7 is unrelated internal (must vanish)
+    cop = symmetric_coordinates(W1p, tree, cue_rows=meta["cue_rows"]); assert abs(cop.residual[4] - 0.2) < 1e-6 and abs(cop.own[4] - 0.3) < 1e-6 and cop.residual.drop(4).max() < 1e-6
+    W1a = q["W1"].copy(); W1a[8] += 0.5 * U[1] * (-1)                            # probe of node 4 (+): ancestor u_1, node 4 = 2*1 + 2 is on u_1's positive side -> anc_1 = -0.5
+    coa = symmetric_coordinates(W1a, tree, cue_rows=meta["cue_rows"]); assert abs(coa.anc_1[8] + 0.5) < 1e-6 and coa.residual[8] < 1e-6

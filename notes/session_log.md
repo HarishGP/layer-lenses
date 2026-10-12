@@ -5561,3 +5561,35 @@ Assuming it works out similarly, The next goal will be to characterise the popul
 - Characterise the population gradient flow solution and trajectory from the equivariant init. The equivariance reduces the flow to one
   representative per (level, pole, unit type), so a full-batch / large-sample run from run 37's or 38's init and a reduced ODE are
   the natural tools.
+
+## 2026-10-12 — Population-gradient-flow setup (run 40), weaker cue bias (run 39)
+
+### User prompts (verbatim)
+- "Once run 38 is done, set up the population gradient flow analysis. 
+
+How much of the analysis would change if instead of the cues being initialised to (sign)*(v+u_j) the bias towards u_j was weaker? e.g. (sign)*(v+0.1 u_j)? An experiment for that would also be good."
+
+### Changes
+- `run_hierarchy_equivariant60.py`: `--cue-bias` (cues = pole x (v + bias u_j) renormalised), `--full-batch-steps` (full-batch GD: batch =
+  the whole sample, one step per epoch, constant lr via eta_min_ratio 1.0, snapshots every 100 steps), `--n-train`. Copies tracked under
+  the four equivariant folders; gitignore negations and regeneration lines for runs 39-40.
+- Run 39 (`hierarchy_equivariant_60_nospare_cue01`, 62-60-40, cue bias 0.1) launched alongside run 38; logit rms at init 0.0056 (run 38:
+  0.049). Run 40 (`hierarchy_equivariant_60_nospare_pgf`, full-batch GD, 150 000 steps, lr 0.01, momentum 0.9) is chained to start when
+  run 38 finishes; full-batch mode smoke-tested (300 steps on 100k points).
+- `src/layer_lenses/designed_init.py`: `symmetric_coordinates(W1, tree, cue_rows)` (coordinates of every first-layer row in the classes
+  the symmetry group leaves free: own, side-signed ancestors, common level-4 coefficients by side / common-ancestor level, spare rows'
+  single level-4 coefficient; `residual` = the in-span part that must vanish on the symmetric subspace) and `symmetric_class_summary`
+  (class means, within-class spreads, residuals). Test: zero residual and spreads on the quadruple init, correct bookkeeping of injected
+  own / ancestor / unrelated components. Suite at 121.
+- `notebooks/hierarchy_pgf_analysis.ipynb` (new): sections 1 residual and spreads along runs 37/38/40, 2 class-coordinate trajectories,
+  3 symmetry of the sample gradient at checkpoints (train vs test sample), 4 the solution at the end of the full-batch run. Executes
+  headlessly on the runs available.
+- Runs notebook: registry entries 39-40, sections 39 (with a cue-identity comparison cell vs run 38) and 40 (loss vs steps against run 38);
+  cross-run index lists 39-40.
+
+### Decisions
+- Cue bias: the unit's cue block is exactly linear in x, c x bias x (sum of a_m on the left - sum on the right), so a weaker bias scales
+  every unit's in-span signal at init by the bias; the init stays equivariant for any bias, and at bias 0 it gains invariance under all
+  permutations of the cue pairs (cue identities then sample-decided). Run 39 tests whether bias 0.1 keeps the cue identities.
+- Full-batch GD with run 37's lr / momentum keeps step counts comparable with the SGD runs; 150k steps (~0.1 s each) was chosen over the
+  1M steps of the SGD runs for cost.

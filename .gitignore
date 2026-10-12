@@ -111,3 +111,7 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/hierarchy_equivariant_60/replay/meta.pkl
 !results/designed_init/hierarchy_equivariant_60_nospare/
 !results/designed_init/hierarchy_equivariant_60_nospare/replay/meta.pkl
+!results/designed_init/hierarchy_equivariant_60_nospare_pgf/
+!results/designed_init/hierarchy_equivariant_60_nospare_pgf/replay/meta.pkl
+!results/designed_init/hierarchy_equivariant_60_nospare_cue01/
+!results/designed_init/hierarchy_equivariant_60_nospare_cue01/replay/meta.pkl
