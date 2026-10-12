@@ -1,1 +1,4 @@
 linear_free_kaiming_cosine_equiv60_seed0: 80-60-40 equivariant init; flip test worst deviation 4.6e-08 over 15 flips; probe+spare rows off-span to 1.2e-15, pairwise |cos| max 1.8e-08; W3 ones per row [30]; data seed 5178 (1000000, 100); logit rms 0.0493
+trained in 26.8 min; snapshots 1001
+linear_free_kaiming_cosine_equiv60_seed0: final epoch loss 0.0020, test error 0.0063 (strict 0.0063); epochs to 0.3/0.2/0.1/0.05/0.03: 234/286/413/644/1023; nodes covered 31/31; on-target end [1.0, 1.0, 1.0, 0.94]; 26.9 min
+ALL DONE

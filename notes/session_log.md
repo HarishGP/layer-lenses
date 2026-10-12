@@ -5532,3 +5532,13 @@ The reason we need random directions in the probe is for scale reasons rather th
 - With 80 rows the 30 probes are shared by the same-pole twins (one probe per pole per node); 60 probes would need 92 rows.
 - W3 keeps run 26's quantum (0.365) with 30 inputs per third-layer row instead of 15; the pre-activation scale of the third layer is
   therefore larger than run 26's (not rescaled, so every unit keeps its +-10-quanta path).
+
+### Results (run 37, finished 2026-10-12, 27 min)
+- Loss 0.0020, test error 0.63%, 31/31 nodes, 0 spiky epochs (largest change 1.2%); epochs to 0.1 / 0.05 / 0.01 / 0.005: 413 / 644 / 3387 / 5105
+  (run 26: 0.016 / 1.0%, 28 nodes, 0.1 at 1059, 0.05 at 2828). Best run of the series.
+- 28/30 probes on their own node at the designed pole; +u_13 -> -u_27 (child), +u_10 uncaptured (node 10 held by two cues); 23/32 cues
+  on their own normal, 7 on internal nodes, 1 spare row captured (u_21), 17 diffuse.
+- Congruence: `flip_equivariance_report` on checkpoints (cue labels fixed at init; `cue_identity` argument added for this): W2
+  deviation 0.04 / 0.10 / 0.27 at epochs 50 / 100 / 200 against entries 1.0-1.4; smooth growth, no burst. Same-level, same-pole
+  probes stay congruent at levels 0-2 to the end; level 3 spreads from epoch 100 and carries both deviations.
+- Notebook section 37 findings filled; congruence cell uses the init's cue identities.

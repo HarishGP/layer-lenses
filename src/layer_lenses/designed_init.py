@@ -1194,7 +1194,7 @@ def equivariant_quadruple_weights(W1: np.ndarray, W2: np.ndarray, W3: np.ndarray
 
 
 def flip_equivariance_report(W1: np.ndarray, W2: np.ndarray, W3: np.ndarray, Wout: np.ndarray, tree: COBODTTree, j: int, *, cue_rows: list[int] | np.ndarray,
-                             units_per_node: int = 4) -> dict[str, float]:
+                             units_per_node: int = 4, cue_identity: dict[tuple[int, int], int] | None = None) -> dict[str, float]:
     """Apply the tree flip at node ``j`` to an init and compare with the init itself, after relabelling rows and units.
 
     Rows: ``W1 -> W1 Q^T`` (each row ``w -> Q w``), then the probe rows of the descendants of ``j`` are relabelled to the mirror
@@ -1204,10 +1204,12 @@ def flip_equivariance_report(W1: np.ndarray, W2: np.ndarray, W3: np.ndarray, Wou
     design has no partner, which is the chirality the report exposes). Third-layer neurons and the output are fixed.
 
     Returns the largest absolute deviations: ``in_span`` (W1's in-span parts), ``off_span_gram`` (the Gram matrix of W1's off-span
-    parts, invariant iff some rotation of the complement completes the symmetry), ``w2``, ``w3``, ``wout``.
+    parts, invariant iff some rotation of the complement completes the symmetry), ``w2``, ``w3``, ``wout``. ``cue_identity``
+    (``(node, pole) -> row``) fixes the cue labels; by default they are read from ``W1``, which only works at init, before the cue
+    rows move off their normals (pass the init's ``cue_row_identity`` to track a trajectory).
     """
     U = tree.w_list; n1 = W1.shape[0]; cue_rows = [int(r) for r in cue_rows]
-    Q = tree_flip_matrix(tree, j); cue_id = cue_row_identity(W1, tree, cue_rows)
+    Q = tree_flip_matrix(tree, j); cue_id = cue_identity if cue_identity is not None else cue_row_identity(W1, tree, cue_rows)
     row_perm = np.arange(n1)
     for n in range(15):
         for q_idx, q in enumerate((+1, -1)):
