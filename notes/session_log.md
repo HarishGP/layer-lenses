@@ -5609,3 +5609,5 @@ How much of the analysis would change if instead of the cues being initialised t
 - Gradient symmetry: 10% deviation at init on 1M points; at step 100k the train-sample gradient is symmetric to 2e-4, the test-sample
   gradient deviates by 1e-2 (the solution absorbed the sample's asymmetry).
 - `hierarchy_pgf_analysis.ipynb` executed headlessly on runs 37/38/40 (findings in its intro); runs notebook section 40 findings filled.
+- Weight-space check: runs 38 and 40 agree to 0.1% at step 1000, 0.5% at 10k, 6% at 30k, 10-19% at 150k (cosines > 0.98); the
+  class statistics and fates stay the same throughout. Findings text corrected accordingly.
