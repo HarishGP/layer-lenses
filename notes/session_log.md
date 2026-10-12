@@ -5611,3 +5611,10 @@ How much of the analysis would change if instead of the cues being initialised t
 - `hierarchy_pgf_analysis.ipynb` executed headlessly on runs 37/38/40 (findings in its intro); runs notebook section 40 findings filled.
 - Weight-space check: runs 38 and 40 agree to 0.1% at step 1000, 0.5% at 10k, 6% at 30k, 10-19% at 150k (cosines > 0.98); the
   class statistics and fates stay the same throughout. Findings text corrected accordingly.
+
+### Results (run 39, cue bias 0.1, finished 2026-10-12, 82 min sharing the GPU)
+- Loss 0.0163, test error 0.83%, 27/31 nodes, no spikes, slower (0.1 at epoch 1050 vs 417).
+- Designed assignment collapses: 13/30 probes on their own node (root 0/2, both root probes on level-4 normals), 10 unrelated captures
+  (lineage rule gone); cues lose their identity by epoch 300 and take the internal nodes (10 on ancestors, four on +-u_0), 5 on their
+  own normal, 8 diffuse. The sample decides the cue identities, as predicted near the bias-0 point.
+- Conclusion: the design's node-by-node story needs a cue bias of order 1; at 0.1 the population-flow solution is a different basin.

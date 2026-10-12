@@ -1,2 +1,4 @@
 linear_free_kaiming_cosine_equiv60_nospare_cue01_seed0: cue bias 0.1; batch 10000 x 10000 epochs, lr 0.01 eta_min_ratio 0.05; 62-60-40 equivariant init; flip test worst deviation 4.6e-08 over 15 flips; probe+spare rows off-span to 7.1e-16, pairwise |cos| max 1.8e-08; W3 ones per row [30]; data seed 5178 (1000000, 100); logit rms 0.0056
 trained in 82.1 min; snapshots 1001
+linear_free_kaiming_cosine_equiv60_nospare_cue01_seed0: final epoch loss 0.0163, test error 0.0083 (strict 0.0083); epochs to 0.3/0.2/0.1/0.05/0.03: 512/611/1050/2912/4990; nodes covered 27/31; on-target end [0.0, 1.0, 0.75, 0.19]; 82.1 min
+ALL DONE
