@@ -5542,3 +5542,22 @@ The reason we need random directions in the probe is for scale reasons rather th
   deviation 0.04 / 0.10 / 0.27 at epochs 50 / 100 / 200 against entries 1.0-1.4; smooth growth, no burst. Same-level, same-pole
   probes stay congruent at levels 0-2 to the end; level 3 spreads from epoch 100 and carries both deviations.
 - Notebook section 37 findings filled; congruence cell uses the init's cue identities.
+
+## 2026-10-12 — Run 38: run 37 without the spare rows (62-60-40); next goal noted
+
+### User prompts (verbatim)
+- "Great, the spare rows seem kind of abandoned in this run. I guess it should be safe to assume nothing really changes even if they are removed. But do schedule such a run anyway.
+
+Assuming it works out similarly, The next goal will be to characterise the population gradient flow solution and trajectory for this init."
+
+### Changes
+- `run_hierarchy_equivariant60.py`: `--no-spare` drops the 18 spare rows after the quadruple build (62-60-40); architecture strings
+  follow the width. Tracked copies under `notebooks/results/designed_init/hierarchy_equivariant_60{,_nospare}/`; gitignore negations and
+  regeneration line for run 38. Launched 2026-10-12 (flip test 4.6e-8 at init, logit rms 0.049, ~27 min expected).
+- Runs notebook: registry entry 38, section 38 (load, trajectories, network view, and a cross-run cell comparing runs 37 and 38);
+  cross-run index lists 38.
+
+### Next (user's stated goal)
+- Characterise the population gradient flow solution and trajectory from the equivariant init. The equivariance reduces the flow to one
+  representative per (level, pole, unit type), so a full-batch / large-sample run from run 37's or 38's init and a reduced ODE are
+  the natural tools.

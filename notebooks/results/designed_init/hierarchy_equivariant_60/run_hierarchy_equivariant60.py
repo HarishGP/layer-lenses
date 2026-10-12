@@ -9,6 +9,7 @@ The init is fixed, up to a rotation of the off-span complement, by every flip of
 is asserted here for all 15 flips), so the sample / batch order are the only breakers of congruence between same-level nodes.
 Protocol: 1M points, batch 10k, 10 000 epochs, lr 0.01 -> 0.0005 cosine, momentum 0.9, nothing frozen, snapshots every 10 epochs.
   run 37: --out hierarchy_equivariant_60 --tag linear_free_kaiming_cosine_equiv60_seed0
+  run 38: --out hierarchy_equivariant_60_nospare --tag linear_free_kaiming_cosine_equiv60_nospare_seed0 --no-spare   (62-60-40: the 18 spare rows dropped after the build)
 """
 import argparse, json, os, time, numpy as np, pandas as pd, torch
 from layer_lenses.designed_init import build_hierarchy_model, hierarchy_probe_table, logit_scale, standard_scale_spec, equivariant_quadruple_weights, flip_equivariance_report
@@ -16,7 +17,7 @@ from layer_lenses.init_sweep import SweepRunSpec, build_tree, build_data, build_
 from layer_lenses.relu_mlp import ReLUMLP
 from layer_lenses.relu_training import ReLUTrainConfig, evaluate_relu_mlp
 from layer_lenses.relu_analysis import train_relu_mlp_with_optimizer_snapshots, designed_run_seed_result, save_designed_run
-ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--orth-seed", type=int, default=0)
+ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--orth-seed", type=int, default=0); ap.add_argument("--no-spare", action="store_true")
 args = ap.parse_args(); OUT = f"results/designed_init/{args.out}"; os.makedirs(f"{OUT}/runs", exist_ok=True); T0 = time.time()
 N_TRAIN, EPOCHS, BS, LR, MOM, ETA_MIN_RATIO, SNAP = 1_000_000, 10_000, 10_000, 0.01, 0.9, 0.05, 10
 DESIGN = dict(seed=0, cue_mode="linear", subset_mode="all", units_per_level=(1, 1, 1, 1), width1=80, width2=30, width3=40, cue_offspan_ratio=0.2,
@@ -33,23 +34,27 @@ for r in meta["cue_rows"]:                                                     #
     c = W1[r] / np.linalg.norm(W1[r]) @ U.T; m = int(np.abs(c).argmax()); pole = int(np.sign(c[m])); assert m >= 15 and abs(c[m]) > 0.9
     new = pole * (v + U[m]); W1[r] = new / np.linalg.norm(new) * np.linalg.norm(W1[r])
 q = equivariant_quadruple_weights(W1, W2, W3, Wout, cue_rows=meta["cue_rows"], tree=tree, orth_seed=args.orth_seed)
+if args.no_spare:                                                              # run 38: drop the 18 spare rows (W2 has no weight on them)
+    keep = q["probe_rows"] + q["cue_rows"]; assert keep == list(range(62)) and not (q["W2"][:, 62:] != 0).any()
+    q["W1"] = q["W1"][:62]; q["W2"] = q["W2"][:, :62]; q["spare_rows"] = []
+WIDTH1 = q["W1"].shape[0]; ARCH = f"{WIDTH1}-60-40"
 reports = {j: flip_equivariance_report(q["W1"], q["W2"], q["W3"], q["Wout"], tree, j, cue_rows=meta["cue_rows"], units_per_node=4) for j in range(15)}
 worst = max(max(r.values()) for r in reports.values()); assert worst < 1e-5, reports
-model = ReLUMLP(input_dim=100, hidden_dims=[80, 60, 40], bias=False)
+model = ReLUMLP(input_dim=100, hidden_dims=[WIDTH1, 60, 40], bias=False)
 model.load_state_dict({"hidden_layers.0.weight": torch.as_tensor(q["W1"], dtype=torch.float32), "hidden_layers.1.weight": torch.as_tensor(q["W2"], dtype=torch.float32),
                        "hidden_layers.2.weight": torch.as_tensor(q["W3"], dtype=torch.float32), "output_layer.weight": torch.as_tensor(q["Wout"], dtype=torch.float32)})
 lg = logit_scale(model, x, device="cuda")
 rows = q["probe_rows"] + q["spare_rows"]; R = q["W1"][rows]
-print(f"{tag}: 80-60-40 equivariant init; flip test worst deviation {worst:.1e} over 15 flips; probe+spare rows off-span to {np.abs(R @ U.T).max():.1e}, "
+print(f"{tag}: {ARCH} equivariant init; flip test worst deviation {worst:.1e} over 15 flips; probe+spare rows off-span to {np.abs(R @ U.T).max():.1e}, "
       f"pairwise |cos| max {np.abs(R @ R.T / 2 - np.eye(len(rows))).max():.1e}; W3 ones per row {np.unique((q['W3'] != 0).sum(1)).tolist()}; data seed {args.data_seed} {x.shape}; logit rms {lg['rms_logit']:.4f}", flush=True)
 mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}                                                # nothing frozen
 cfg = ReLUTrainConfig(epochs=EPOCHS, lr=LR, batch_size=BS, seed=1000, device="cuda", snapshot_epochs=tuple(range(0, EPOCHS + 1, SNAP)),
                       lr_scheduler_eta_min_ratio=ETA_MIN_RATIO, optimizer="sgd", momentum=MOM, parameter_update_mask=mask, show_progress=False)
 out = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=cfg)
 print(f"trained in {(time.time() - t0) / 60:.1f} min; snapshots {len(out['checkpoint_snapshots'])}", flush=True)
-sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 100, "hidden_dims": [80, 60, 40], "bias": False, "activation": "relu"},
+sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 100, "hidden_dims": [WIDTH1, 60, 40], "bias": False, "activation": "relu"},
                               data_spec=DATA, tree=tree, design={**{k: (list(vv) if isinstance(vv, tuple) else vv) for k, vv in DESIGN.items()}, "scale": "kaiming", "cues": "free; pole*(v + u_j) renormalised",
-                                                                   "init": "equivariant quadruples (run 37)", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cue_rows": meta["cue_rows"], "probe_rows": q["probe_rows"], "spare_rows": q["spare_rows"],
+                                                                   "init": "equivariant quadruples (run 37)", "arch": ARCH, "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cue_rows": meta["cue_rows"], "probe_rows": q["probe_rows"], "spare_rows": q["spare_rows"],
                                                                    "unit_path_sign": q["unit_path_sign"].tolist(), "unit_block_sign": q["unit_block_sign"].tolist(), "unit_node": q["unit_node"].tolist(), "flip_reports": {int(k): r for k, r in reports.items()}}, tag=tag)
 save_designed_run(sr, f"{OUT}/replay")
 ck = out["checkpoint_snapshots"]; epochs = sorted(ck); m_end = out["model"]
@@ -62,12 +67,12 @@ for ep in epochs:
                       "nodes_covered": len(set(np.abs(Ce).argmax(1)[np.abs(Ce).max(1) > 0.95]))})
 pe = pd.DataFrame(per_epoch); pe.to_csv(f"{OUT}/per_epoch_{tag}.csv", index=False)
 L = np.array(out["epoch_losses"]); first = lambda thr: int(np.nonzero(L <= thr)[0][0] + 1) if (L <= thr).any() else -1
-rec = {"tag": tag, "arch": "80-60-40", "init": "equivariant quadruples", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "n_train": N_TRAIN, "batch": BS, "epochs": EPOCHS, "lr": LR, "logit_rms_init": lg["rms_logit"], "final_epoch_loss": float(L[-1]), "min_epoch_loss": float(L.min()),
+rec = {"tag": tag, "arch": ARCH, "init": "equivariant quadruples", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "n_train": N_TRAIN, "batch": BS, "epochs": EPOCHS, "lr": LR, "logit_rms_init": lg["rms_logit"], "final_epoch_loss": float(L[-1]), "min_epoch_loss": float(L.min()),
        "train_log_loss_end": tr["log_loss"], "test_error_end": te["zero_one_loss"], "test_error_strict_end": te["zero_one_loss_strict"], "zero_logit_frac_end": te["zero_logit_fraction"],
        "epoch_to_0.3": first(0.3), "epoch_to_0.2": first(0.2), "epoch_to_0.1": first(0.1), "epoch_to_0.05": first(0.05), "epoch_to_0.03": first(0.03),
        **{f"on_target_L{l}_end": float(pe[f"on_target_L{l}"].iloc[-1]) for l in range(4)}, "nodes_covered_end": int(pe.nodes_covered.iloc[-1]), "wall_min": (time.time() - t0) / 60}
 pd.DataFrame([rec]).to_csv(f"{OUT}/summary.csv", index=False)
-json.dump({"arch": "80-60-40", "init": "equivariant quadruples (run 37)", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cues": "free; pole*(v + u_j) renormalised", "n_train": N_TRAIN, "epochs": EPOCHS, "batch": BS, "lr": LR, "eta_min_ratio": ETA_MIN_RATIO, "momentum": MOM, "snapshot_every_epochs": SNAP,
+json.dump({"arch": ARCH, "init": "equivariant quadruples (run 37)", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cues": "free; pole*(v + u_j) renormalised", "n_train": N_TRAIN, "epochs": EPOCHS, "batch": BS, "lr": LR, "eta_min_ratio": ETA_MIN_RATIO, "momentum": MOM, "snapshot_every_epochs": SNAP,
            "design": {k: (list(vv) if isinstance(vv, tuple) else vv) for k, vv in DESIGN.items()}, "data": DATA}, open(f"{OUT}/manifest.json", "w"), indent=2)
 print(f"{tag}: final epoch loss {rec['final_epoch_loss']:.4f}, test error {te['zero_one_loss']:.4f} (strict {te['zero_one_loss_strict']:.4f}); epochs to 0.3/0.2/0.1/0.05/0.03: {rec['epoch_to_0.3']}/{rec['epoch_to_0.2']}/{rec['epoch_to_0.1']}/{rec['epoch_to_0.05']}/{rec['epoch_to_0.03']}; "
       f"nodes covered {rec['nodes_covered_end']}/31; on-target end {[round(rec[f'on_target_L{l}_end'], 2) for l in range(4)]}; {rec['wall_min']:.1f} min", flush=True)
