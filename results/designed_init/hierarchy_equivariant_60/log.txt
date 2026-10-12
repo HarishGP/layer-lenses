@@ -1,0 +1,1 @@
+linear_free_kaiming_cosine_equiv60_seed0: 80-60-40 equivariant init; flip test worst deviation 4.6e-08 over 15 flips; probe+spare rows off-span to 1.2e-15, pairwise |cos| max 1.8e-08; W3 ones per row [30]; data seed 5178 (1000000, 100); logit rms 0.0493

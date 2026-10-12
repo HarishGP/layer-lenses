@@ -107,3 +107,5 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/hierarchy_cuev_62_ps7/replay/meta.pkl
 !results/designed_init/hierarchy_cuev_62_w3seed1_ps7/
 !results/designed_init/hierarchy_cuev_62_w3seed1_ps7/replay/meta.pkl
+!results/designed_init/hierarchy_equivariant_60/
+!results/designed_init/hierarchy_equivariant_60/replay/meta.pkl

@@ -44,6 +44,7 @@ $PY $S/hierarchy_cuev_62_ds2/run_hierarchy_cuev62.py --out hierarchy_cuev_62_ds2
 $PY $S/hierarchy_cuev_62_w3seed1_ds2/run_hierarchy_cuev62.py --out hierarchy_cuev_62_w3seed1_ds2 --tag linear_free_kaiming_cosine_cuev_62_w3seed1_ds6178 --w3-seed 1 --data-seed 6178   # run 34
 $PY $S/hierarchy_cuev_62_ps7/run_hierarchy_cuev62.py --out hierarchy_cuev_62_ps7 --tag linear_free_kaiming_cosine_cuev_62_ps7 --probe-seed 7                                          # run 35
 $PY $S/hierarchy_cuev_62_w3seed1_ps7/run_hierarchy_cuev62.py --out hierarchy_cuev_62_w3seed1_ps7 --tag linear_free_kaiming_cosine_cuev_62_w3seed1_ps7 --w3-seed 1 --probe-seed 7      # run 36
+$PY $S/hierarchy_equivariant_60/run_hierarchy_equivariant60.py --out hierarchy_equivariant_60 --tag linear_free_kaiming_cosine_equiv60_seed0                                      # run 37
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"

@@ -1084,3 +1084,146 @@ def unit_leaf_anatomy(W1: np.ndarray, W2: np.ndarray, W3: np.ndarray, Wout: np.n
                      "positive_inputs": ", ".join((f"{'+' if det[t][1] > 0 else '-'}u{det[t][0]}" if det[t] else f"row{t}") + f":{W2[u, t]:.2f}" for t in pos[:5]),
                      "path": float(abs(W3[:, u] @ np.asarray(Wout).ravel()))})
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Tree flips and the 60-unit equivariant design (run 37)
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+def mirror_node(n: int, j: int) -> int:
+    """Image of node ``n`` under the flip at internal node ``j``: the two subtrees of ``j`` are exchanged (heap indexing), every
+    other node, ``j`` included, is fixed. An involution."""
+    if n == j:
+        return n
+    path = []; m = n
+    while m > j:
+        p = (m - 1) // 2; path.append(m - 2 * p); m = p          # 1 = left child (2p + 1), 2 = right child (2p + 2)
+    if m != j:
+        return n
+    path = path[::-1]; path[0] = 3 - path[0]; m = j
+    for c in path:
+        m = 2 * m + c
+    return m
+
+
+def subtree_nodes(j: int, n_nodes: int = 31) -> list[int]:
+    """Strict descendants of ``j`` in heap order."""
+    out = []; frontier = [j]
+    while frontier:
+        m = frontier.pop(0)
+        for c in (2 * m + 1, 2 * m + 2):
+            if c < n_nodes:
+                out.append(c); frontier.append(c)
+    return out
+
+
+def tree_flip_matrix(tree: COBODTTree, j: int) -> np.ndarray:
+    """Orthogonal ``Q`` realising the flip at internal node ``j``: ``Q u_j = -u_j``, ``Q u_m = u_{mirror(m)}`` for the descendants
+    ``m`` of ``j``, identity on every other direction (the other normals and the off-span complement). The label of the COB-ODT is
+    invariant, ``y(Qx) = y(x)``, so ``Q`` is a symmetry of the data law; it acts on a first-layer row ``w`` as ``Q w``."""
+    U = tree.w_list; n_nodes = U.shape[0]
+    Q = np.eye(U.shape[1]) - 2.0 * np.outer(U[j], U[j])
+    for m in subtree_nodes(j, n_nodes):
+        Q += np.outer(U[mirror_node(m, j)], U[m]) - np.outer(U[m], U[m])
+    return Q
+
+
+def cue_row_identity(W1: np.ndarray, tree: COBODTTree, cue_rows: list[int] | np.ndarray) -> dict[tuple[int, int], int]:
+    """``(node, pole) -> row`` for the cue rows, read off the in-span part of each row (largest |cosine| with a normal)."""
+    U = tree.w_list; out = {}
+    for r in cue_rows:
+        c = W1[r] / np.linalg.norm(W1[r]) @ U.T; m = int(np.abs(c).argmax()); out[(m, int(np.sign(c[m])))] = int(r)
+    if len(out) != len(cue_rows):
+        raise ValueError("cue rows do not have distinct (node, pole) identities")
+    return out
+
+
+QUAD_TYPES = ((+1, +1), (+1, -1), (-1, -1), (-1, +1))
+"""Unit types of the 60-unit design, in order within each node's quadruple: (cue-block sign, net path sign). Types 0 and 2 read the
++pole probe of the node, types 1 and 3 the -pole probe (the block sign times the path sign is the probe pole)."""
+
+
+def equivariant_quadruple_weights(W1: np.ndarray, W2: np.ndarray, W3: np.ndarray, Wout: np.ndarray, *, cue_rows: list[int] | np.ndarray, tree: COBODTTree,
+                                  orth_seed: int = 0) -> dict[str, Any]:
+    """Build the 60-unit equivariant init (run 37) from a 30-unit hierarchy design (run 26's layout: probe rows 0..29 in
+    ``HIERARCHY_TARGETS`` order feeding units 0..29, cue rows, the rest spare rows).
+
+    * Probe and spare rows become mutually orthogonal, purely off-span vectors (drawn from ``orth_seed``), each keeping its norm.
+    * Cue rows are kept as given.
+    * Unit ``4j + t`` has cue block ``sign_t * B_j`` (``B_j`` the design's block for node ``j``, shared by the pair) and the probe
+      weight of the design on the probe of pole ``sign_t * s_t`` (see ``QUAD_TYPES``).
+    * W3: one common column for every net-path-sign ``+`` unit (the design's column of unit 0) and the complementary column for
+      every ``-`` unit (the column of unit 1); every third-layer row then has ``width2 / 2`` nonzero entries. ``Wout`` is kept.
+    """
+    n1 = W1.shape[0]; U = tree.w_list; cue_rows = [int(r) for r in cue_rows]
+    probe_rows = list(range(30)); spare_rows = [r for r in range(n1) if r not in probe_rows and r not in cue_rows]
+    if (W2[:, spare_rows] != 0).any():
+        raise ValueError("the design wires spare rows into W2; the quadruple construction assumes it does not")
+    # orthogonal off-span directions for the probes and spare rows
+    rng = np.random.default_rng(orth_seed); P = np.eye(U.shape[1]) - U.T @ U
+    G = P @ rng.normal(size=(U.shape[1], len(probe_rows) + len(spare_rows))); Qo, _ = np.linalg.qr(G)
+    if Qo.shape[1] != len(probe_rows) + len(spare_rows):
+        raise ValueError("not enough off-span dimensions for orthogonal probe and spare rows")
+    W1n = W1.copy()
+    for k, r in enumerate(probe_rows + spare_rows):
+        W1n[r] = Qo[:, k] * np.linalg.norm(W1[r])
+    # second layer: quadruples
+    W2n = np.zeros((60, n1), dtype=W2.dtype)
+    for j in range(15):
+        a, b = 2 * j, 2 * j + 1
+        if not np.array_equal(W2[a, cue_rows], W2[b, cue_rows]):
+            raise ValueError(f"the two units of node {j} do not share a cue block")
+        B = W2[a, cue_rows]; wa, wb = W2[a, a], W2[b, b]
+        if wa != wb or (W2[a] != 0).sum() != len(B[B != 0]) + 1 or (W2[b] != 0).sum() != len(B[B != 0]) + 1:
+            raise ValueError(f"unexpected wiring of the units of node {j}")
+        for t, (bsign, s) in enumerate(QUAD_TYPES):
+            u = 4 * j + t; probe = a if bsign * s > 0 else b
+            W2n[u, cue_rows] = bsign * B; W2n[u, probe] = wa
+    # third layer: common pattern per path sign
+    col_plus, col_minus = W3[:, 0], W3[:, 1]
+    if not (((col_plus != 0) ^ (col_minus != 0)).all() and np.sign(col_plus @ Wout.ravel()) > 0 and np.sign(col_minus @ Wout.ravel()) < 0):
+        raise ValueError("units 0 and 1 of the design must have complementary W3 columns with net path signs + and -")
+    W3n = np.zeros((W3.shape[0], 60), dtype=W3.dtype)
+    for j in range(15):
+        for t, (_, s) in enumerate(QUAD_TYPES):
+            W3n[:, 4 * j + t] = col_plus if s > 0 else col_minus
+    unit_path_sign = np.array([s for _ in range(15) for (_, s) in QUAD_TYPES])
+    return {"W1": W1n, "W2": W2n, "W3": W3n, "Wout": Wout.copy(), "probe_rows": probe_rows, "cue_rows": cue_rows, "spare_rows": spare_rows,
+            "unit_path_sign": unit_path_sign, "unit_block_sign": np.array([b for _ in range(15) for (b, _) in QUAD_TYPES]), "unit_node": np.repeat(np.arange(15), 4)}
+
+
+def flip_equivariance_report(W1: np.ndarray, W2: np.ndarray, W3: np.ndarray, Wout: np.ndarray, tree: COBODTTree, j: int, *, cue_rows: list[int] | np.ndarray,
+                             units_per_node: int = 4) -> dict[str, float]:
+    """Apply the tree flip at node ``j`` to an init and compare with the init itself, after relabelling rows and units.
+
+    Rows: ``W1 -> W1 Q^T`` (each row ``w -> Q w``), then the probe rows of the descendants of ``j`` are relabelled to the mirror
+    node, the two probe rows of ``j`` swap poles, the cue rows follow their node, spare rows stay. Units: the units of a descendant
+    node move to the mirror node with the same type; the units of ``j`` itself exchange the sign of their cue block keeping their
+    path sign (types 0 <-> 3, 1 <-> 2 of ``QUAD_TYPES``) when ``units_per_node`` is 4, and keep their index when it is 2 (the 30-unit
+    design has no partner, which is the chirality the report exposes). Third-layer neurons and the output are fixed.
+
+    Returns the largest absolute deviations: ``in_span`` (W1's in-span parts), ``off_span_gram`` (the Gram matrix of W1's off-span
+    parts, invariant iff some rotation of the complement completes the symmetry), ``w2``, ``w3``, ``wout``.
+    """
+    U = tree.w_list; n1 = W1.shape[0]; cue_rows = [int(r) for r in cue_rows]
+    Q = tree_flip_matrix(tree, j); cue_id = cue_row_identity(W1, tree, cue_rows)
+    row_perm = np.arange(n1)
+    for n in range(15):
+        for q_idx, q in enumerate((+1, -1)):
+            r = 2 * n + q_idx; n2 = mirror_node(n, j); q2 = -q if n == j else q
+            row_perm[r] = 2 * n2 + (0 if q2 > 0 else 1)
+    for (m, q), r in cue_id.items():
+        row_perm[r] = cue_id[(mirror_node(m, j), q)]
+    n_units = W2.shape[0]; unit_perm = np.arange(n_units)
+    for u in range(n_units):
+        n, t = divmod(u, units_per_node); n2 = mirror_node(n, j)
+        t2 = {0: 3, 1: 2, 2: 1, 3: 0}[t] if (n == j and units_per_node == 4) else t
+        unit_perm[u] = units_per_node * n2 + t2
+    W1f = W1 @ Q.T; W1n = np.zeros_like(W1); W1n[row_perm] = W1f
+    W2n = np.zeros_like(W2); W2n[np.ix_(unit_perm, row_perm)] = W2
+    W3n = np.zeros_like(W3); W3n[:, unit_perm] = W3
+    Pin = U.T @ U; Poff = np.eye(U.shape[1]) - Pin
+    gram = lambda W: (W @ Poff) @ (W @ Poff).T
+    return {"in_span": float(np.abs(W1n @ Pin - W1 @ Pin).max()), "off_span_gram": float(np.abs(gram(W1n) - gram(W1)).max()),
+            "w2": float(np.abs(W2n - W2).max()), "w3": float(np.abs(W3n - W3).max()), "wout": float(np.abs(Wout - Wout).max())}

@@ -477,3 +477,57 @@ def test_leaf_wrong_side_detectors_and_unit_leaf_anatomy() -> None:
     t = unit_leaf_anatomy(W1, W2, W3, Wout, tree, x)
     assert t.top_leaf[0] == 30 and t.share[0] > 0.9 and t.vetoes_on_chain[0] == 4 and t.veto_levels[0] == "0123" and t.positive_inputs[0] == "-u30:0.10" and abs(t.active[0] - 1 / 32) < 0.02
     assert abs(t.active[1] - 0.5) < 0.05 and t.n_veto[1] == 0 and t.vetoes_on_chain[1] <= 1 and t.path[1] == 2.0
+
+
+def test_mirror_node_and_tree_flip_matrix_are_label_symmetries() -> None:
+    from layer_lenses.designed_init import mirror_node, subtree_nodes, tree_flip_matrix
+    from layer_lenses.init_sweep import SweepRunSpec, build_tree, build_data
+
+    assert [mirror_node(n, 0) for n in (0, 1, 2, 3, 4, 5, 6, 15, 23, 30)] == [0, 2, 1, 5, 6, 3, 4, 23, 15, 22]
+    assert [mirror_node(n, 1) for n in (0, 1, 2, 3, 4, 7, 9, 15, 19, 22)] == [0, 1, 2, 4, 3, 9, 7, 19, 15, 18]
+    assert subtree_nodes(7) == [15, 16] and subtree_nodes(3) == [7, 8, 15, 16, 17, 18]
+    assert all(mirror_node(mirror_node(n, j), j) == n for j in range(15) for n in range(31))
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1))
+    x, y = build_data(SweepRunSpec(tree_seed=5178, data_seed=11, init_seed=0, batch_size=1, n_train=4000), tree)
+    from layer_lenses.odt import _traverse_tree
+    def labels(pts):
+        leaves = _traverse_tree(pts @ tree.w_list.T + tree.b_list, depth=5); return tree.leaf_labels[leaves - 31]
+    for j in (0, 1, 6, 14):
+        Q = tree_flip_matrix(tree, j)
+        assert np.allclose(Q @ Q.T, np.eye(100), atol=1e-10)
+        assert np.allclose(Q @ tree.w_list[j], -tree.w_list[j]) and np.allclose(Q @ tree.w_list[2 * j + 1], tree.w_list[2 * j + 2])
+        assert np.array_equal(labels(x @ Q.T), labels(x)) and np.array_equal(labels(x), y)
+
+
+def test_equivariant_quadruple_init_is_fixed_by_every_flip_and_the_30_unit_design_is_not() -> None:
+    from layer_lenses.designed_init import (build_hierarchy_model, standard_scale_spec, equivariant_quadruple_weights, flip_equivariance_report, QUAD_TYPES)
+    from layer_lenses.init_sweep import SweepRunSpec, build_tree
+
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1)); U = tree.w_list
+    design = dict(seed=0, cue_mode="linear", subset_mode="all", units_per_level=(1, 1, 1, 1), width1=80, width2=30, width3=40, cue_offspan_ratio=0.2,
+                  output_signs="balanced", path_sign_cues=True, layer3_mode="balanced_paths", layer3_majority=15, cue_block_scale="inv_sqrt")
+    model, meta = build_hierarchy_model(standard_scale_spec("kaiming", **design), tree)
+    W1 = model.hidden_layers[0].weight.detach().numpy().astype(np.float64).copy(); W2 = model.hidden_layers[1].weight.detach().numpy().astype(np.float64)
+    W3 = model.hidden_layers[2].weight.detach().numpy().astype(np.float64); Wout = model.output_layer.weight.detach().numpy().astype(np.float64)
+    v = U[15:31].sum(0)
+    for r in meta["cue_rows"]:                                                   # run 26's cues
+        c = W1[r] / np.linalg.norm(W1[r]) @ U.T; m = int(np.abs(c).argmax()); pole = int(np.sign(c[m])); new = pole * (v + U[m]); W1[r] = new / np.linalg.norm(new) * np.linalg.norm(W1[r])
+    q = equivariant_quadruple_weights(W1, W2, W3, Wout, cue_rows=meta["cue_rows"], tree=tree, orth_seed=3)
+    rows = q["probe_rows"] + q["spare_rows"]; R = q["W1"][rows]
+    assert np.abs(R @ U.T).max() < 1e-12 and np.allclose(R @ R.T, np.diag(np.linalg.norm(W1[rows], axis=1) ** 2), atol=1e-10)   # orthogonal, off-span, norms kept
+    assert q["W2"].shape == (60, 80) and q["W3"].shape == (40, 60) and (q["W3"] != 0).sum(1).tolist() == [30] * 40
+    for jn in range(15):
+        for t, (bsign, s) in enumerate(QUAD_TYPES):
+            u = 4 * jn + t; probe = 2 * jn + (0 if bsign * s > 0 else 1)
+            assert q["W2"][u, probe] == -1 and np.array_equal(q["W2"][u, meta["cue_rows"]], bsign * W2[2 * jn, meta["cue_rows"]])
+            assert np.sign(q["W3"][:, u] @ Wout.ravel()) == s
+    for jn in range(15):
+        rep = flip_equivariance_report(q["W1"], q["W2"], q["W3"], q["Wout"], tree, jn, cue_rows=meta["cue_rows"], units_per_node=4)
+        assert max(rep.values()) < 1e-6, (jn, rep)                                           # float32 normals: orthonormal to ~1e-7
+    # the 30-unit design with the same orthogonal rows fails only through its cue blocks (the chirality) and W3's random pattern
+    W1o = W1.copy(); W1o[rows] = q["W1"][rows]
+    rep = flip_equivariance_report(W1o, W2, W3, Wout, tree, 0, cue_rows=meta["cue_rows"], units_per_node=2)
+    assert rep["in_span"] < 1e-6 and rep["off_span_gram"] < 1e-6 and rep["w2"] > 0.1
+    W3c = np.stack([W3[:, 0] if u % 2 == 0 else W3[:, 1] for u in range(30)], axis=1)      # common pattern: W3 passes, W2 still fails
+    rep = flip_equivariance_report(W1o, W2, W3c, Wout, tree, 0, cue_rows=meta["cue_rows"], units_per_node=2)
+    assert rep["w3"] < 1e-6 and rep["w2"] > 0.1

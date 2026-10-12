@@ -5409,3 +5409,126 @@ For example consider run26 -- this will be my new anchor run. It has 80*30*40 pa
 ### Current state / where to pick up
 - Cross-run notebook sections 1-2; not pushed. Possible next: the same bookkeeping on runs 11 and 21-25 (do the dense-family units of run 23
   reach consensus?), and a step-level check of the minority flips with `replay_steps_full`.
+
+## 2026-10-12 — Node-swap data transformations (discussion, no runs yet)
+
+### User prompts (verbatim)
+- "Okay, I want to take another detour. 
+
+Considering the data seed change has similar effect as probe, it leads me to believe that the asymmetry in the data due to finiteness of training data is what causes these deviation phenomena. If you really had infinite data what would happen seems like a hard question to me. 
+
+To that end, I am thinking of systematic changes to data. One idea I have is node swaps. By this I mean, we take a dataset and choose a pair of nodes at the same level on the ODT.  By systematically flipping the signs of data entering these two nodes, we can make them swap. e.g. to swap nodes 3 and 6 (say), we consider all data entering 3 and 6 other data is not touched. For each data point x entering 3, the projection of x along u_0 and u_2 are forcinbly made positive by reflecting (if required). Thus such a point would enter 6 now. Similarly all data points entering 6 can be made to go to 3. The points are still labelled by the same decision tree. Crucially, this modified data has the same likelihood as the original data due to symmetry.
+
+I want to test what would happen when data is changed in this systematic way instead of just sampling from a different seed. 
+
+Any clarifications/errors in thought/suggestions?"
+
+### Decisions
+- Assessment given (no code): the "force the projections positive" map is not measure preserving (it fixes the sign of the dead
+  coordinate, u_1 under node 6 / u_2 under node 3); the swap must be an orthogonal map of span(u_0, u_1, u_2) restricted to the two
+  regions, e.g. (a_0, a_1, a_2) -> (-a_0, a_2, -a_1) on node 3's region and its inverse on node 6's, which is an involution and keeps
+  the sample exactly i.i.d. uniform on the sphere. The swapped set is then a coupled resample: identical outside the two regions, same
+  batch order (config seed 1000), so differences isolate the sample in those regions. Suggested controls: batch-order seed alone,
+  level-4 sibling swaps (1/8 of the data) and remote vs own-subtree swaps as a locality test of probe fates.
+
+## 2026-10-12 — Disagreement on what the probes' random off-span directions do (Q&A)
+
+### User prompts (verbatim)
+- "I disagree on the source of asymmetry.  The random probe directions in the off-span components seems like a much lesser symmetry break than the explicit W2 construction that biases the gradient of the probes in the desired directions.
+
+The reason we need random directions in the probe is for scale reasons rather than symmetry breaking reasons."
+
+### Assessment (no repo changes)
+- Agreed that W2's cue blocks fix where each probe goes: the in-span gradient on an off-span row does not depend on the row's
+  direction (its gate is independent of the tree coordinates), so the population gradient at init points every probe at its own
+  node whatever its off-span part. But that construction is equivariant under the tree's symmetry group (relabel the nodes and the
+  design relabels with them), so it decides destinations, not ties between congruent probes; the deviations are tie-like events.
+- Not agreed that scale is all: runs 27-30 had the same probe norm as run 26 and differed in fates and smoothness. The identical
+  direction is however also a degenerate init (identical gates, identical third-layer pre-activations, logit exactly 0), so the
+  randomness per se is not isolated. Proposed discriminating init: 30 mutually orthogonal off-span probe directions, which is
+  non-degenerate yet equivariant together with a rotation of the off-span complement (a symmetry of the data). If it behaves like
+  run 26 with deterministic fates across data seeds, the user is right; if the fates become sample-decided, the random directions
+  are doing the tie-breaking. Suggested as runs 37/38 (62 rows, data seeds 5178 / 6178); not launched.
+- Memory note softened accordingly.
+
+## 2026-10-12 — Are run 26's probe off-span parts orthogonal, and can they favour a node? (Q&A with a check)
+
+### User prompts (verbatim)
+- "I still don't agree that off-span probe components can give the kind of symmetry breaking we are seeking. I am assuming the off-span components in the probe are orthogonal to each other in run 26? If so, why would that break symmetry in favour of any node?"
+
+### Checks (no repo changes)
+- Run 26 init: the 30 probes are pure off-span vectors of norm sqrt(2) (in-span norm 0), random, not orthogonal: pairwise cosines
+  mean 0.00, std 0.11, extremes -0.31 / +0.31, 34 of 435 pairs above 0.2 in magnitude. Cues are pure in-span; the 18 spare rows
+  have in-span parts up to norm 1.0.
+- Overlap mechanism tested and refuted: across runs 11-36 (branches 13/15 aside), the 45 probes that deviate to an internal node
+  have mean |cos_off| 0.106 with that node's probe against a median of 0.078 with the other probes; only 3 of 45 overlap most with
+  their destination's probe. Deviators are not the probes whose off-span part points at the rows of the node they end on.
+
+### Decisions
+- Conceded: the off-span directions are not a directed symmetry breaker. They enter the population gradient only through products
+  with in-span quantities, so at init the in-span gradient of every probe is direction-independent and set by W2's cue blocks; later
+  the random overlaps act as an undirected perturbation of the competition dynamics, like the sample. Identical directions (runs
+  27-30) are the fully coupled, degenerate extreme of this, not a cleaner version of it.
+- Memory note updated.
+
+## 2026-10-12 — With orthogonal off-span probes, what breaks the symmetry? (Q&A with checks)
+
+### User prompts (verbatim)
+- "Ok, if the probe inits were orthogonal and off-span then do you agree that the only two sources of asymmetry that causes some probes/cues to deviate are:finite data/batch and W3?"
+
+### Checks (no repo changes)
+- Run 26's W2 cue blocks: both units of a pair carry the SAME block, coefficient -side_j(m) x cue pole x c on the cue of level-4 node m
+  (so the block computes c x (sum of a_m on j's left side - sum on its right side)); only the net path sign (+-10 quanta) distinguishes
+  the two units. Measured at init on 50k eval points: every unit fires on 32% of the (left, y=+) and (right, y=-) points and on 23% of
+  the other two cells, the same pattern at every node. At the end the units are pure side gates (unit 0 on all of the left side, unit 1
+  on all of the right).
+- Consequence: no tree flip fixes the init. A flip at node j swaps j's sides, which negates j's cue block, and the level-4 normals are
+  not negated by any symmetry, so nothing relabels it back. The design has a chirality that is the same at every node; it is not
+  equivariant under the label's symmetry group even with orthogonal probes and a common W3 pattern.
+
+### Decisions
+- Answer: agreed that the sample / batch order and W3's pattern are the random sources, provided the spare rows are removed or made
+  orthogonal off-span too (run 26's 18 spare rows have in-span parts up to norm 1.0); numerical noise is a third, negligible one. But a
+  fourth, deterministic source exists: the cue-block chirality, which makes a node's units treat its left and right subtrees with
+  opposite label signs, so sibling subtrees are in different environments even in the infinite-data limit. A congruence test should
+  therefore compare left children with left children (and the two poles of a node separately), and the clean infinite-data limit of
+  the design is not symmetric among same-level nodes.
+
+## 2026-10-12 — Would 60 units remove the chirality? (Q&A)
+
+### User prompts (verbatim)
+- "If I understand your deterministic asymmetry right, would it be fixed by having 60 units? For example with repeating the W2 weights, and flipping between the odd and even connections for W3?"
+
+### Decisions
+- Yes, provided the copy's cue block is NEGATED (equivalently the same block on the opposite-pole cue rows); a literal repeat of W2 with
+  flipped W3 only duplicates the existing pair, since each pair already has both path signs on the same block. The closed set per node
+  is {(B, +), (B, -), (-B, +), (-B, -)}; the copy (-B, -s) has the same pole as (B, s), so flipping W3 on the copy is what keeps one probe
+  pole per unit. Full equivariance also needs a common W3 pattern for all s=+ units and the complementary one for all s=- units
+  (every third-layer row then has 30 ones), orthogonal off-span probes (60 fit in 69 dimensions, or 30 shared by the same-pole twins),
+  no spare rows, and the cues as in run 26. With that, the sample / batch order (and numerics) are the only breakers, and the
+  population dynamics are congruent within a level and across poles. Not built or launched.
+
+## 2026-10-12 — Run 37: the 60-unit equivariant init (80-60-40) with the flip test
+
+### User prompts (verbatim)
+- "Build run 37 with the 60-unit equivariant init and the flip test. Do keep the spare rows, but have it and the probes all be orthogonal to each other and purely off-span. The architecture is 80-60-40."
+
+### Changes
+- `src/layer_lenses/designed_init.py`: `mirror_node`, `subtree_nodes`, `tree_flip_matrix` (orthogonal Q of the flip at node j; label
+  invariant), `cue_row_identity`, `QUAD_TYPES`, `equivariant_quadruple_weights` (30-unit design -> 60-unit init: orthogonal off-span
+  probe and spare rows keeping their norms, quadruple units with +-B_j and the probe of pole block sign x path sign, common W3 column
+  per path sign, output kept), `flip_equivariance_report` (apply the flip, relabel rows and units, report max deviations of W1's in-span
+  parts, the off-span Gram matrix, W2, W3, Wout).
+- `tests/test_designed_init.py`: flip map tests (mirror images, involution, Q orthogonal and label-preserving on sampled points);
+  the quadruple init is fixed by all 15 flips (deviation < 1e-6), the 30-unit design with the same orthogonal rows and a common W3
+  still fails through W2 (the chirality). Suite at 120.
+- `results/designed_init/run_hierarchy_equivariant60.py` (copy tracked under `notebooks/results/designed_init/hierarchy_equivariant_60/`),
+  folder `hierarchy_equivariant_60`, gitignore negations, regeneration line (run 37). Launched 2026-10-12 (~75 min expected).
+  Init: flip test worst deviation 4.6e-8, rows off-span to 1e-15, pairwise |cos| 2e-8, W3 30 ones per row, logit rms 0.049.
+- Runs notebook: registry entry 37 and section 37 (load, trajectories, network view, and a congruence cell that applies all 15 flips to
+  checkpoints along the run); cross-run index lists 37. Findings to be filled when the run finishes.
+
+### Decisions
+- With 80 rows the 30 probes are shared by the same-pole twins (one probe per pole per node); 60 probes would need 92 rows.
+- W3 keeps run 26's quantum (0.365) with 30 inputs per third-layer row instead of 15; the pre-activation scale of the third layer is
+  therefore larger than run 26's (not rescaled, so every unit keeps its +-10-quanta path).
