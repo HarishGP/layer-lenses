@@ -5593,3 +5593,11 @@ How much of the analysis would change if instead of the cues being initialised t
   permutations of the cue pairs (cue identities then sample-decided). Run 39 tests whether bias 0.1 keeps the cue identities.
 - Full-batch GD with run 37's lr / momentum keeps step counts comparable with the SGD runs; 150k steps (~0.1 s each) was chosen over the
   1M steps of the SGD runs for cost.
+
+### Results (run 38, finished 2026-10-12, 26 min)
+- Loss 0.0030, test error 0.49%, 31/31 nodes, 0 spiky epochs; epochs to 0.1 / 0.05 / 0.01: 417 / 713 / 4432 (run 37: 413 / 644 / 3387).
+- 27/30 probes on their own node; +u_13 -> -u_27 and +u_10 uncaptured as in run 37, plus +u_14 -> -u_29; 22/32 cues on their own normal,
+  6 on ancestors, 4 diffuse.
+- Congruence identical to run 37's within a few percent (level-3 own-coordinate spread 0.06 / 0.50 / 2.0 / 3.4 at epochs 100-1000 in
+  both; W2 flip deviation 0.04 / 0.10 / 0.27 at epochs 50-200 in both): the spare rows change nothing but one level-3 fate.
+- Run 40 (full batch) started automatically after run 38; run 39 still training.
