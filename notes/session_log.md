@@ -5357,3 +5357,55 @@ spare rows play no part with free cues (27 = 28).
   Verified headlessly: sections 12, 14, 22, 25, 32 and 36 each run alone after the setup cell.
 - Note: the trajectory cell of section 22 (a user cell) plots run 21 (`series21 = trajectory_plots(run21, ...)`);
   it now loads run 21 itself, but it may have been meant for run 22.
+
+## 2026-10-12 — Path signs in run 26: how far the output-weight argument extends
+
+### Goal
+Count the sign flips of the 80 x 30 x 40 three-edge paths of run 26 (the new anchor run) and relate them to the reason output weights never flip.
+
+### User prompts (verbatim)
+- "We have seen the output weights not flip sign mostly and have an intuitive reasoning for why that should happen.
+
+How much of this can be extended to paths? Recall the notion of paths where if we have L hidden layers with m_1, m_2, ..., m_L hidden nodes in each layer the network output can be viewed as sum of m_1*m_2*...*m_L paths.  i.e.
+
+\[
+\hat y(\x) 
+=
+\sum_{\pi \in\Pi}  
+\prod_{\ell=1}^L 
+\left( w^{\ell+1}_{m_{\ell+1},m_{\ell}} \1(g^\ell_{m_\ell}(\x)>0) \right)
+\left(  \w^1_{m_1} \cdot \x \right) ,
+\]
+where the neuron pre-activations are given by $g^\ell(\x)$ and parameters are given by $W^1,\ldots,W^{L+1}$ and $\Pi$ is the cartesian product of $[m_1],[m_2], \ldots, [m_L]$. 
+
+For example consider run26 -- this will be my new anchor run. It has 80*30*40 paths. How many of them actually flip sign during training?"
+
+### Changes
+- `src/layer_lenses/relu_analysis.py`: `edge_sign_flips(weights, epochs)` (per-entry flip count, first flip epoch, net flip, born; zeros ignored),
+  `path_products(w_out, w3, w2)` (single or stacked), `path_sign_summary(...)` (designed vs born paths, flips attributed to W2 / W3 edges,
+  significant born paths, |product| mass, sign stability over the tail), `unit_path_sign_consensus(w_out, w3, unit_sign)`.
+- `tests/test_relu_analysis.py`: two tests on toy stacks (zeros ignored, double flips not net, born paths, consensus fractions).
+- `notebooks/hierarchy_cross_run_analysis.ipynb`: section 2 (markdown findings + two cells: counts / per-unit table / flip CSV, and the
+  cumulative first-flip plot by edge class with the loss, plus the consensus bars). Verified headlessly after the setup cell; cells left unexecuted.
+- `results/designed_init/path_sign_flips_run26.csv`: every designed W2 / W3 edge of run 26 that ends with the opposite sign (class, init, end,
+  first flip epoch, where the row sits at the end).
+- Runs notebook committed with the user's executed outputs (no code change).
+
+### Findings (run 26, checkpoints every 10 epochs, so a double crossing within 1000 steps is invisible)
+- 5720 of the 96 000 paths are nonzero at init; 1745 (30%) of them end with the opposite sign; the 40 output weights never flip.
+- Three edge classes explain the flips: 80 of the 150 W3 *minority* edges (one-quantum paths against the unit's net sign) go through zero
+  and join the net sign, the other 70 shrink; 5 of 30 probe edges and 56 of 256 cue edges are pruned through zero (end near 0); 12 cue edges
+  re-grow with the opposite sign, all on cues that climbed to an ancestor node (identity change -> the unit re-chooses the sign).
+- Per-unit path-sign consensus goes from 0.75 (15 of 20 quanta) to 1.00 for 10 units, > 0.94 for 23; units 27 and 29 (failed probes) are
+  re-purposed with the opposite sign (born W3 edges 1 of 20 on the init sign).
+- Born paths (90 280) hold 82% of the end |product| mass; 62 173 are significant and sign-stable over the last 2000 epochs.
+- Gradient-flow balancedness invariants drift by up to 8 / 126 / 46 (neurons / units / rows) and are negative at init, so the output-weight
+  sign persistence is dynamical (feature built through the weight's own sign), not a conservation law.
+
+### Decisions
+- Path-level statement adopted: sign persistence holds for an edge iff the feature it reads was built with that edge's sign (fan-out 1 at
+  the output makes it automatic); for shared features it becomes a consensus rule per unit, and W2 edge signs follow the row's identity.
+
+### Current state / where to pick up
+- Cross-run notebook sections 1-2; not pushed. Possible next: the same bookkeeping on runs 11 and 21-25 (do the dense-family units of run 23
+  reach consensus?), and a step-level check of the minority flips with `replay_steps_full`.

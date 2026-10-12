@@ -804,3 +804,31 @@ def test_plot_layered_relu_graph_layer_orders_rearranges_positions_only() -> Non
     with pytest.raises(ValueError):
         plot_layered_relu_graph(state_dict=sd, tree=tree, depth=2, epoch=0, figsize=(4, 4), layer_orders={2: [0, 0, 1, 2]})
     plt.close(fig_a); plt.close(fig_b)
+
+
+def test_edge_sign_flips_ignores_zeros_and_counts_net_flips() -> None:
+    from layer_lenses.relu_analysis import edge_sign_flips
+
+    w = np.array([[1.0, -1.0, 0.0, 2.0], [0.0, 1.0, 0.5, -2.0], [-1.0, 1.0, 0.5, 2.0], [-1.0, 0.0, -0.5, 2.0]])
+    r = edge_sign_flips(w, [0, 10, 20, 30])
+    assert r["n_flips"].tolist() == [1, 1, 1, 2]                 # zero at t=1 does not count; entry 3 flips twice and is back
+    assert r["first_flip_epoch"].tolist() == [20, 10, 30, 10]
+    assert r["net_flipped"].tolist() == [True, False, False, False]   # entry 1 ends at zero: not a net flip
+    assert r["born"].tolist() == [False, False, True, False]
+
+
+def test_path_sign_summary_and_consensus_on_a_toy_stack() -> None:
+    from layer_lenses.relu_analysis import path_products, path_sign_summary, unit_path_sign_consensus
+
+    w_out = np.array([[1.0, -1.0]] * 2)                          # 2 neurons, 2 checkpoints
+    w3 = np.array([[[1.0, 0.0], [1.0, 1.0]], [[1.0, 0.5], [-1.0, 1.0]]])   # (t, k, j): edge (1, 0) flips, edge (0, 1) is born
+    w2 = np.array([[[1.0, 0.0, 2.0], [0.0, 1.0, 0.0]], [[1.0, 0.0, -2.0], [0.0, 1.0, 0.0]]])  # (t, j, i): edge (0, 2) flips
+    p = path_products(w_out, w3, w2)
+    assert p.shape == (2, 3, 2, 2) and p[0, 0, 0, 0] == 1.0 and p[0, 0, 0, 1] == -1.0
+    s = path_sign_summary(w_out, w3, w2, [0, 1], significant_ratio=0.1)
+    assert s["n_paths"] == 12 and s["n_designed"] == 5             # paths (i in {0,2}, j=0, k in {0,1}) and (i=1, j=1, k=1)
+    assert s["n_designed_flipped"] == 2                            # W3 edge (1,0) flips paths (0,0,1),(2,0,1); W2 edge (0,2) flips (2,0,0),(2,0,1): (2,0,1) is flipped twice
+    assert s["n_designed_flipped_via_w3"] == 1 and s["n_designed_flipped_via_w2"] == 1
+    assert s["n_born"] == 7 and s["n_born_significant"] == 1       # born path (1, 1, 0) = 1 * 0.5 * 1 exceeds 0.1 x median 1
+    c = unit_path_sign_consensus(w_out[-1], w3[-1], np.array([1, -1]))
+    assert np.allclose(c, [1.0, 2.0 / 3.0])                       # unit 0: paths +1, +1 (flipped edge now agrees); unit 1: -1*1 agrees, +0.5 disagrees

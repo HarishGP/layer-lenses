@@ -3017,3 +3017,64 @@ def top_hessian_eigenvalue(template_model: ReLUMLP, params: dict[str, np.ndarray
         shift = history[-1]; history2, v = power(v, shift); history = history + history2
     vec = {nm: vi.detach().cpu().numpy().copy() for (nm, _), vi in zip(named, v)}
     return {"lambda_max": history[-1], "eigenvector": vec, "layer_fraction": {nm: float((vi ** 2).sum()) for nm, vi in vec.items()}, "history": history}
+
+
+def edge_sign_flips(weights: np.ndarray, epochs: Sequence[int]) -> dict[str, np.ndarray]:
+    """Sign changes of every entry of a weight stack (checkpoints x weight shape).
+
+    A flip is a change between two nonzero signs, the reference being the latest nonzero sign seen
+    (an entry that is exactly zero at a checkpoint keeps its previous reference). Returns, per entry,
+    ``n_flips``, ``first_flip_epoch`` (-1 if never), ``net_flipped`` (nonzero at both ends with opposite
+    signs) and ``born`` (zero at the first checkpoint). Flips that come and go between two checkpoints
+    are invisible.
+    """
+    s = np.sign(weights); epochs = np.asarray(epochs)
+    if len(s) != len(epochs):
+        raise ValueError("weights and epochs must have the same length")
+    ref = s[0].copy(); n = np.zeros(ref.shape, dtype=int); first = np.full(ref.shape, -1)
+    for t in range(1, len(s)):
+        cur = s[t]; flip = (cur != ref) & (cur != 0) & (ref != 0)
+        n += flip; first[(first < 0) & flip] = epochs[t]; ref = np.where(cur != 0, cur, ref)
+    net = (s[-1] != s[0]) & (s[0] != 0) & (s[-1] != 0)
+    return {"n_flips": n, "first_flip_epoch": first, "net_flipped": net, "born": s[0] == 0}
+
+
+def path_products(w_out: np.ndarray, w3: np.ndarray, w2: np.ndarray) -> np.ndarray:
+    """Products w_out[k] W3[k, j] W2[j, i] of every three-edge path of a 3-hidden-layer net.
+
+    Single matrices (``w_out`` of shape (width3,)) give an array (rows x units x neurons); stacks with a
+    leading checkpoint axis give (checkpoints x rows x units x neurons).
+    """
+    if w_out.ndim == 1:
+        return np.einsum("k,kj,ji->ijk", w_out, w3, w2)
+    return np.einsum("tk,tkj,tji->tijk", w_out, w3, w2)
+
+
+def path_sign_summary(w_out: np.ndarray, w3: np.ndarray, w2: np.ndarray, epochs: Sequence[int], *, significant_ratio: float = 0.1, tail: int = 1) -> dict[str, Any]:
+    """Sign bookkeeping of all paths across a run, from weight stacks (checkpoints x shape).
+
+    Paths nonzero at the first checkpoint are *designed*; the rest are *born*. Counts the designed paths
+    whose end sign differs from the init sign, how many of those go through a net-flipped W2 or W3 edge,
+    the born paths whose end |product| exceeds ``significant_ratio`` x the median end |product| of the
+    designed paths, and how many paths keep one sign over the last ``tail`` checkpoints.
+    """
+    p0 = path_products(w_out[0], w3[0], w2[0]); p1 = path_products(w_out[-1], w3[-1], w2[-1])
+    designed = p0 != 0; flipped = designed & (np.sign(p1) != np.sign(p0)) & (p1 != 0)
+    e2 = edge_sign_flips(w2, epochs)["net_flipped"]; e3 = edge_sign_flips(w3, epochs)["net_flipped"]
+    via2 = np.einsum("ji,kj->ijk", e2, np.ones(e3.shape, dtype=bool)); via3 = np.einsum("ji,kj->ijk", np.ones(e2.shape, dtype=bool), e3)
+    thr = significant_ratio * float(np.median(np.abs(p1[designed]))) if designed.any() else 0.0
+    significant_born = ~designed & (np.abs(p1) > thr)
+    s_tail = np.sign(path_products(w_out[-tail:], w3[-tail:], w2[-tail:])); stable = (s_tail == s_tail[-1]).all(0)
+    return {"n_paths": int(p0.size), "n_designed": int(designed.sum()), "n_designed_flipped": int(flipped.sum()),
+            "n_designed_flipped_via_w3": int((flipped & via3 & ~via2).sum()), "n_designed_flipped_via_w2": int((flipped & via2 & ~via3).sum()),
+            "n_born": int((~designed).sum()), "n_born_significant": int(significant_born.sum()), "significance_threshold": thr,
+            "mass_end_designed": float(np.abs(p1[designed]).sum()), "mass_end_designed_flipped": float(np.abs(p1[flipped]).sum()), "mass_end_born": float(np.abs(p1[~designed]).sum()),
+            "n_designed_stable_tail": int((designed & stable).sum()), "n_born_significant_stable_tail": int((significant_born & stable).sum()),
+            "designed": designed, "flipped": flipped, "significant_born": significant_born}
+
+
+def unit_path_sign_consensus(w_out: np.ndarray, w3: np.ndarray, unit_sign: np.ndarray) -> np.ndarray:
+    """Per unit j, the fraction of the signed path mass sum_k |w_out[k] W3[k, j]| whose sign w_out[k] W3[k, j] equals ``unit_sign[j]``."""
+    pm = w_out[:, None] * w3
+    agree = np.where(pm * unit_sign[None, :] > 0, np.abs(pm), 0.0).sum(0); total = np.abs(pm).sum(0)
+    return np.divide(agree, total, out=np.full(total.shape, np.nan), where=total > 0)
