@@ -5601,3 +5601,11 @@ How much of the analysis would change if instead of the cues being initialised t
 - Congruence identical to run 37's within a few percent (level-3 own-coordinate spread 0.06 / 0.50 / 2.0 / 3.4 at epochs 100-1000 in
   both; W2 flip deviation 0.04 / 0.10 / 0.27 at epochs 50-200 in both): the spare rows change nothing but one level-3 fate.
 - Run 40 (full batch) started automatically after run 38; run 39 still training.
+
+### Results (run 40, full-batch GD, finished 2026-10-12, 65 min for 150k steps)
+- Loss 0.0203, test error 1.0%, 29/31 nodes; loss 0.1 at step 40 066, 0.05 at 60 813 (run 38: 41 700 / 71 300).
+- Full-batch GD and SGD (run 38) coincide step for step in every symmetric-subspace measure and in the fates: the batch noise is
+  irrelevant, the sample's fixed asymmetry breaks the symmetry (level 3 and the cues only; levels 0-2 congruent to the end).
+- Gradient symmetry: 10% deviation at init on 1M points; at step 100k the train-sample gradient is symmetric to 2e-4, the test-sample
+  gradient deviates by 1e-2 (the solution absorbed the sample's asymmetry).
+- `hierarchy_pgf_analysis.ipynb` executed headlessly on runs 37/38/40 (findings in its intro); runs notebook section 40 findings filled.
