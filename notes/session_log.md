@@ -5342,3 +5342,18 @@ spare rows play no part with free cues (27 = 28).
 ### Current state / where to pick up
 - Runs notebook sections 33-36 with a seven-run comparison cell; cross-run index lists 31-36. Not
   pushed; tracked content ~2.2 GB (a push needs about half the replay folders dropped).
+
+## 2026-10-12 — Runs notebook: every section runs on its own after the setup cell
+
+### User prompts (verbatim)
+- "Can you make edits to the notebook so that any section can be run from a restart after just running the setup cell? Some of the cells in some sections analyse the results of other runs together with that section run. Have these cells at the end of the section, and make them load the runs if those are not already loaded. (Add a comment in that cell saying what other runs will be loaded)"
+
+### Changes
+- Setup cell: `RUN_REGISTRY` (run number -> how it is loaded: `load_hier_run` folder / tag / dims for
+  runs 1-10, replay folder / dims for runs 11-36), `load_replay_run(folder, dims)` and
+  `ensure_runs(*numbers)` (loads the listed runs into the namespace as run<n> and sr<n> if missing).
+- Every cell that uses another section's run (18 cells) now starts with a comment naming those runs
+  and an `ensure_runs(...)` call, and sits at the end of its section (4 sections reordered: 22-25).
+  Verified headlessly: sections 12, 14, 22, 25, 32 and 36 each run alone after the setup cell.
+- Note: the trajectory cell of section 22 (a user cell) plots run 21 (`series21 = trajectory_plots(run21, ...)`);
+  it now loads run 21 itself, but it may have been meant for run 22.
