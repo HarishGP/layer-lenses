@@ -5618,3 +5618,18 @@ How much of the analysis would change if instead of the cues being initialised t
   (lineage rule gone); cues lose their identity by epoch 300 and take the internal nodes (10 on ancestors, four on +-u_0), 5 on their
   own normal, 8 diffuse. The sample decides the cue identities, as predicted near the bias-0 point.
 - Conclusion: the design's node-by-node story needs a cue bias of order 1; at 0.1 the population-flow solution is a different basin.
+
+## 2026-10-13 — Run 38 is the anchor; the third layer is four neurons (Q&A with a check)
+
+### User prompts (verbatim)
+- "Run 38 is the new anchor run.
+
+What role does 40 3rd hidden neurons even play here? Isn't this just 2 distinct incoming weight configs (0110 on repeat or 1001 on repeat) and 2 output configs (+1 or -1) ? So it can essentially be replaced by just 4 neurons right?"
+
+### Checks and decisions
+- Confirmed on runs 38 and 40: the four classes (S,+) 15, (S,-) 5, (Sc,+) 5, (Sc,-) 15 stay internally identical to 2e-7 all run long;
+  a 62-60-4 model with multiplicities as fixed output factors and lr/m per neuron is exactly equivalent. On the population flow the
+  label-negation symmetry pairs the classes, leaving two distinct neurons; the sample breaks the pairing (end cosines 0.89-0.95).
+- New observation: the 5-copy (minority) classes flip their output sign (-0.22 -> +3.6, +0.22 -> -4.0): output weights do flip when the
+  feature is shared with opposite-sign neurons (consensus rule at the neuron level); recorded in section 38 of the runs notebook.
+- Run 38 is the anchor run from now on.
