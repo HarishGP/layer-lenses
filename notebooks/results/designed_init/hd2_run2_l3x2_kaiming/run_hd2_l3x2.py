@@ -7,7 +7,12 @@ Kaiming row norms sqrt(2) in every layer: first-layer rows sqrt(2) (orthogonal o
 sqrt(2) (the quadruple design's rows already are), W3 rows sqrt(2) (30 entries of sqrt(2/30) = 0.258), output (+1, -1).
 No gradient scales, nothing frozen: SGD momentum 0.9, lr 0.01 -> 0.0005 cosine, 1M points (seed 5178), batch 10k, 10 000 epochs,
 snapshots every 10 epochs. The init passes the flip-equivariance test for all 15 tree flips.
-  --out hd2_run2_l3x2_kaiming --tag hd2_run2_l3x2_kaiming_seed0
+  run 47: --out hd2_run2_l3x2_kaiming --tag hd2_run2_l3x2_kaiming_seed0                      (section 2 of hierarchy_design_runs_2.ipynb)
+  run 48: --w3-entry 1.633 --out-weight 0.5: the readout rescaled so that the effective output weight per unit is +-0.816 as in run 41
+          AND the factorised readout's shared-mode rate at init, lr x (30 e^2 + 2 w^2), matches run 41's full model (30 x 2.67 + 2 = 82):
+          e = sqrt(2.67) = 1.633, w = 0.5 (run 47: e = 0.258, w = 1 gives 4; e = 0.816, w = 1 or e = 0.258, w = 3.16 would give 22).
+  run 49: run 48 with --n-train 10000000 --epochs 1000 --snap 1: ten times the data, the same 1M steps and the same cosine schedule in
+          step units (an epoch is then 1000 steps; snapshots every epoch).
 """
 import argparse, json, os, time, numpy as np, pandas as pd, torch
 from layer_lenses.designed_init import build_hierarchy_model, hierarchy_probe_table, logit_scale, standard_scale_spec, equivariant_quadruple_weights, flip_equivariance_report
@@ -16,9 +21,10 @@ from layer_lenses.relu_mlp import ReLUMLP
 from layer_lenses.relu_training import ReLUTrainConfig, evaluate_relu_mlp
 from layer_lenses.relu_analysis import train_relu_mlp_with_optimizer_snapshots, designed_run_seed_result, save_designed_run
 ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--orth-seed", type=int, default=0)
-ap.add_argument("--epochs", type=int, default=10_000); ap.add_argument("--n-train", type=int, default=1_000_000)
+ap.add_argument("--epochs", type=int, default=10_000); ap.add_argument("--n-train", type=int, default=1_000_000); ap.add_argument("--snap", type=int, default=10)
+ap.add_argument("--w3-entry", type=float, default=float(np.sqrt(2.0 / 30.0))); ap.add_argument("--out-weight", type=float, default=1.0)
 args = ap.parse_args(); OUT = f"results/designed_init/{args.out}"; os.makedirs(f"{OUT}/runs", exist_ok=True); T0 = time.time()
-N_TRAIN, EPOCHS, BS, LR, MOM, ETA_MIN_RATIO, SNAP = args.n_train, args.epochs, 10_000, 0.01, 0.9, 0.05, 10
+N_TRAIN, EPOCHS, BS, LR, MOM, ETA_MIN_RATIO, SNAP = args.n_train, args.epochs, 10_000, 0.01, 0.9, 0.05, args.snap
 DESIGN = dict(seed=0, cue_mode="linear", subset_mode="all", units_per_level=(1, 1, 1, 1), width1=80, width2=30, width3=40, cue_offspan_ratio=0.2,
               output_signs="balanced", path_sign_cues=True, layer3_mode="balanced_paths", layer3_majority=15, cue_block_scale="inv_sqrt")
 DATA = dict(kind="sweep_chunked", tree_seed=5178, data_seed=args.data_seed, n_train=N_TRAIN, chunk_size=1_000_000, eval_seed=999_777, n_eval=200_000, dim=100, depth=5)
@@ -36,17 +42,18 @@ q = equivariant_quadruple_weights(W1, W2, W3, Wout, cue_rows=meta["cue_rows"], t
 W1 = q["W1"][:62]; W2 = q["W2"][:, :62]                                        # no spare rows
 s_units = np.sign(q["W3"].T @ q["Wout"].ravel())                               # +1 for the path-sign-+ units (types 0, 3), -1 for types 1, 2
 assert s_units.tolist() == [1, -1, -1, 1] * 15
-W3 = np.stack([(s_units > 0).astype(np.float64), (s_units < 0).astype(np.float64)]) * np.sqrt(2.0 / 30.0)      # rows S, Sc; row norm sqrt(2)
-Wout = np.array([[1.0, -1.0]])                                                                                  # norm sqrt(2)
+W3 = np.stack([(s_units > 0).astype(np.float64), (s_units < 0).astype(np.float64)]) * args.w3_entry             # rows S, Sc (run 47: entries sqrt(2/30), row norm sqrt(2))
+Wout = np.array([[args.out_weight, -args.out_weight]])                                                           # run 47: (+1, -1), norm sqrt(2)
 W1 = W1 / np.linalg.norm(W1, axis=1, keepdims=True) * np.sqrt(2.0); W2 = W2 / np.linalg.norm(W2, axis=1, keepdims=True) * np.sqrt(2.0)
-for name, W in [("W1", W1), ("W2", W2), ("W3", W3), ("Wout", Wout)]: assert np.allclose(np.linalg.norm(W, axis=1), np.sqrt(2.0)), name
+for name, W in [("W1", W1), ("W2", W2)]: assert np.allclose(np.linalg.norm(W, axis=1), np.sqrt(2.0)), name
+W_EFF = args.out_weight * args.w3_entry; SHARED_RATE = 30 * args.w3_entry ** 2 + 2 * args.out_weight ** 2
 reports = {j: flip_equivariance_report(W1, W2, W3, Wout, tree, j, cue_rows=meta["cue_rows"], units_per_node=4) for j in range(15)}
 worst = max(max(r.values()) for r in reports.values()); assert worst < 1e-5, reports
 HIDDEN = [62, 60, 2]; model = ReLUMLP(input_dim=100, hidden_dims=HIDDEN, bias=False)
 model.load_state_dict({"hidden_layers.0.weight": torch.as_tensor(W1, dtype=torch.float32), "hidden_layers.1.weight": torch.as_tensor(W2, dtype=torch.float32),
                        "hidden_layers.2.weight": torch.as_tensor(W3, dtype=torch.float32), "output_layer.weight": torch.as_tensor(Wout, dtype=torch.float32)})
 lg = logit_scale(model, x, device="cuda")
-print(f"{tag}: 62-60-2 Kaiming (row norms sqrt 2 in every layer; W3 entries {W3.max():.3f}, output +-1; effective output +-{W3.max():.3f}); flip test worst deviation {worst:.1e}; "
+print(f"{tag}: 62-60-2 (W1, W2 row norms sqrt 2; W3 entries {args.w3_entry:.3f}, output +-{args.out_weight}; effective output +-{W_EFF:.3f}, shared-mode rate factor {SHARED_RATE:.1f}); {N_TRAIN} points x {EPOCHS} epochs of {N_TRAIN // BS} steps, snapshots every {SNAP}; flip test worst deviation {worst:.1e}; "
       f"W2 row norms before rescale {np.linalg.norm(q['W2'][:, :62], axis=1).min():.3f}-{np.linalg.norm(q['W2'][:, :62], axis=1).max():.3f}; data seed {args.data_seed} {x.shape}; logit rms {lg['rms_logit']:.4f}", flush=True)
 mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}                                                # nothing frozen, uniform lr
 cfg = ReLUTrainConfig(epochs=EPOCHS, lr=LR, batch_size=BS, seed=1000, device="cuda", snapshot_epochs=tuple(range(0, EPOCHS + 1, SNAP)),
@@ -55,7 +62,7 @@ out = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y,
 print(f"trained in {(time.time() - t0) / 60:.1f} min; snapshots {len(out['checkpoint_snapshots'])}", flush=True)
 sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 100, "hidden_dims": HIDDEN, "bias": False, "activation": "relu"},
                               data_spec=DATA, tree=tree, design={**{k: (list(vv) if isinstance(vv, tuple) else vv) for k, vv in DESIGN.items()}, "scale": "kaiming row norms sqrt(2) in every layer", "cues": "free; pole*(v + u_j) renormalised",
-                                                                   "init": "hd2 run 2: equivariant quadruples, third layer S / Sc (2 neurons), uniform lr", "arch": "62-60-2", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cue_rows": meta["cue_rows"], "probe_rows": q["probe_rows"], "spare_rows": [],
+                                                                   "init": "equivariant quadruples, third layer S / Sc (2 neurons), uniform lr", "arch": "62-60-2", "w3_entry": args.w3_entry, "out_weight": args.out_weight, "w_eff": W_EFF, "shared_rate": SHARED_RATE, "n_train": N_TRAIN, "epochs": EPOCHS, "snap": SNAP, "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cue_rows": meta["cue_rows"], "probe_rows": q["probe_rows"], "spare_rows": [],
                                                                    "unit_path_sign": q["unit_path_sign"].tolist(), "unit_block_sign": q["unit_block_sign"].tolist(), "unit_node": q["unit_node"].tolist(), "flip_reports": {int(k): r for k, r in reports.items()}}, tag=tag)
 save_designed_run(sr, f"{OUT}/replay")
 ck = out["checkpoint_snapshots"]; epochs = sorted(ck); m_end = out["model"]
@@ -68,12 +75,12 @@ for ep in epochs:
                       "nodes_covered": len(set(np.abs(Ce).argmax(1)[np.abs(Ce).max(1) > 0.95]))})
 pe = pd.DataFrame(per_epoch); pe.to_csv(f"{OUT}/per_epoch_{tag}.csv", index=False)
 L = np.array(out["epoch_losses"]); first = lambda thr: int(np.nonzero(L <= thr)[0][0] + 1) if (L <= thr).any() else -1
-rec = {"tag": tag, "arch": "62-60-2", "init": "hd2 run 2", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "n_train": N_TRAIN, "batch": BS, "epochs": EPOCHS, "lr": LR, "logit_rms_init": lg["rms_logit"], "final_epoch_loss": float(L[-1]), "min_epoch_loss": float(L.min()),
+rec = {"tag": tag, "arch": "62-60-2", "w3_entry": args.w3_entry, "out_weight": args.out_weight, "w_eff": W_EFF, "orth_seed": args.orth_seed, "data_seed": args.data_seed, "n_train": N_TRAIN, "batch": BS, "epochs": EPOCHS, "lr": LR, "logit_rms_init": lg["rms_logit"], "final_epoch_loss": float(L[-1]), "min_epoch_loss": float(L.min()),
        "train_log_loss_end": tr["log_loss"], "test_error_end": te["zero_one_loss"], "test_error_strict_end": te["zero_one_loss_strict"], "zero_logit_frac_end": te["zero_logit_fraction"],
        "epoch_to_0.3": first(0.3), "epoch_to_0.2": first(0.2), "epoch_to_0.1": first(0.1), "epoch_to_0.05": first(0.05), "epoch_to_0.03": first(0.03), "epoch_to_0.01": first(0.01),
        **{f"on_target_L{l}_end": float(pe[f"on_target_L{l}"].iloc[-1]) for l in range(4)}, "nodes_covered_end": int(pe.nodes_covered.iloc[-1]), "wall_min": (time.time() - t0) / 60}
 pd.DataFrame([rec]).to_csv(f"{OUT}/summary.csv", index=False)
-json.dump({"arch": "62-60-2", "init": "hd2 run 2: two third-layer neurons, Kaiming row norms, uniform lr", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cues": "free; pole*(v + u_j) renormalised", "n_train": N_TRAIN, "epochs": EPOCHS, "batch": BS, "lr": LR, "eta_min_ratio": ETA_MIN_RATIO, "momentum": MOM, "snapshot_every_epochs": SNAP,
+json.dump({"arch": "62-60-2", "init": "two third-layer neurons, uniform lr", "w3_entry": args.w3_entry, "out_weight": args.out_weight, "w_eff": W_EFF, "snapshot_every_epochs": SNAP, "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cues": "free; pole*(v + u_j) renormalised", "n_train": N_TRAIN, "epochs": EPOCHS, "batch": BS, "lr": LR, "eta_min_ratio": ETA_MIN_RATIO, "momentum": MOM, "snapshot_every_epochs": SNAP,
            "design": {k: (list(vv) if isinstance(vv, tuple) else vv) for k, vv in DESIGN.items()}, "data": DATA}, open(f"{OUT}/manifest.json", "w"), indent=2)
 print(f"{tag}: final epoch loss {rec['final_epoch_loss']:.4f}, test error {te['zero_one_loss']:.4f} (strict {te['zero_one_loss_strict']:.4f}); epochs to 0.3/0.2/0.1/0.05/0.03/0.01: {rec['epoch_to_0.3']}/{rec['epoch_to_0.2']}/{rec['epoch_to_0.1']}/{rec['epoch_to_0.05']}/{rec['epoch_to_0.03']}/{rec['epoch_to_0.01']}; "
       f"nodes covered {rec['nodes_covered_end']}/31; on-target end {[round(rec[f'on_target_L{l}_end'], 2) for l in range(4)]}; {rec['wall_min']:.1f} min", flush=True)

@@ -5753,3 +5753,21 @@ Have it be a more simple uniform learning rate setup, with Kaiming normalised sc
   that are not tree automorphisms are not symmetries of the data law, so equivariance under them is not defined.
 - At the end of the run the S and mapped Sc rows have cosine 0.69 (relative difference 0.78): the sample breaks the label-negation
   pairing far more than in run 38 (0.89-0.94), i.e. the two neurons end genuinely different.
+
+## 2026-10-13 — Runs 48 (readout rescaled) and 49 (10x data); global run numbers in notebook 2
+
+### User prompts (verbatim)
+- "Ok, rescale the readout init and start another run.
+
+Also, start another run with same protocol, but 10 times more data. 
+
+Have runs be called by their old numbers i.e. 41,  47, 48, 49 etc. Still number the sections 1,2, etc. This way there is no confusion when we say "run x"."
+
+### Changes
+- Numbering: notebook 2 keeps global run numbers (section 1 = run 41, section 2 = run 47 = the former "hd2 run 2", folder name kept),
+  sections numbered 1, 2, ...; registry keys and variables use the global numbers.
+- `run_hd2_l3x2.py`: `--w3-entry`, `--out-weight` (readout scale), `--snap`. Run 48: e = 1.633, w = 0.5, so the effective output per unit
+  is +-0.816 (run 41's) and the readout's shared-mode rate factor 30 e^2 + 2 w^2 = 80.5 matches run 41's full model (82; run 47 had 4,
+  a single-layer rescale would give 22). Run 49: run 48 with 10M points, 1000 epochs of 1000 steps (same 1M steps, same schedule),
+  snapshots every epoch. Both launched 2026-10-13 in parallel (logit rms at init 0.049 for both, = run 41).
+- Notebook 2 sections 3-4 with a four-run comparison cell (steps on the x axis); gitignore and regeneration entries.
