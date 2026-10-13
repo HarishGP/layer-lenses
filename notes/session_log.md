@@ -5694,3 +5694,10 @@ Another clarification, the model logit output is identically zero at init, right
 ### Decisions
 - ScalarAdam at constant lr 0.01 and 0.03 (runs 45-46) as the "appropriate learning rate" runs: run 19/20's rates on the earlier design;
   the point is a step size independent of the gradient scale that the removed third layer had been amplifying.
+
+### Results (run 41, 62-60-4, finished 2026-10-13, 24 min)
+- Loss 0.0033 / 0.49%, 31/31 nodes, 29/30 probes on their own node; pace identical to run 38 (0.1 at 418 vs 417, 0.05 at 716 vs 713).
+- Exactness vs run 38's class representatives: max weight difference 3e-5 (epoch 10), 6e-4 (100), 1.3e-2 (300), 0.07 (1000), then
+  float-32 chaos separates the runs (0.6-1.0 from epoch 3000) while loss and the fate core agree. End output weights 80.1 / 18.1 /
+  -19.7 / -84.7 vs run 38's class sums 80.2 / 18.2 / -19.8 / -84.9.
+- Runs 42-44 started automatically (three in parallel); 45-46 follow.
