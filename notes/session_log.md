@@ -5657,3 +5657,40 @@ Another clarification, the model logit output is identically zero at init, right
   (reading (B,+) on probe 2j and (-B,+) on probe 2j+1) and the s=- rows (reading (B,-) on probe 2j+1 and (-B,-) on probe 2j) have
   different pre-activations pointwise; the logit is 10 x 0.2236 x (relu(S) - relu(Sc)), zero in mean (the two have the same law) but not
   pointwise. It is identically zero only when the two probes of a node coincide (runs 27-30) — or in the reduced model, trivially the same.
+
+## 2026-10-13 — Is the third hidden layer needed? (discussion with a check on run 38)
+
+### User prompts (verbatim)
+- "Ok while it is running let's start another discussion, Given that just 4 layer 3 neurons are sufficient (and just 2 is eventually sufficient), do we even need the third hidden layer? Is there an almost equivalent 2-hidden layer init, which will lead to a solution of similar quality under gradient descent/flow?"
+
+### Checks (run 38, 50k test points)
+- The third layer's ReLUs gate almost nothing: pre-activations are sums of non-negative terms at init (inactive fraction 0), peak at
+  0.7-2.7% of inputs around epoch 300, end at 0.3-1.1%. Replacing the third layer by its linear map Wout . W3 at the end changes the
+  logit by at most 6.7 on an rms of 15 and keeps the sign on 100.000% of points.
+- The effective output vector w_eff = Wout . W3 (60 entries) starts at +-0.816 (the unit path signs) and ends at +117 / -134 on average
+  with per-unit std ~60; the sign pattern explains 100% / 94% / 79% of its variance at epochs 0 / 300 / 10000.
+- So the third layer is a deep-linear overparametrisation of the output layer: a preconditioner W3^T W3 + |w|^2 I on w_eff, 41x faster
+  along the shared +- direction than per unit at init and accelerating as the factors grow, plus a low-rank bias toward the sign
+  pattern. Functionally a 2-hidden-layer net with w_out = +-0.816 s_u; dynamically not.
+
+### Proposal (not launched)
+- Run 42: 62-60 with w_out = +-0.816 s_u free, lr 0.01 (plain). Run 43: same with the output layer's gradient scaled x41 (the shared-mode
+  rate at init). Run 44: output frozen at +-0.816 (is any output-layer learning needed?). Compare loss, fates, w_eff growth with run 38.
+
+## 2026-10-13 — Runs 42-46 queued: the third layer removed (SGDM plain / output x41 / output frozen; ScalarAdam 0.01 / 0.03)
+
+### User prompts (verbatim)
+- "Launch runs 42, 43 and 44 once run 41 is done. Also add a few scalar lr  Adam runs with an appropriate learning rate to handle the learning rate issues with  SGDM. Time budget: 2 hours."
+
+### Changes
+- `run_hierarchy_equivariant60.py`: `--two-layer` (62-60; output row = Wout . W3 at init = +-0.816 x path sign; the flip test uses the
+  output row in W3's place), `--out-scale` (gradient scale on the output row), `--freeze-out`, `--optimizer` / `--const-lr` / `--lr`
+  (ScalarAdam runs), `--epochs` (smoke tests). Smoke-tested (two-layer x41, two-layer ScalarAdam 0.03).
+- `scripts/launch_runs_42_46.sh`: 42-44 three at a time, then 45-46; chained behind run 41 in the background. Folders
+  `hierarchy_equiv2L_62{,_outx41,_outfrozen,_sadam01,_sadam03}`, tracked script copies, gitignore negations, regeneration lines.
+- Runs notebook: registry 42-46, sections 42-46 (load / trajectories / network view) and a cross-run cell comparing loss, fates, spikes
+  and the growth of the effective output vector |w_eff| with run 38; cross-run index lists 42-46.
+
+### Decisions
+- ScalarAdam at constant lr 0.01 and 0.03 (runs 45-46) as the "appropriate learning rate" runs: run 19/20's rates on the earlier design;
+  the point is a step size independent of the gradient scale that the removed third layer had been amplifying.

@@ -14,6 +14,10 @@ Protocol: 1M points, batch 10k, 10 000 epochs, lr 0.01 -> 0.0005 cosine, momentu
   run 41: run 38 with --reduced-l3: the third layer is its FOUR distinct neurons (62-60-4): rows (S,+) x15, (S,-) x5, (Sc,+) x5, (Sc,-) x15,
           where S reads the path-sign-+ units; the multiplicity m is folded into the output weight (m x 0.2236) and the gradient of that
           weight is scaled by m, that of the W3 row by 1/m (parameter_update_mask), which reproduces the 40-neuron dynamics exactly.
+  runs 42-46: run 38 with the THIRD LAYER REMOVED (--two-layer, 62-60): the output weights start at w_eff = Wout . W3 = +-0.816 x the
+          units' path signs (the third layer's linear map at init). 42: plain, SGD momentum as run 38; 43: --out-scale 41 (the output
+          layer's gradient scaled by 41, the shared-mode rate of the factorised readout at init); 44: --freeze-out; 45 / 46: ScalarAdam
+          (--optimizer scalar_adam --const-lr) at lr 0.01 / 0.03 (--lr).
   run 40: run 38 with --full-batch-steps 100000: FULL-BATCH gradient descent on the 1M points (one step per "epoch", constant lr 0.01,
           momentum 0.9, snapshots every 100 steps) as the population-gradient-flow proxy; no batch noise, the fixed sample is the only noise.
 """
@@ -24,9 +28,10 @@ from layer_lenses.relu_mlp import ReLUMLP
 from layer_lenses.relu_training import ReLUTrainConfig, evaluate_relu_mlp
 from layer_lenses.relu_analysis import train_relu_mlp_with_optimizer_snapshots, designed_run_seed_result, save_designed_run
 ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--orth-seed", type=int, default=0); ap.add_argument("--no-spare", action="store_true"); ap.add_argument("--cue-bias", type=float, default=1.0)
-ap.add_argument("--full-batch-steps", type=int, default=0); ap.add_argument("--reduced-l3", action="store_true"); ap.add_argument("--n-train", type=int, default=1_000_000)
+ap.add_argument("--full-batch-steps", type=int, default=0); ap.add_argument("--reduced-l3", action="store_true"); ap.add_argument("--two-layer", action="store_true"); ap.add_argument("--out-scale", type=float, default=1.0); ap.add_argument("--freeze-out", action="store_true")
+ap.add_argument("--optimizer", default="sgd"); ap.add_argument("--const-lr", action="store_true"); ap.add_argument("--lr", type=float, default=0.01); ap.add_argument("--epochs", type=int, default=10_000); ap.add_argument("--n-train", type=int, default=1_000_000)
 args = ap.parse_args(); OUT = f"results/designed_init/{args.out}"; os.makedirs(f"{OUT}/runs", exist_ok=True); T0 = time.time()
-N_TRAIN, EPOCHS, BS, LR, MOM, ETA_MIN_RATIO, SNAP = args.n_train, 10_000, 10_000, 0.01, 0.9, 0.05, 10
+N_TRAIN, EPOCHS, BS, LR, MOM, ETA_MIN_RATIO, SNAP = args.n_train, args.epochs, 10_000, args.lr, 0.9, (1.0 if args.const_lr else 0.05), 10
 if args.full_batch_steps:                                                       # run 40: full-batch GD, one step per epoch, constant lr
     EPOCHS, BS, ETA_MIN_RATIO, SNAP = args.full_batch_steps, N_TRAIN, 1.0, 100
 DESIGN = dict(seed=0, cue_mode="linear", subset_mode="all", units_per_level=(1, 1, 1, 1), width1=80, width2=30, width3=40, cue_offspan_ratio=0.2,
@@ -54,25 +59,33 @@ if args.reduced_l3:                                                            #
     q["W3"] = np.stack([q["W3"][r] for r in reps]); q["Wout"] = (mult * np.array([wo[r] for r in reps]))[None, :]
     grad_scale = {"hidden_layers.2.weight": np.repeat(1.0 / mult[:, None], 60, axis=1).astype(np.float32), "output_layer.weight": mult[None, :].astype(np.float32)}
     q["multiplicity"] = mult.tolist()
-WIDTH1 = q["W1"].shape[0]; WIDTH3 = q["W3"].shape[0]; ARCH = f"{WIDTH1}-60-{WIDTH3}"
-reports = {j: flip_equivariance_report(q["W1"], q["W2"], q["W3"], q["Wout"], tree, j, cue_rows=meta["cue_rows"], units_per_node=4) for j in range(15)}
+if args.two_layer:                                                             # runs 42-46: no third layer; output = the third layer's linear map at init
+    assert not args.reduced_l3
+    q["Wout"] = (q["Wout"] @ q["W3"]).reshape(1, 60); q["W3"] = None
+WIDTH1 = q["W1"].shape[0]; WIDTH3 = None if args.two_layer else q["W3"].shape[0]; ARCH = f"{WIDTH1}-60" if args.two_layer else f"{WIDTH1}-60-{WIDTH3}"
+HIDDEN = [WIDTH1, 60] if args.two_layer else [WIDTH1, 60, WIDTH3]
+_W3, _Wo = (q["Wout"], np.ones((1, 1))) if args.two_layer else (q["W3"], q["Wout"])               # two-layer: the output row plays W3's part in the flip test
+reports = {j: flip_equivariance_report(q["W1"], q["W2"], _W3, _Wo, tree, j, cue_rows=meta["cue_rows"], units_per_node=4) for j in range(15)}
 worst = max(max(r.values()) for r in reports.values()); assert worst < 1e-5, reports
-model = ReLUMLP(input_dim=100, hidden_dims=[WIDTH1, 60, WIDTH3], bias=False)
-model.load_state_dict({"hidden_layers.0.weight": torch.as_tensor(q["W1"], dtype=torch.float32), "hidden_layers.1.weight": torch.as_tensor(q["W2"], dtype=torch.float32),
-                       "hidden_layers.2.weight": torch.as_tensor(q["W3"], dtype=torch.float32), "output_layer.weight": torch.as_tensor(q["Wout"], dtype=torch.float32)})
+model = ReLUMLP(input_dim=100, hidden_dims=HIDDEN, bias=False)
+_sd = {"hidden_layers.0.weight": torch.as_tensor(q["W1"], dtype=torch.float32), "hidden_layers.1.weight": torch.as_tensor(q["W2"], dtype=torch.float32), "output_layer.weight": torch.as_tensor(q["Wout"], dtype=torch.float32)}
+if not args.two_layer: _sd["hidden_layers.2.weight"] = torch.as_tensor(q["W3"], dtype=torch.float32)
+model.load_state_dict(_sd)
 lg = logit_scale(model, x, device="cuda")
 rows = q["probe_rows"] + q["spare_rows"]; R = q["W1"][rows]
-print(f"{tag}: cue bias {args.cue_bias}; batch {BS} x {EPOCHS} epochs, lr {LR} eta_min_ratio {ETA_MIN_RATIO}; {ARCH} equivariant init; flip test worst deviation {worst:.1e} over 15 flips; probe+spare rows off-span to {np.abs(R @ U.T).max():.1e}, "
-      f"pairwise |cos| max {np.abs(R @ R.T / 2 - np.eye(len(rows))).max():.1e}; W3 ones per row {np.unique((q['W3'] != 0).sum(1)).tolist()}; third layer {WIDTH3} rows{(' with multiplicities ' + str(q.get('multiplicity'))) if args.reduced_l3 else ''}; data seed {args.data_seed} {x.shape}; logit rms {lg['rms_logit']:.4f}", flush=True)
+print(f"{tag}: optimizer {args.optimizer} lr {LR}{' const' if args.const_lr else ' cosine'}; out-scale {args.out_scale} freeze-out {args.freeze_out}; cue bias {args.cue_bias}; batch {BS} x {EPOCHS} epochs, lr {LR} eta_min_ratio {ETA_MIN_RATIO}; {ARCH} equivariant init; flip test worst deviation {worst:.1e} over 15 flips; probe+spare rows off-span to {np.abs(R @ U.T).max():.1e}, "
+      f"pairwise |cos| max {np.abs(R @ R.T / 2 - np.eye(len(rows))).max():.1e}; W3 ones per row {None if args.two_layer else np.unique((q['W3'] != 0).sum(1)).tolist()}; third layer {WIDTH3} rows{(' with multiplicities ' + str(q.get('multiplicity'))) if args.reduced_l3 else ''}; data seed {args.data_seed} {x.shape}; logit rms {lg['rms_logit']:.4f}", flush=True)
 mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}                                                # nothing frozen
 if grad_scale: mask.update(grad_scale)                                                                                                   # run 41: per-entry gradient scales
+if args.out_scale != 1.0: mask["output_layer.weight"] = np.full(mask["output_layer.weight"].shape, args.out_scale, dtype=np.float32)      # run 43
+if args.freeze_out: mask["output_layer.weight"] = np.zeros(mask["output_layer.weight"].shape, dtype=np.float32)                            # run 44
 cfg = ReLUTrainConfig(epochs=EPOCHS, lr=LR, batch_size=BS, seed=1000, device="cuda", snapshot_epochs=tuple(range(0, EPOCHS + 1, SNAP)),
-                      lr_scheduler_eta_min_ratio=ETA_MIN_RATIO, optimizer="sgd", momentum=MOM, parameter_update_mask=mask, show_progress=False)
+                      lr_scheduler_eta_min_ratio=ETA_MIN_RATIO, optimizer=args.optimizer, momentum=MOM, parameter_update_mask=mask, show_progress=False)
 out = train_relu_mlp_with_optimizer_snapshots(model=model, x_train=x, y_train=y, config=cfg)
 print(f"trained in {(time.time() - t0) / 60:.1f} min; snapshots {len(out['checkpoint_snapshots'])}", flush=True)
-sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 100, "hidden_dims": [WIDTH1, 60, WIDTH3], "bias": False, "activation": "relu"},
+sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 100, "hidden_dims": HIDDEN, "bias": False, "activation": "relu"},
                               data_spec=DATA, tree=tree, design={**{k: (list(vv) if isinstance(vv, tuple) else vv) for k, vv in DESIGN.items()}, "scale": "kaiming", "cues": f"free; pole*(v + {args.cue_bias} u_j) renormalised",
-                                                                   "init": "equivariant quadruples (run 37)", "arch": ARCH, "reduced_l3": args.reduced_l3, "multiplicity": q.get("multiplicity"), "cue_bias": args.cue_bias, "full_batch_steps": args.full_batch_steps, "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cue_rows": meta["cue_rows"], "probe_rows": q["probe_rows"], "spare_rows": q["spare_rows"],
+                                                                   "init": "equivariant quadruples (run 37)", "arch": ARCH, "two_layer": args.two_layer, "out_scale": args.out_scale, "freeze_out": args.freeze_out, "optimizer": args.optimizer, "const_lr": args.const_lr, "reduced_l3": args.reduced_l3, "multiplicity": q.get("multiplicity"), "cue_bias": args.cue_bias, "full_batch_steps": args.full_batch_steps, "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cue_rows": meta["cue_rows"], "probe_rows": q["probe_rows"], "spare_rows": q["spare_rows"],
                                                                    "unit_path_sign": q["unit_path_sign"].tolist(), "unit_block_sign": q["unit_block_sign"].tolist(), "unit_node": q["unit_node"].tolist(), "flip_reports": {int(k): r for k, r in reports.items()}}, tag=tag)
 save_designed_run(sr, f"{OUT}/replay")
 ck = out["checkpoint_snapshots"]; epochs = sorted(ck); m_end = out["model"]
@@ -85,12 +98,12 @@ for ep in epochs:
                       "nodes_covered": len(set(np.abs(Ce).argmax(1)[np.abs(Ce).max(1) > 0.95]))})
 pe = pd.DataFrame(per_epoch); pe.to_csv(f"{OUT}/per_epoch_{tag}.csv", index=False)
 L = np.array(out["epoch_losses"]); first = lambda thr: int(np.nonzero(L <= thr)[0][0] + 1) if (L <= thr).any() else -1
-rec = {"tag": tag, "arch": ARCH, "cue_bias": args.cue_bias, "full_batch_steps": args.full_batch_steps, "init": "equivariant quadruples", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "n_train": N_TRAIN, "batch": BS, "epochs": EPOCHS, "lr": LR, "logit_rms_init": lg["rms_logit"], "final_epoch_loss": float(L[-1]), "min_epoch_loss": float(L.min()),
+rec = {"tag": tag, "arch": ARCH, "optimizer": args.optimizer, "const_lr": args.const_lr, "out_scale": args.out_scale, "freeze_out": args.freeze_out, "cue_bias": args.cue_bias, "full_batch_steps": args.full_batch_steps, "init": "equivariant quadruples", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "n_train": N_TRAIN, "batch": BS, "epochs": EPOCHS, "lr": LR, "logit_rms_init": lg["rms_logit"], "final_epoch_loss": float(L[-1]), "min_epoch_loss": float(L.min()),
        "train_log_loss_end": tr["log_loss"], "test_error_end": te["zero_one_loss"], "test_error_strict_end": te["zero_one_loss_strict"], "zero_logit_frac_end": te["zero_logit_fraction"],
        "epoch_to_0.3": first(0.3), "epoch_to_0.2": first(0.2), "epoch_to_0.1": first(0.1), "epoch_to_0.05": first(0.05), "epoch_to_0.03": first(0.03),
        **{f"on_target_L{l}_end": float(pe[f"on_target_L{l}"].iloc[-1]) for l in range(4)}, "nodes_covered_end": int(pe.nodes_covered.iloc[-1]), "wall_min": (time.time() - t0) / 60}
 pd.DataFrame([rec]).to_csv(f"{OUT}/summary.csv", index=False)
-json.dump({"arch": ARCH, "cue_bias": args.cue_bias, "full_batch_steps": args.full_batch_steps, "init": "equivariant quadruples (run 37)", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cues": f"free; pole*(v + {args.cue_bias} u_j) renormalised", "n_train": N_TRAIN, "epochs": EPOCHS, "batch": BS, "lr": LR, "eta_min_ratio": ETA_MIN_RATIO, "momentum": MOM, "snapshot_every_epochs": SNAP,
+json.dump({"arch": ARCH, "optimizer": args.optimizer, "const_lr": args.const_lr, "out_scale": args.out_scale, "freeze_out": args.freeze_out, "cue_bias": args.cue_bias, "full_batch_steps": args.full_batch_steps, "init": "equivariant quadruples (run 37)", "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cues": f"free; pole*(v + {args.cue_bias} u_j) renormalised", "n_train": N_TRAIN, "epochs": EPOCHS, "batch": BS, "lr": LR, "eta_min_ratio": ETA_MIN_RATIO, "momentum": MOM, "snapshot_every_epochs": SNAP,
            "design": {k: (list(vv) if isinstance(vv, tuple) else vv) for k, vv in DESIGN.items()}, "data": DATA}, open(f"{OUT}/manifest.json", "w"), indent=2)
 print(f"{tag}: final epoch loss {rec['final_epoch_loss']:.4f}, test error {te['zero_one_loss']:.4f} (strict {te['zero_one_loss_strict']:.4f}); epochs to 0.3/0.2/0.1/0.05/0.03: {rec['epoch_to_0.3']}/{rec['epoch_to_0.2']}/{rec['epoch_to_0.1']}/{rec['epoch_to_0.05']}/{rec['epoch_to_0.03']}; "
       f"nodes covered {rec['nodes_covered_end']}/31; on-target end {[round(rec[f'on_target_L{l}_end'], 2) for l in range(4)]}; {rec['wall_min']:.1f} min", flush=True)

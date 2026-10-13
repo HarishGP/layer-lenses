@@ -115,5 +115,15 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/hierarchy_equivariant_60_nospare_pgf/replay/meta.pkl
 !results/designed_init/hierarchy_equivariant_60_nospare_l3x4/
 !results/designed_init/hierarchy_equivariant_60_nospare_l3x4/replay/meta.pkl
+!results/designed_init/hierarchy_equiv2L_62_sadam03/
+!results/designed_init/hierarchy_equiv2L_62_sadam03/replay/meta.pkl
+!results/designed_init/hierarchy_equiv2L_62_sadam01/
+!results/designed_init/hierarchy_equiv2L_62_sadam01/replay/meta.pkl
+!results/designed_init/hierarchy_equiv2L_62_outfrozen/
+!results/designed_init/hierarchy_equiv2L_62_outfrozen/replay/meta.pkl
+!results/designed_init/hierarchy_equiv2L_62_outx41/
+!results/designed_init/hierarchy_equiv2L_62_outx41/replay/meta.pkl
+!results/designed_init/hierarchy_equiv2L_62/
+!results/designed_init/hierarchy_equiv2L_62/replay/meta.pkl
 !results/designed_init/hierarchy_equivariant_60_nospare_cue01/
 !results/designed_init/hierarchy_equivariant_60_nospare_cue01/replay/meta.pkl

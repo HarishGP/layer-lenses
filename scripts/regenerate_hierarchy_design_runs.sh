@@ -49,6 +49,11 @@ $PY $S/hierarchy_equivariant_60_nospare/run_hierarchy_equivariant60.py --out hie
 $PY $S/hierarchy_equivariant_60_nospare_cue01/run_hierarchy_equivariant60.py --out hierarchy_equivariant_60_nospare_cue01 --tag linear_free_kaiming_cosine_equiv60_nospare_cue01_seed0 --no-spare --cue-bias 0.1   # run 39
 $PY $S/hierarchy_equivariant_60_nospare_pgf/run_hierarchy_equivariant60.py --out hierarchy_equivariant_60_nospare_pgf --tag linear_free_kaiming_equiv60_nospare_pgf_seed0 --no-spare --full-batch-steps 150000   # run 40 (full-batch GD)
 $PY $S/hierarchy_equivariant_60_nospare_l3x4/run_hierarchy_equivariant60.py --out hierarchy_equivariant_60_nospare_l3x4 --tag linear_free_kaiming_cosine_equiv60_nospare_l3x4_seed0 --no-spare --reduced-l3   # run 41 (62-60-4)
+$PY $S/hierarchy_equiv2L_62/run_hierarchy_equivariant60.py --out hierarchy_equiv2L_62 --tag linear_free_kaiming_cosine_equiv2L_62_seed0 --no-spare --two-layer   # run 42 (62-60, no third layer)
+$PY $S/hierarchy_equiv2L_62_outx41/run_hierarchy_equivariant60.py --out hierarchy_equiv2L_62_outx41 --tag linear_free_kaiming_cosine_equiv2L_62_outx41_seed0 --no-spare --two-layer --out-scale 41   # run 43
+$PY $S/hierarchy_equiv2L_62_outfrozen/run_hierarchy_equivariant60.py --out hierarchy_equiv2L_62_outfrozen --tag linear_free_kaiming_cosine_equiv2L_62_outfrozen_seed0 --no-spare --two-layer --freeze-out   # run 44
+$PY $S/hierarchy_equiv2L_62_sadam01/run_hierarchy_equivariant60.py --out hierarchy_equiv2L_62_sadam01 --tag linear_free_kaiming_equiv2L_62_sadam01_seed0 --no-spare --two-layer --optimizer scalar_adam --const-lr --lr 0.01   # run 45
+$PY $S/hierarchy_equiv2L_62_sadam03/run_hierarchy_equivariant60.py --out hierarchy_equiv2L_62_sadam03 --tag linear_free_kaiming_equiv2L_62_sadam03_seed0 --no-spare --two-layer --optimizer scalar_adam --const-lr --lr 0.03   # run 46
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"
