@@ -558,3 +558,44 @@ def test_symmetric_coordinates_vanish_on_the_equivariant_init_and_flag_breaking(
     cop = symmetric_coordinates(W1p, tree, cue_rows=meta["cue_rows"]); assert abs(cop.residual[4] - 0.2) < 1e-6 and abs(cop.own[4] - 0.3) < 1e-6 and cop.residual.drop(4).max() < 1e-6
     W1a = q["W1"].copy(); W1a[8] += 0.5 * U[1] * (-1)                            # probe of node 4 (+): ancestor u_1, node 4 = 2*1 + 2 is on u_1's positive side -> anc_1 = -0.5
     coa = symmetric_coordinates(W1a, tree, cue_rows=meta["cue_rows"]); assert abs(coa.anc_1[8] + 0.5) < 1e-6 and coa.residual[8] < 1e-6
+
+
+def test_reduced_third_layer_with_gradient_scales_reproduces_the_40_neuron_dynamics() -> None:
+    """Four third-layer neurons with multiplicities folded into the output weights and gradient scales (m on the output weight, 1/m on
+    the W3 row) train exactly like the 40 identical-copy neurons of the equivariant design."""
+    import torch
+    from layer_lenses.designed_init import build_hierarchy_model, standard_scale_spec, equivariant_quadruple_weights
+    from layer_lenses.init_sweep import SweepRunSpec, build_tree, build_data
+    from layer_lenses.relu_mlp import ReLUMLP
+    from layer_lenses.relu_training import ReLUTrainConfig
+    from layer_lenses.relu_analysis import train_relu_mlp_with_optimizer_snapshots
+
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1)); U = tree.w_list
+    x, y = build_data(SweepRunSpec(tree_seed=5178, data_seed=3, init_seed=0, batch_size=1, n_train=4000), tree)
+    design = dict(seed=0, cue_mode="linear", subset_mode="all", units_per_level=(1, 1, 1, 1), width1=80, width2=30, width3=40, cue_offspan_ratio=0.2,
+                  output_signs="balanced", path_sign_cues=True, layer3_mode="balanced_paths", layer3_majority=15, cue_block_scale="inv_sqrt")
+    model, meta = build_hierarchy_model(standard_scale_spec("kaiming", **design), tree)
+    W1 = model.hidden_layers[0].weight.detach().numpy().astype(np.float64).copy(); W2 = model.hidden_layers[1].weight.detach().numpy().astype(np.float64)
+    W3 = model.hidden_layers[2].weight.detach().numpy().astype(np.float64); Wout = model.output_layer.weight.detach().numpy().astype(np.float64); v = U[15:31].sum(0)
+    for r in meta["cue_rows"]:
+        c = W1[r] / np.linalg.norm(W1[r]) @ U.T; m = int(np.abs(c).argmax()); pole = int(np.sign(c[m])); new = pole * (v + U[m]); W1[r] = new / np.linalg.norm(new) * np.linalg.norm(W1[r])
+    q = equivariant_quadruple_weights(W1, W2, W3, Wout, cue_rows=meta["cue_rows"], tree=tree, orth_seed=0)
+    q["W1"] = q["W1"][:62]; q["W2"] = q["W2"][:, :62]
+    inS = q["W3"][:, 0] != 0; wo = q["Wout"].ravel(); classes = [inS & (wo > 0), inS & (wo < 0), ~inS & (wo > 0), ~inS & (wo < 0)]
+    mult = np.array([int(c.sum()) for c in classes]); reps = [int(np.nonzero(c)[0][0]) for c in classes]
+    W3r = np.stack([q["W3"][r] for r in reps]); Wor = (mult * np.array([wo[r] for r in reps]))[None, :]
+    def train(dims, W3_, Wo_, mask_extra):
+        m = ReLUMLP(input_dim=100, hidden_dims=dims, bias=False)
+        m.load_state_dict({"hidden_layers.0.weight": torch.as_tensor(q["W1"], dtype=torch.float32), "hidden_layers.1.weight": torch.as_tensor(q["W2"], dtype=torch.float32),
+                           "hidden_layers.2.weight": torch.as_tensor(W3_, dtype=torch.float32), "output_layer.weight": torch.as_tensor(Wo_, dtype=torch.float32)})
+        mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in m.named_parameters()}; mask.update(mask_extra)
+        cfg = ReLUTrainConfig(epochs=6, lr=0.1, batch_size=1000, seed=7, device="cpu", snapshot_epochs=(0, 6), lr_scheduler_eta_min_ratio=1.0, optimizer="sgd", momentum=0.9, parameter_update_mask=mask, show_progress=False)
+        out = train_relu_mlp_with_optimizer_snapshots(model=m, x_train=x, y_train=y, config=cfg); return {k: v.numpy().astype(np.float64) for k, v in out["checkpoint_snapshots"][6].items()}, np.array(out["epoch_losses"])
+    full, loss_full = train([62, 60, 40], q["W3"], q["Wout"], {})
+    red, loss_red = train([62, 60, 4], W3r, Wor, {"hidden_layers.2.weight": np.repeat(1.0 / mult[:, None], 60, axis=1).astype(np.float32), "output_layer.weight": mult[None, :].astype(np.float32)})
+    assert np.allclose(loss_full, loss_red, rtol=1e-4) and np.abs(loss_full - 0.69).max() > 1e-3     # the same losses, and training happened
+    assert np.abs(full["hidden_layers.0.weight"] - red["hidden_layers.0.weight"]).max() < 3e-5 and np.abs(full["hidden_layers.1.weight"] - red["hidden_layers.1.weight"]).max() < 3e-5
+    for k, r in enumerate(reps):
+        assert np.abs(full["hidden_layers.2.weight"][classes[k]] - red["hidden_layers.2.weight"][k]).max() < 3e-5            # every copy equals the reduced row
+        assert abs(mult[k] * full["output_layer.weight"][0, r] - red["output_layer.weight"][0, k]) < 3e-4                   # output weight = m x the copy's
+    assert np.abs(full["hidden_layers.2.weight"] - q["W3"]).max() > 5e-4 and np.abs(full["output_layer.weight"] - q["Wout"]).max() > 5e-4   # and the third layer moved

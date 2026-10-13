@@ -163,7 +163,12 @@ def _parameter_update_masks(
     config: ReLUTrainConfig,
     device: torch.device,
 ) -> dict[str, torch.Tensor]:
-    """Return validated 0/1 masks keyed by model parameter name."""
+    """Return validated masks keyed by model parameter name.
+
+    0 freezes an entry, 1 trains it normally, and any other positive value multiplies its gradient
+    (under SGD / momentum that is a per-entry learning-rate factor; under Adam-type optimizers it
+    is not, since the normalisation absorbs a constant scale).
+    """
     if config.parameter_update_mask is None:
         return {}
 
@@ -192,8 +197,8 @@ def _parameter_update_masks(
                 f"parameter_update_mask[{name!r}] has shape {tuple(mask.shape)}, "
                 f"expected {tuple(param.shape)}."
             )
-        if not torch.all((mask == 0) | (mask == 1)):
-            raise ValueError(f"parameter_update_mask[{name!r}] must contain only 0 and 1.")
+        if not torch.all(torch.isfinite(mask) & (mask >= 0)):
+            raise ValueError(f"parameter_update_mask[{name!r}] must contain finite non-negative values (0 freezes, 1 trains, other values scale the gradient).")
         masks[name] = mask
     return masks
 
@@ -220,7 +225,7 @@ def _snapshot_frozen_parameter_values(
     return {
         name: param.detach().clone()
         for name, param in model.named_parameters()
-        if not bool(torch.all(parameter_update_masks[name]).detach().cpu())
+        if not bool(torch.all(parameter_update_masks[name] > 0).detach().cpu())
     }
 
 
@@ -236,8 +241,8 @@ def _restore_frozen_parameter_values(
         for name, param in model.named_parameters():
             if name not in frozen_parameter_values:
                 continue
-            mask = parameter_update_masks[name]
-            param.copy_(param * mask + frozen_parameter_values[name] * (1 - mask))
+            free = (parameter_update_masks[name] > 0).to(param.dtype)
+            param.copy_(param * free + frozen_parameter_values[name] * (1 - free))
 
 
 @dataclass

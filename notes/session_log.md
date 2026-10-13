@@ -5633,3 +5633,27 @@ What role does 40 3rd hidden neurons even play here? Isn't this just 2 distinct 
 - New observation: the 5-copy (minority) classes flip their output sign (-0.22 -> +3.6, +0.22 -> -4.0): output weights do flip when the
   feature is shared with opposite-sign neurons (consensus rule at the neuron level); recorded in section 38 of the runs notebook.
 - Run 38 is the anchor run from now on.
+
+## 2026-10-13 — Run 41: the reduced third layer (62-60-4); logit at init
+
+### User prompts (verbatim)
+- "Yes, build run 41 with the 62-60-4 reduced third layer. 
+
+Another clarification, the model logit output is identically zero at init, right?"
+
+### Changes
+- `relu_training.py`: `parameter_update_mask` entries may now be any finite non-negative value: 0 freezes, 1 trains, other values scale
+  the gradient (a per-entry learning-rate factor under SGD / momentum); the frozen-restore logic uses mask > 0. Existing 0/1 masks
+  behave as before (all tests pass).
+- `run_hierarchy_equivariant60.py --reduced-l3`: third layer = the four class representatives (S,+) x15, (S,-) x5, (Sc,+) x5, (Sc,-) x15
+  with the multiplicity folded into the output weight and gradient scales m (output) / 1/m (W3 row). Test
+  `test_reduced_third_layer_with_gradient_scales_reproduces_the_40_neuron_dynamics`: full 62-60-40 and reduced 62-60-4 trainings agree
+  to 3e-5 in every weight after 6 epochs of momentum SGD. Suite at 122.
+- Run 41 launched (`hierarchy_equivariant_60_nospare_l3x4`, run 38's protocol); registry entries, runs-notebook section 41 with an
+  exactness cell against run 38's class representatives epoch by epoch; cross-run index; gitignore; regeneration line.
+
+### Decisions / answers
+- The logit at init is NOT identically zero (rms 0.049 in runs 37-41): the two probes of a node are different vectors, so the s=+ rows
+  (reading (B,+) on probe 2j and (-B,+) on probe 2j+1) and the s=- rows (reading (B,-) on probe 2j+1 and (-B,-) on probe 2j) have
+  different pre-activations pointwise; the logit is 10 x 0.2236 x (relu(S) - relu(Sc)), zero in mean (the two have the same law) but not
+  pointwise. It is identically zero only when the two probes of a node coincide (runs 27-30) — or in the reduced model, trivially the same.
