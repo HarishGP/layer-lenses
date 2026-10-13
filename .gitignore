@@ -117,6 +117,8 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/hierarchy_equivariant_60_nospare_l3x4/replay/meta.pkl
 !results/designed_init/hierarchy_equiv2L_62_sadam03/
 !results/designed_init/hierarchy_equiv2L_62_sadam03/replay/meta.pkl
+!results/designed_init/hd2_run2_l3x2_kaiming/
+!results/designed_init/hd2_run2_l3x2_kaiming/replay/meta.pkl
 !results/designed_init/hierarchy_equiv2L_62_sadam01/
 !results/designed_init/hierarchy_equiv2L_62_sadam01/replay/meta.pkl
 !results/designed_init/hierarchy_equiv2L_62_outfrozen/

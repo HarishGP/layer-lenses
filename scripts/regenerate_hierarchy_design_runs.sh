@@ -54,6 +54,7 @@ $PY $S/hierarchy_equiv2L_62_outx41/run_hierarchy_equivariant60.py --out hierarch
 $PY $S/hierarchy_equiv2L_62_outfrozen/run_hierarchy_equivariant60.py --out hierarchy_equiv2L_62_outfrozen --tag linear_free_kaiming_cosine_equiv2L_62_outfrozen_seed0 --no-spare --two-layer --freeze-out   # run 44
 $PY $S/hierarchy_equiv2L_62_sadam01/run_hierarchy_equivariant60.py --out hierarchy_equiv2L_62_sadam01 --tag linear_free_kaiming_equiv2L_62_sadam01_seed0 --no-spare --two-layer --optimizer scalar_adam --const-lr --lr 0.01   # run 45
 $PY $S/hierarchy_equiv2L_62_sadam03/run_hierarchy_equivariant60.py --out hierarchy_equiv2L_62_sadam03 --tag linear_free_kaiming_equiv2L_62_sadam03_seed0 --no-spare --two-layer --optimizer scalar_adam --const-lr --lr 0.03   # run 46
+$PY $S/hd2_run2_l3x2_kaiming/run_hd2_l3x2.py --out hd2_run2_l3x2_kaiming --tag hd2_run2_l3x2_kaiming_seed0   # notebook 2, run 2 (62-60-2, Kaiming, uniform lr)
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"

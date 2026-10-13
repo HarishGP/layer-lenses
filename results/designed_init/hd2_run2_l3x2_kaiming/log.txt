@@ -1,0 +1,1 @@
+hd2_run2_l3x2_kaiming_seed0: 62-60-2 Kaiming (row norms sqrt 2 in every layer; W3 entries 0.258, output +-1; effective output +-0.258); flip test worst deviation 2.2e-15; W2 row norms before rescale 1.414-1.414; data seed 5178 (1000000, 100); logit rms 0.0156

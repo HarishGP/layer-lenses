@@ -5715,3 +5715,21 @@ Another clarification, the model logit output is identically zero at init, right
   faster than a plain output layer can (and the rate keeps growing with the factors), and that growth is what the hidden layers need:
   removing it costs 7-14x in loss, a fixed 41x gradient scale recovers half the gap, a frozen output is catastrophic, and ScalarAdam
   (global step normalisation) does not change the relative layer rates. Sections 42-46 filled; section 42 verified to run alone.
+
+## 2026-10-13 — Second runs notebook (hierarchy_design_runs_2.ipynb); hd2 run 2: 62-60-2, Kaiming, uniform lr
+
+### User prompts (verbatim)
+- "Start a new notebook for hierarchy_design_runs. It has become too big. Have run 41 as the first run there. 
+
+Consider the following second run there. It is the same as run 41 (run 1 in the new notebook) , just with only two 3rd layer hidden nodes instead of 4 (remove the redundant hidden nodes 2, and 2 which flip sign and become just weaker versions of 0 and 3.
+
+Have it be a more simple uniform learning rate setup, with Kaiming normalised scale at every layer."
+
+### Changes
+- `notebooks/hierarchy_design_runs_2.ipynb`: intro, the first notebook's setup cell with a fresh registry (1 = run 41's folder, 2 = the new
+  run), section 1 (run 41, findings carried over), section 2 with a cross-run cell against run 1. Runs there are "hd2 run n" in this log.
+- `results/designed_init/run_hd2_l3x2.py` (tracked copy under `notebooks/results/designed_init/hd2_run2_l3x2_kaiming/`): the quadruple
+  init without spare rows, third layer = [S; Sc] (the 15-copy classes of run 41; the 5-copy classes 1 and 2 dropped), every layer's rows
+  rescaled to norm sqrt(2) (W1 and W2 already were; W3 entries sqrt(2/30) = 0.258; output (+1, -1); effective output +-0.258 vs +-0.816
+  in run 41), no gradient scales, run 38's protocol; flip test 2e-15; logit rms at init 0.0156 (run 41: 0.049). Launched 2026-10-13.
+- gitignore negations and regeneration line.
