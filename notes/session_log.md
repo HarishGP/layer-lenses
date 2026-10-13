@@ -5740,3 +5740,16 @@ Have it be a more simple uniform learning rate setup, with Kaiming normalised sc
 - Two third-layer neurons suffice (output ends +-21, |W3| 5.5, |w_eff| 76 at the end vs 110); the gap is the initial readout scale
   (+-0.258 vs +-0.816 per unit), which slows the factorised readout's early growth 6x. Suggested hd2 run 3: the same design with the
   readout scaled to +-0.816. Findings in notebook 2, section 2.
+
+## 2026-10-13 — Is the two-neuron init equivariant? (Q&A with a check)
+
+### User prompts (verbatim)
+- "Is the two neuron init also equivariant w.r.t. node shuffles?"
+
+### Checks
+- hd2 run 2's init: all 15 tree flips pass `flip_equivariance_report` (worst deviation 2e-15 in float64 at launch, 8e-8 from the stored
+  float32 init). The label-negation symmetry (negate the level-4 normals, cue rows (m, q) <-> (m, -q), unit types (B, s) <-> (-B, -s),
+  third-layer rows S <-> Sc, output negated) also fixes the init exactly (W2 / W3 / Wout deviation 0, W1 to 3e-8). Node permutations
+  that are not tree automorphisms are not symmetries of the data law, so equivariance under them is not defined.
+- At the end of the run the S and mapped Sc rows have cosine 0.69 (relative difference 0.78): the sample breaks the label-negation
+  pairing far more than in run 38 (0.89-0.94), i.e. the two neurons end genuinely different.
