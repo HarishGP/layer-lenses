@@ -1,1 +1,4 @@
 hd2_run49_l3x2_readout_10M_seed0: 62-60-2 (W1, W2 row norms sqrt 2; W3 entries 1.633, output +-0.5; effective output +-0.817, shared-mode rate factor 80.5); 10000000 points x 1000 epochs of 1000 steps, snapshots every 1; flip test worst deviation 2.2e-15; W2 row norms before rescale 1.414-1.414; data seed 5178 (10000000, 100); logit rms 0.0493
+trained in 34.9 min; snapshots 1001
+hd2_run49_l3x2_readout_10M_seed0: final epoch loss 0.0055, test error 0.0017 (strict 0.0017); epochs to 0.3/0.2/0.1/0.05/0.03/0.01: 24/28/39/55/81/520; nodes covered 31/31; on-target end [1.0, 1.0, 1.0, 1.0]; 34.9 min
+ALL DONE

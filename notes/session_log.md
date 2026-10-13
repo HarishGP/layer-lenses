@@ -5771,3 +5771,16 @@ Have runs be called by their old numbers i.e. 41,  47, 48, 49 etc. Still number 
   a single-layer rescale would give 22). Run 49: run 48 with 10M points, 1000 epochs of 1000 steps (same 1M steps, same schedule),
   snapshots every epoch. Both launched 2026-10-13 in parallel (logit rms at init 0.049 for both, = run 41).
 - Notebook 2 sections 3-4 with a four-run comparison cell (steps on the x axis); gitignore and regeneration entries.
+
+### Results (runs 48-49, finished 2026-10-13, 35 min each in parallel)
+| run | points | loss / test error | nodes | probes own | step to 0.1 / 0.05 | |w_eff| 10k / 100k / 1M | L3 own spread 20k / 100k / 1M |
+|---|---|---|---|---|---|---|---|
+| 41 | 1M | 0.0033 / 0.49% | 31 | 28 | 41.8k / 71.6k | 33 / 86 / 110 | 0.49 / 3.37 / 5.23 |
+| 47 | 1M | 0.0102 / 0.71% | 29 | 19 | 104k / 261k | 5 / 49 / 76 | 0.07 / 1.55 / 4.13 |
+| 48 | 1M | 0.0029 / 0.46% | 31 | 27 | 41.4k / 71.8k | 34 / 86 / 111 | 0.50 / 3.38 / 5.28 |
+| 49 | 10M | 0.0055 / 0.17% | 31 | 30 | 39k / 55k | 32 / 85 / 102 | 0.14 / 0.25 / 0.34 |
+- Run 48 reproduces run 41 in end state and trajectory statistics: the anchor's dynamics live in a 62-60-2 model with one learning
+  rate once the effective output weight (+-0.816) and the readout's shared-mode rate (80.5 vs 82) are matched.
+- Run 49: all 30 probes on their own node, no deviations, level-3 spread 0.34 vs 5.3, residual 0.005: the level-3 symmetry breaking is
+  sample-induced and the infinite-data solution is the fully symmetric one. Test error 0.17%.
+- Notebook 2 sections 3-4 filled.
