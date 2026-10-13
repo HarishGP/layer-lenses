@@ -1,1 +1,4 @@
 linear_free_kaiming_cosine_equiv2L_62_seed0: optimizer sgd lr 0.01 cosine; out-scale 1.0 freeze-out False; cue bias 1.0; batch 10000 x 10000 epochs, lr 0.01 eta_min_ratio 0.05; 62-60 equivariant init; flip test worst deviation 4.6e-08 over 15 flips; probe+spare rows off-span to 7.1e-16, pairwise |cos| max 1.8e-08; W3 ones per row None; third layer None rows; data seed 5178 (1000000, 100); logit rms 0.0493
+trained in 35.5 min; snapshots 1001
+linear_free_kaiming_cosine_equiv2L_62_seed0: final epoch loss 0.0420, test error 0.0155 (strict 0.0155); epochs to 0.3/0.2/0.1/0.05/0.03: 634/990/2231/5748/-1; nodes covered 31/31; on-target end [1.0, 1.0, 1.0, 0.56]; 35.5 min
+ALL DONE

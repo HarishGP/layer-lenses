@@ -1,0 +1,4 @@
+linear_free_kaiming_equiv2L_62_sadam03_seed0: optimizer scalar_adam lr 0.03 const; out-scale 1.0 freeze-out False; cue bias 1.0; batch 10000 x 10000 epochs, lr 0.03 eta_min_ratio 1.0; 62-60 equivariant init; flip test worst deviation 4.6e-08 over 15 flips; probe+spare rows off-span to 7.1e-16, pairwise |cos| max 1.8e-08; W3 ones per row None; third layer None rows; data seed 5178 (1000000, 100); logit rms 0.0493
+trained in 44.7 min; snapshots 1001
+linear_free_kaiming_equiv2L_62_sadam03_seed0: final epoch loss 0.0205, test error 0.0093 (strict 0.0093); epochs to 0.3/0.2/0.1/0.05/0.03: 114/266/951/2981/6074; nodes covered 30/31; on-target end [1.0, 0.5, 1.0, 0.69]; 44.7 min
+ALL DONE

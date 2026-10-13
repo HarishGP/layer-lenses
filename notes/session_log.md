@@ -5701,3 +5701,17 @@ Another clarification, the model logit output is identically zero at init, right
   float-32 chaos separates the runs (0.6-1.0 from epoch 3000) while loss and the fate core agree. End output weights 80.1 / 18.1 /
   -19.7 / -84.7 vs run 38's class sums 80.2 / 18.2 / -19.8 / -84.9.
 - Runs 42-44 started automatically (three in parallel); 45-46 follow.
+
+### Results (runs 42-46, finished 2026-10-13 06:04, 81 min for the five; all smooth, no spiky epochs)
+| run | setting | loss / test error | nodes | probes own | |w_eff| at epochs 100 / 1000 / 10000 |
+|---|---|---|---|---|---|
+| 38 | 62-60-40 anchor | 0.0030 / 0.49% | 31 | 27 | 33 / 86 / 111 |
+| 42 | no third layer, plain | 0.042 / 1.55% | 31 | 22 | 0.8 / 3.5 / 7.7 |
+| 43 | output gradient x41 | 0.020 / 0.90% | 29 | 21 | 1.6 / 17 / 31 |
+| 44 | output frozen | 0.17 / 6.5% | 20 | 15 | 0.8 (fixed) |
+| 45 | ScalarAdam 0.01 | 0.036 / 1.38% | 31 | 21 | 1.3 / 4.0 / 8.1 |
+| 46 | ScalarAdam 0.03 | 0.0205 / 0.93% | 30 | 22 | 2.4 / 5.4 / 10 |
+- Reading: the third layer is needed for its dynamics, not its ReLUs. Its factorised readout grows the effective output vector 10-100x
+  faster than a plain output layer can (and the rate keeps growing with the factors), and that growth is what the hidden layers need:
+  removing it costs 7-14x in loss, a fixed 41x gradient scale recovers half the gap, a frozen output is catastrophic, and ScalarAdam
+  (global step normalisation) does not change the relative layer rates. Sections 42-46 filled; section 42 verified to run alone.
