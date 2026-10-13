@@ -1,1 +1,4 @@
 hd2_run2_l3x2_kaiming_seed0: 62-60-2 Kaiming (row norms sqrt 2 in every layer; W3 entries 0.258, output +-1; effective output +-0.258); flip test worst deviation 2.2e-15; W2 row norms before rescale 1.414-1.414; data seed 5178 (1000000, 100); logit rms 0.0156
+trained in 28.1 min; snapshots 1001
+hd2_run2_l3x2_kaiming_seed0: final epoch loss 0.0102, test error 0.0071 (strict 0.0071); epochs to 0.3/0.2/0.1/0.05/0.03/0.01: 367/457/1039/2611/3691/-1; nodes covered 29/31; on-target end [1.0, 1.0, 1.0, 0.5]; 28.1 min
+ALL DONE

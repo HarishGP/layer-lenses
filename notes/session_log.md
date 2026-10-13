@@ -5733,3 +5733,10 @@ Have it be a more simple uniform learning rate setup, with Kaiming normalised sc
   rescaled to norm sqrt(2) (W1 and W2 already were; W3 entries sqrt(2/30) = 0.258; output (+1, -1); effective output +-0.258 vs +-0.816
   in run 41), no gradient scales, run 38's protocol; flip test 2e-15; logit rms at init 0.0156 (run 41: 0.049). Launched 2026-10-13.
 - gitignore negations and regeneration line.
+
+### Results (hd2 run 2, finished 2026-10-13, 28 min)
+- Loss 0.0102 / 0.71%, 29/31 nodes, 19/30 probes on their own node (8 level-3 probes to a child, 0 unrelated), cues 10 own / 13 on
+  ancestors, no spikes; loss 0.1 at epoch 1039 (run 41: 418), never below 0.01.
+- Two third-layer neurons suffice (output ends +-21, |W3| 5.5, |w_eff| 76 at the end vs 110); the gap is the initial readout scale
+  (+-0.258 vs +-0.816 per unit), which slows the factorised readout's early growth 6x. Suggested hd2 run 3: the same design with the
+  readout scaled to +-0.816. Findings in notebook 2, section 2.
