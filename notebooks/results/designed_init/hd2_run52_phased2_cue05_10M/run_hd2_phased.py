@@ -6,6 +6,7 @@ Three segments of `train_relu_mlp_with_optimizer_snapshots` chained with `start_
 momentum buffers and the cosine schedule (lr 0.01 -> 0.0005 over the 1200 epochs) continue across the phase changes; batch 10k, 1000
 steps per epoch, snapshots every epoch. Saved as one replayable run (segments merged).
   run 51: --out hd2_run51_phased_10M --tag hd2_run51_phased_10M_seed0
+  run 53: --cue-bias 1.0 --phases 500 500: the bias-1 control of run 52 (same two-phase 1000-epoch schedule).
   run 52: --cue-bias 0.5 --phases 500 500: cues = pole * (v + 0.5 u_j) renormalised (half the level-4 bias), TWO phases: cues frozen for
           500 epochs, then nothing frozen for 500 (cosine over the 1000 epochs, as run 49).
 """

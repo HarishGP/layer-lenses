@@ -5855,3 +5855,13 @@ Also, the second phase where the probes are frozen seems redundant. Just have tw
   |cos| 0.36 -> 0.55 at epoch 700 -> 0.97 at 1000) and the loss has no time to fall.
 - Caveat: bias (0.5 vs 1) and release-phase lr (0.0053 -> 0.0005 vs run 51's 0.0065 -> 0.0011) changed together; a bias-1 control under
   the same two-phase 1000-epoch schedule would isolate the bias. Notebook 2 section 7 filled.
+
+## 2026-10-14 — Run 53: the bias-1 control of run 52
+
+### User prompts (verbatim)
+- "Run the bias-1 control with the two-phase 1000-epoch schedule."
+
+### Changes
+- Run 53 launched (`hd2_run53_phased2_cue1_10M`): run 49's init (cue bias 1), run 52's protocol (cues frozen 0-500, free 500-1000, cosine
+  over 1000 epochs). Notebook 2 section 8 with a release-phase comparison cell (cue cosine and loss, runs 51-53); registry, gitignore,
+  regeneration entries.
