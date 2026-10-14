@@ -1,1 +1,4 @@
 hd2_run50_pluscues_10M_seed0: 46-60-2, 16 cues +u_j only (W1, W2 row norms sqrt 2; W3 entries 1.633, output +-0.5; effective output +-0.817, shared-mode rate factor 80.5); 10000000 points x 1000 epochs of 1000 steps, snapshots every 1; flip test worst deviation 2.2e-15; W2 row norms before rescale 1.414-1.414 (after the cue selection 1.225-1.225); data seed 5178 (10000000, 100); logit rms 0.0390
+trained in 22.6 min; snapshots 1001
+hd2_run50_pluscues_10M_seed0: final epoch loss 0.0222, test error 0.0059 (strict 0.0059); epochs to 0.3/0.2/0.1/0.05/0.03/0.01: 37/45/144/504/730/-1; nodes covered 27/31; on-target end [1.0, 1.0, 1.0, 0.69]; 22.7 min
+ALL DONE

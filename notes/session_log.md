@@ -5798,3 +5798,10 @@ The cues may have a redundancy that makes it so that both poles need not be capt
   with run 49's protocol (10M points, 1000 epochs of 1000 steps). Flip test 2e-15 at init: the tree flips still fix the init (they never
   negate a level-4 normal); the label-negation symmetry (cue twins) is gone. Logit rms at init 0.039 (run 49: 0.049).
 - Notebook 2 section 5 with a cue-fate comparison cell against run 49; registry, gitignore, regeneration entries.
+
+### Results (run 50, finished 2026-10-14, 23 min)
+- Loss 0.0222 / 0.59%, 27/31 nodes (14/16 level-4), probes 20/30 on their own node (4 to a child, 6 uncaptured), cues 10/16 own, 1 on an
+  ancestor, 5 stuck at |cos| 0.6-0.7; 4x slower than run 49; level-3 own spread 6.4 (run 49: 0.34) despite 10M points.
+- Reading: the cue pairs are redundant for level-4 coverage (run 49 kept every level-4 node with 21 own cues while 11 surplus cues
+  climbed to internal nodes), and that surplus is what the design uses; without it the blocks are half-rectified, capture is slower,
+  the level-3 competition is lost to the sample again, and the loss is 4x worse. Notebook 2 section 5 filled.
