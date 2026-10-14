@@ -5938,3 +5938,37 @@ The W2 at init is negative of run 53."
 - Poles unchanged (30/30 at the designed pole: negating W2 flips the probe weight and the block side together). The units become the
   dense additive family (95% active, +20..+26 on the path features instead of -30..-54 vetoes); the released cues shrink to norm 0.29
   and capture nothing. Notebook 2 section 9 filled.
+
+## 2026-10-14 — Towards a theorem: reachability of run 53's solution from random inits (discussion)
+
+### User prompts (verbatim)
+- "Hmm, interesting, will file this for later.
+
+I am interested in breaking down and understanding run 53 even further.
+
+A sort of final theorem-like object I am looking at is based on run 53. I imagine the theorem saying something like this: "For most inits for a 3 hidden layer network, from some standard scheme (like Xavier-Glorot or He), there exists a postive vector learning rate eta(t) that when applied to population gradient flow, would be such that its subnetwork would be equivalent to the final converged network of run 53." 
+
+In some sense this might be vacuous as it is just saying that there exists a monotone decreasing path in the loss landscape from most inits to a solution that is run 53's solution (subject to node removals and node permutations). 
+
+But it would still not be totally vacuous, and it is possible to give a clear narrative of gradient descent and split into recognisable phases.
+
+Linear phase: Random init to first layer gating vectors containing mostly combos of layer 4 ODT vectors with one of them leading just by channce.
+
+Capture the top phase: By chance again, there is quite likely to be first layer nodes similar to the probe for u_0, (less so for u_1, u_2 etc) and that forms a positive feedback loop between W2 seeking to support probe movements along internal nodes and the probes moving along internal nodes.
+
+Capture the rest phase: Once the probes have moved enough along internal nodes, W2 switches to feedback from the opposite direction -- supporting movement of other nodes along layer 4 nodes.
+
+Capture the top and capture the rest phases are analogous to the phase 1 and 2 in run 53.  THe linear phase is way more chaotic, and the init in run 53 tries to capture the essence of movement in this phase.
+
+ Any thoughts?"
+
+### Assessment (no repo changes)
+- A positive vector rate is a diagonal preconditioner: the reachable paths are those whose motion agrees in sign with the gradient in
+  every coordinate at every time ("sign-descent reachability"), not every loss-decreasing path; non-vacuous, hard to prove directly.
+- Suggested sharper form: (A) the linear phase of population flow from a random init produces rows ~ alpha v + a leading level-4
+  component (the cue init), and (B) from that structured init plain flow reaches the solution, with eta(t) only encoding the
+  time-scale separation (cues slow during capture) and the readout scale. (B) is what runs 40/49/51/53 establish; (A) is the lens theory.
+- Phase mapping: capture-the-top = run 53 phase 1 (probes captured by epoch 40, W2 probe columns and W3 settled by epoch 500, 6% / 10%
+  change afterwards); capture-the-rest = phase 2 (W2 cue columns change 62-80%, cues rotate onto their normals). Caveats: the
+  equivariant init has no chance element; in random inits the u_0 winner is decided mid-escape, not at init (init sweep); the dense
+  family of W2 > 0 units (run 54) must be the part removed; free training overlaps the phases (run 49's cue climbs).
