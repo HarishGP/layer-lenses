@@ -5784,3 +5784,17 @@ Have runs be called by their old numbers i.e. 41,  47, 48, 49 etc. Still number 
 - Run 49: all 30 probes on their own node, no deviations, level-3 spread 0.34 vs 5.3, residual 0.005: the level-3 symmetry breaking is
   sample-induced and the infinite-data solution is the fully symmetric one. Test error 0.17%.
 - Notebook 2 sections 3-4 filled.
+
+## 2026-10-14 — Run 50: run 49 with the 16 +u_j cues only
+
+### User prompts (verbatim)
+- "Do another run with run 49's setup, but with only 16 cues corresponding to only +u_j. I am not sure if this would still be symmetric, but do it anyway. 
+
+The cues may have a redundancy that makes it so that both poles need not be captured for good loss, and thus even though they already start at a healthy cosine with their target direction (unlike the probes which start at a 0) some of them are not captured."
+
+### Changes
+- `run_hd2_l3x2.py --plus-cues-only`: keeps the 30 probes and the 16 cue rows on +(v + u_j) (46-60-2); the W2 cue blocks keep their
+  coefficients on the remaining cues and the rows are rescaled to norm sqrt(2) (they had dropped to 1.22). Run 50 launched 2026-10-14
+  with run 49's protocol (10M points, 1000 epochs of 1000 steps). Flip test 2e-15 at init: the tree flips still fix the init (they never
+  negate a level-4 normal); the label-negation symmetry (cue twins) is gone. Logit rms at init 0.039 (run 49: 0.049).
+- Notebook 2 section 5 with a cue-fate comparison cell against run 49; registry, gitignore, regeneration entries.
