@@ -5865,3 +5865,8 @@ Also, the second phase where the probes are frozen seems redundant. Just have tw
 - Run 53 launched (`hd2_run53_phased2_cue1_10M`): run 49's init (cue bias 1), run 52's protocol (cues frozen 0-500, free 500-1000, cosine
   over 1000 epochs). Notebook 2 section 8 with a release-phase comparison cell (cue cosine and loss, runs 51-53); registry, gitignore,
   regeneration entries.
+
+### Results (run 53, finished 2026-10-14, 34 min)
+- Loss 0.0063 / 0.13%, 31 nodes, 30/30 probes, 32/32 cues on their own normal: run 51's result without the middle phase.
+- Release-phase cue capture in lr-integrated time: 0.51 (run 51), 0.58 (run 53), 1.10 (run 52): halving the bias doubles the time,
+  the schedule explains 15%; run 52's cues finished only in the schedule's tail. Notebook 2 section 8 filled.
