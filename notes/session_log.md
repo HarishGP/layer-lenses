@@ -5870,3 +5870,13 @@ Also, the second phase where the probes are frozen seems redundant. Just have tw
 - Loss 0.0063 / 0.13%, 31 nodes, 30/30 probes, 32/32 cues on their own normal: run 51's result without the middle phase.
 - Release-phase cue capture in lr-integrated time: 0.51 (run 51), 0.58 (run 53), 1.10 (run 52): halving the bias doubles the time,
   the schedule explains 15%; run 52's cues finished only in the schedule's tail. Notebook 2 section 8 filled.
+
+## 2026-10-14 — Notebook 2: trajectory_plots shows the test error over epochs
+
+### User prompts (verbatim)
+- "Can you change the trajectory_plots function so that it plots the test error as a function of epochs? Remove the plot that gives zero logit fraction of test. In runs_2 notebook."
+
+### Changes
+- `hierarchy_design_runs_2.ipynb` setup cell: the middle panel of `trajectory_plots` now shows the test error (logit >= 0 rule, log
+  scale) at every stored checkpoint, computed from the same per-checkpoint logits that fed the zero-logit panel, which is removed.
+  Verified headlessly on run 53. The first notebook's function is unchanged.
