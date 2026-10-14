@@ -5880,3 +5880,25 @@ Also, the second phase where the probes are frozen seems redundant. Just have tw
 - `hierarchy_design_runs_2.ipynb` setup cell: the middle panel of `trajectory_plots` now shows the test error (logit >= 0 rule, log
   scale) at every stored checkpoint, computed from the same per-checkpoint logits that fed the zero-logit panel, which is removed.
   Verified headlessly on run 53. The first notebook's function is unchanged.
+
+## 2026-10-14 — Anatomy of run 53's converged network (new notebook)
+
+### User prompts (verbatim)
+- "Ok. Take the final converged relu network of run 53. Each unit is just a weighted sum of ReLU of DOT normal projections of the input. 
+
+Can you interpret the 60 units now clearly and analyse/break it down? How exactly is this network implementing the decision tree? Create a separate notebook for this."
+
+### Changes
+- `notebooks/run53_network_anatomy.ipynb` (executed in place, 100k test points): sections 1 first layer as a bank of 62 one-sided
+  features (all rows on normals, norms 12.8 / 9.0 / 7.0 / 5.7 / 1.6 by level), 2 second layer in the feature basis (heatmap and recipes:
+  vetoes of 20-55 on wrong-side features plus a dense background of tiny positive weights), 3 the 32 level-3 units as (leaf, sign)
+  detectors (one per pair, readout sign = label; active on 100% of the right-sign region, 9% of the wrong-sign region, 0.06% elsewhere;
+  vetoes 54 / 36 / 30 / 30 / 4 by level), 4 the 28 lower-level units as coarse region detectors (label correlation 0.05 / 0.22 / 0.53),
+  5 readout: ablations (leaf detectors alone 1.1% error, without them 26%, all 0.14%), the third layer as two opposed gated evidence
+  sums (corr(S, -Sc) 0.79, gates close on 8% each), the decision near the leaf split (logit linear in a_m with slope ~300; errors only
+  for |a_m| < 0.003).
+
+### Reading
+- The network implements the tree as a sum over the 32 (leaf, sign) cells of readout x background x 1[x reaches m, sign(a_m) = s],
+  with membership computed by vetoes on the wrong side of every split on the path and the sign by a veto on the wrong cue; the lower
+  levels add margin.
