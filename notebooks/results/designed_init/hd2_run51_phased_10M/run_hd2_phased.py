@@ -6,6 +6,8 @@ Three segments of `train_relu_mlp_with_optimizer_snapshots` chained with `start_
 momentum buffers and the cosine schedule (lr 0.01 -> 0.0005 over the 1200 epochs) continue across the phase changes; batch 10k, 1000
 steps per epoch, snapshots every epoch. Saved as one replayable run (segments merged).
   run 51: --out hd2_run51_phased_10M --tag hd2_run51_phased_10M_seed0
+  run 54: --negate-w2 --phases 500 500: run 53 with W2 negated at init (every probe weight +1 instead of -1, every cue block B -> -B,
+          i.e. the same four blocks per node attached to the opposite probe weight sign); the flip equivariance is unchanged.
   run 53: --cue-bias 1.0 --phases 500 500: the bias-1 control of run 52 (same two-phase 1000-epoch schedule).
   run 52: --cue-bias 0.5 --phases 500 500: cues = pole * (v + 0.5 u_j) renormalised (half the level-4 bias), TWO phases: cues frozen for
           500 epochs, then nothing frozen for 500 (cosine over the 1000 epochs, as run 49).
@@ -17,7 +19,7 @@ from layer_lenses.relu_mlp import ReLUMLP
 from layer_lenses.relu_training import ReLUTrainConfig, evaluate_relu_mlp, checkpoint_model_from_state
 from layer_lenses.relu_analysis import train_relu_mlp_with_optimizer_snapshots, designed_run_seed_result, save_designed_run
 ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--orth-seed", type=int, default=0)
-ap.add_argument("--n-train", type=int, default=10_000_000); ap.add_argument("--phases", type=int, nargs="+", default=[500, 500, 200], help="3 values: epochs with cues frozen, with probes frozen, with nothing frozen; 2 values: cues frozen, nothing frozen"); ap.add_argument("--cue-bias", type=float, default=1.0)
+ap.add_argument("--n-train", type=int, default=10_000_000); ap.add_argument("--phases", type=int, nargs="+", default=[500, 500, 200], help="3 values: epochs with cues frozen, with probes frozen, with nothing frozen; 2 values: cues frozen, nothing frozen"); ap.add_argument("--cue-bias", type=float, default=1.0); ap.add_argument("--negate-w2", action="store_true")
 ap.add_argument("--w3-entry", type=float, default=1.633); ap.add_argument("--out-weight", type=float, default=0.5)
 args = ap.parse_args(); OUT = f"results/designed_init/{args.out}"; os.makedirs(f"{OUT}/runs", exist_ok=True); T0 = time.time()
 N_TRAIN, BS, LR, MOM, ETA_MIN_RATIO, SNAP = args.n_train, 10_000, 0.01, 0.9, 0.05, 1
@@ -41,13 +43,14 @@ W1 = q["W1"][:62]; W2 = q["W2"][:, :62]; CUE_ROWS = list(meta["cue_rows"]); PROB
 s_units = np.sign(q["W3"].T @ q["Wout"].ravel()); assert s_units.tolist() == [1, -1, -1, 1] * 15
 W3 = np.stack([(s_units > 0).astype(np.float64), (s_units < 0).astype(np.float64)]) * args.w3_entry; Wout = np.array([[args.out_weight, -args.out_weight]])
 W1 = W1 / np.linalg.norm(W1, axis=1, keepdims=True) * np.sqrt(2.0); W2 = W2 / np.linalg.norm(W2, axis=1, keepdims=True) * np.sqrt(2.0)
+if args.negate_w2: W2 = -W2                                                    # run 54
 reports = {j: flip_equivariance_report(W1, W2, W3, Wout, tree, j, cue_rows=CUE_ROWS, units_per_node=4) for j in range(15)}
 worst = max(max(r.values()) for r in reports.values()); assert worst < 1e-5, reports
 HIDDEN = [62, 60, 2]; model = ReLUMLP(input_dim=100, hidden_dims=HIDDEN, bias=False)
 model.load_state_dict({"hidden_layers.0.weight": torch.as_tensor(W1, dtype=torch.float32), "hidden_layers.1.weight": torch.as_tensor(W2, dtype=torch.float32),
                        "hidden_layers.2.weight": torch.as_tensor(W3, dtype=torch.float32), "output_layer.weight": torch.as_tensor(Wout, dtype=torch.float32)})
 lg = logit_scale(model, x, device="cuda")
-print(f"{tag}: 62-60-2 (run 49's init, cue bias {args.cue_bias}); phases (frozen rows, epochs): {list(zip(PHASE_FROZEN, BOUNDS))}; {N_TRAIN} points, {N_TRAIN // BS} steps per epoch, cosine lr over {EPOCHS} epochs; flip test {worst:.1e}; logit rms {lg['rms_logit']:.4f}", flush=True)
+print(f"{tag}: 62-60-2 (run 49's init, cue bias {args.cue_bias}{', W2 negated' if args.negate_w2 else ''}); phases (frozen rows, epochs): {list(zip(PHASE_FROZEN, BOUNDS))}; {N_TRAIN} points, {N_TRAIN // BS} steps per epoch, cosine lr over {EPOCHS} epochs; flip test {worst:.1e}; logit rms {lg['rms_logit']:.4f}", flush=True)
 def phase_mask(k):
     mask = {n: np.ones(tuple(p.shape), dtype=np.float32) for n, p in model.named_parameters()}
     if PHASE_FROZEN[k] == "cues": mask["hidden_layers.0.weight"][CUE_ROWS] = 0.0
@@ -72,7 +75,7 @@ for k, (a, b) in enumerate(BOUNDS):
 out = merged
 sr = designed_run_seed_result(out=out, train_config=cfg, model_spec={"input_dim": 100, "hidden_dims": HIDDEN, "bias": False, "activation": "relu"},
                               data_spec=DATA, tree=tree, design={**{k: (list(vv) if isinstance(vv, tuple) else vv) for k, vv in DESIGN.items()}, "scale": "kaiming row norms sqrt(2), readout e / w", "cues": f"pole*(v + {args.cue_bias} u_j) renormalised",
-                                                                   "init": "run 49's", "arch": "62-60-2", "w3_entry": args.w3_entry, "out_weight": args.out_weight, "n_train": N_TRAIN, "epochs": EPOCHS, "snap": SNAP, "phases": dict(zip(PHASE_FROZEN, BOUNDS)), "cue_bias": args.cue_bias,
+                                                                   "init": "run 49's", "arch": "62-60-2", "w3_entry": args.w3_entry, "out_weight": args.out_weight, "n_train": N_TRAIN, "epochs": EPOCHS, "snap": SNAP, "phases": dict(zip(PHASE_FROZEN, BOUNDS)), "cue_bias": args.cue_bias, "negate_w2": args.negate_w2,
                                                                    "orth_seed": args.orth_seed, "data_seed": args.data_seed, "cue_rows": CUE_ROWS, "probe_rows": PROBE_ROWS, "spare_rows": [], "unit_path_sign": q["unit_path_sign"].tolist(), "unit_block_sign": q["unit_block_sign"].tolist(), "unit_node": q["unit_node"].tolist()}, tag=tag)
 save_designed_run(sr, f"{OUT}/replay")
 ck = out["checkpoint_snapshots"]; epochs = sorted(ck); m_end = out["model"]
@@ -88,7 +91,7 @@ L = np.array(out["epoch_losses"]); first = lambda thr: int(np.nonzero(L <= thr)[
 rec = {"tag": tag, "arch": "62-60-2", "phases": str(BOUNDS), "n_train": N_TRAIN, "batch": BS, "epochs": EPOCHS, "lr": LR, "logit_rms_init": lg["rms_logit"], "final_epoch_loss": float(L[-1]), "min_epoch_loss": float(np.nanmin(L)),
        "train_log_loss_end": tr["log_loss"], "test_error_end": te["zero_one_loss"], "test_error_strict_end": te["zero_one_loss_strict"], "zero_logit_frac_end": te["zero_logit_fraction"],
        "epoch_to_0.3": first(0.3), "epoch_to_0.2": first(0.2), "epoch_to_0.1": first(0.1), "epoch_to_0.05": first(0.05), "epoch_to_0.03": first(0.03), "epoch_to_0.01": first(0.01),
-       **{f"loss_end_phase{k + 1}": float(L[b - 1]) for k, (a, b) in enumerate(BOUNDS)}, "cue_bias": args.cue_bias,
+       **{f"loss_end_phase{k + 1}": float(L[b - 1]) for k, (a, b) in enumerate(BOUNDS)}, "cue_bias": args.cue_bias, "negate_w2": args.negate_w2,
        **{f"on_target_L{l}_end": float(pe[f"on_target_L{l}"].iloc[-1]) for l in range(4)}, "nodes_covered_end": int(pe.nodes_covered.iloc[-1]), "wall_min": (time.time() - t0) / 60}
 pd.DataFrame([rec]).to_csv(f"{OUT}/summary.csv", index=False)
 json.dump({"arch": "62-60-2", "init": "run 49's", "cue_bias": args.cue_bias, "phases": dict(zip(PHASE_FROZEN, BOUNDS)), "n_train": N_TRAIN, "epochs": EPOCHS, "batch": BS, "lr": LR, "eta_min_ratio": ETA_MIN_RATIO, "momentum": MOM, "snapshot_every_epochs": SNAP,

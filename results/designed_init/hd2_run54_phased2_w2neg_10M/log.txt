@@ -1,0 +1,1 @@
+hd2_run54_phased2_w2neg_10M_seed0: 62-60-2 (run 49's init, cue bias 1.0, W2 negated); phases (frozen rows, epochs): [('cues', (0, 500)), ('none', (500, 1000))]; 10000000 points, 1000 steps per epoch, cosine lr over 1000 epochs; flip test 2.2e-15; logit rms 0.0493

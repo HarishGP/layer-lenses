@@ -5919,3 +5919,15 @@ What would actually be implemented if we took the W2, W3 and Wout of epoch 500, 
 - Hybrid W1(1000) + W2/W3/Wout(500): test error 8.9%, log loss 1.12, logit rms 38 (overconfident); the 32 level-3 units still serve 32
   distinct (leaf, sign) cells but only 63% of their active points fall in their cell (89% at epoch 1000). Epoch 500 itself: 2.2% error.
   Reverse hybrid W1(500) + rest(1000): 35% error.
+
+## 2026-10-14 — Run 54: run 53 with W2 negated at init
+
+### User prompts (verbatim)
+- "Start a new run 54, with same protocol as 53, but with a different init. 
+
+The W2 at init is negative of run 53."
+
+### Changes
+- `run_hd2_phased.py --negate-w2`; run 54 launched (`hd2_run54_phased2_w2neg_10M`): probe weights +1, cue blocks B -> -B, flip test
+  unchanged. Notebook 2 section 9 with a pole-outcome comparison cell against run 53; registry, gitignore, regeneration entries.
+- Expectation (pole rule of runs 24-25): every probe pulled to the opposite pole of its node.
