@@ -5805,3 +5805,23 @@ The cues may have a redundancy that makes it so that both poles need not be capt
 - Reading: the cue pairs are redundant for level-4 coverage (run 49 kept every level-4 node with 21 own cues while 11 surplus cues
   climbed to internal nodes), and that surplus is what the design uses; without it the blocks are half-rectified, capture is slower,
   the level-3 competition is lost to the sample again, and the loss is 4x worse. Notebook 2 section 5 filled.
+
+## 2026-10-14 — Run 49 is the anchor; run 51: phased freezing (cues 0-500, probes 500-1000, free 1000-1200)
+
+### User prompts (verbatim)
+- "Ok, run 50 did not yield any good ideas. Run 49 is the new anchor run for now.
+
+Try the following variant of run 49. Different protocol. Cues are frozen for the first 500 epochs, and the probes are frozen for the next 500 epochs. Then everything trains (no frozen parameters) for the last 200 epochs.,"
+
+### Changes
+- `relu_analysis.train_relu_mlp_with_optimizer_snapshots`: new `stop_epoch` (ends a segment after epoch stop_epoch - 1 with the snapshot
+  at stop_epoch; histories padded with NaN to config.epochs). Test: 0-4 in one go equals 0-2 + 2-4 chained with stop_epoch /
+  start_epoch / the optimizer state (losses, lr, weights to 1e-6).
+- `results/designed_init/run_hd2_phased.py` (tracked copy under `hd2_run51_phased_10M/`): run 49's init; three chained segments with
+  masks (cue rows frozen / probe rows frozen / none), one cosine schedule over the 1200 epochs, momentum continuous, segments merged into
+  one replayable run. Smoke-tested (frozen groups exactly unmoved per phase, lr continuous). Run 51 launched 2026-10-14 (~45 min).
+- Notebook 2 section 6 with a by-phase fate table against run 49; registry, gitignore, regeneration entries.
+
+### Decisions
+- Anchor run: run 49 (as of 2026-10-14). Run 50 recorded as a negative result.
+- The lr schedule of run 51 is one cosine over 1200 epochs (run 49's over 1000), so the final free phase runs at lr 0.0012 -> 0.0005.

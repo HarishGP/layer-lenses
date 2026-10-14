@@ -1,0 +1,1 @@
+hd2_run51_phased_10M_seed0: 62-60-2 (run 49's init); phases: cues frozen (0, 500), probes frozen (500, 1000), all free (1000, 1200); 10000000 points, 1000 steps per epoch, cosine lr over 1200 epochs; flip test 2.2e-15; logit rms 0.0493

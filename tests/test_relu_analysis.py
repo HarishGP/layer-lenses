@@ -832,3 +832,24 @@ def test_path_sign_summary_and_consensus_on_a_toy_stack() -> None:
     assert s["n_born"] == 7 and s["n_born_significant"] == 1       # born path (1, 1, 0) = 1 * 0.5 * 1 exceeds 0.1 x median 1
     c = unit_path_sign_consensus(w_out[-1], w3[-1], np.array([1, -1]))
     assert np.allclose(c, [1.0, 2.0 / 3.0])                       # unit 0: paths +1, +1 (flipped edge now agrees); unit 1: -1*1 agrees, +0.5 disagrees
+
+
+def test_stop_epoch_segments_chain_exactly() -> None:
+    """Training epochs 0-4 in one go equals two segments 0-2 and 2-4 chained with stop_epoch, start_epoch and the optimizer state."""
+    from layer_lenses.relu_mlp import ReLUMLP
+    from layer_lenses.relu_training import ReLUTrainConfig, checkpoint_model_from_state
+    from layer_lenses.relu_analysis import train_relu_mlp_with_optimizer_snapshots
+
+    rng = np.random.default_rng(0); x = rng.normal(size=(600, 6)).astype(np.float32); y = np.sign(x[:, 0] * x[:, 1] + 0.1).astype(np.int8)
+    def fresh():
+        torch.manual_seed(3); return ReLUMLP(input_dim=6, hidden_dims=[8, 8], bias=False)
+    cfg = ReLUTrainConfig(epochs=4, lr=0.05, batch_size=100, seed=5, device="cpu", snapshot_epochs=(0, 1, 2, 3, 4), lr_scheduler_eta_min_ratio=0.1, optimizer="sgd", momentum=0.9, show_progress=False)
+    full = train_relu_mlp_with_optimizer_snapshots(model=fresh(), x_train=x, y_train=y, config=cfg)
+    seg1 = train_relu_mlp_with_optimizer_snapshots(model=fresh(), x_train=x, y_train=y, config=cfg, stop_epoch=2)
+    assert len(seg1["epoch_losses"]) == 4 and np.isnan(seg1["epoch_losses"][2]) and sorted(seg1["checkpoint_snapshots"]) == [0, 1, 2]
+    m2 = checkpoint_model_from_state(seg1["model"], seg1["checkpoint_snapshots"][2])
+    seg2 = train_relu_mlp_with_optimizer_snapshots(model=m2, x_train=x, y_train=y, config=cfg, start_epoch=2, initial_optimizer_states=seg1["optimizer_snapshots"][2])
+    assert np.allclose(seg1["epoch_losses"][:2], full["epoch_losses"][:2]) and np.allclose(seg2["epoch_losses"][2:], full["epoch_losses"][2:])
+    assert np.allclose(seg2["lr_history"][2:], full["lr_history"][2:])
+    for k, v in full["checkpoint_snapshots"][4].items():
+        assert torch.allclose(v, seg2["checkpoint_snapshots"][4][k], atol=1e-6), k

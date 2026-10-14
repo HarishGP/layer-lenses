@@ -1504,6 +1504,7 @@ def train_relu_mlp_with_optimizer_snapshots(
     config: ReLUTrainConfig,
     shuffle_each_epoch: bool = False,
     start_epoch: int = 0,
+    stop_epoch: int | None = None,
     initial_optimizer_states: list[dict[str, Any]] | None = None,
     initial_rotation_lock: dict[str, np.ndarray] | None = None,
 ) -> dict[str, object]:
@@ -1511,7 +1512,8 @@ def train_relu_mlp_with_optimizer_snapshots(
 
     ``start_epoch`` resumes the schedule at that epoch: the model is taken as the state at
     ``start_epoch``, the cosine schedulers are advanced to it, and only epochs
-    ``start_epoch .. config.epochs - 1`` are run; ``epoch_losses`` / ``lr_history`` keep
+    ``start_epoch .. config.epochs - 1`` are run (``stop_epoch`` ends the segment earlier, after epoch
+    ``stop_epoch - 1``, with the snapshot at ``stop_epoch`` taken); ``epoch_losses`` / ``lr_history`` keep
     length ``config.epochs`` with NaN for the skipped epochs. ``initial_optimizer_states``
     (one state dict per optimizer, e.g. a stored snapshot) continues the optimizer exactly;
     without it the optimizer starts fresh (what an optimizer switch wants).
@@ -1585,7 +1587,10 @@ def train_relu_mlp_with_optimizer_snapshots(
     permutation_generator_snapshots: dict[int, torch.Tensor] = {}
     rotation_lock_snapshots: dict[int, dict[str, np.ndarray]] = {}
 
-    epoch_iter = range(start_epoch, config.epochs + 1)
+    end_epoch = config.epochs if stop_epoch is None else int(stop_epoch)
+    if not start_epoch <= end_epoch <= config.epochs:
+        raise ValueError(f"stop_epoch must lie in [start_epoch, config.epochs], got {stop_epoch}")
+    epoch_iter = range(start_epoch, end_epoch + 1)
     if config.show_progress:
         from tqdm.auto import tqdm
 
@@ -1604,7 +1609,7 @@ def train_relu_mlp_with_optimizer_snapshots(
             if rotation_lock is not None:
                 rotation_lock_snapshots[epoch] = rotation_lock.snapshot()
 
-        if epoch == config.epochs:
+        if epoch == end_epoch:
             break
 
         permutation = _epoch_permutation(
@@ -1642,6 +1647,10 @@ def train_relu_mlp_with_optimizer_snapshots(
         if config.show_progress:
             epoch_iter.set_postfix(loss=f"{losses[-1]:.4f}")
 
+    pad = config.epochs - len(losses)                      # stop_epoch < config.epochs: keep the documented length, NaN for the epochs not run
+    if pad > 0:
+        losses = losses + [float("nan")] * pad; lr_history = lr_history + [float("nan")] * pad
+        lr_history_by_group = {k: v + [float("nan")] * pad for k, v in lr_history_by_group.items()}
     return {
         "model": model,
         "epoch_losses": losses,
