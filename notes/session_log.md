@@ -5848,3 +5848,10 @@ Also, the second phase where the probes are frozen seems redundant. Just have tw
 
 ### Decisions
 - Total length 1000 epochs (500 + 500) so the schedule matches run 49's, rather than run 51's 1200.
+
+### Results (run 52, finished 2026-10-14, 35 min)
+- Loss 0.038 / 1.1%, 31 nodes, 30/30 probes, 30/32 cues on their own normal (two at 0.95), none on ancestors, one transient at the
+  phase change. Phase 1 = run 51's (all probes by epoch 40, plateau 0.071); phase 2: the cues rotate onto their normals slowly (mean
+  |cos| 0.36 -> 0.55 at epoch 700 -> 0.97 at 1000) and the loss has no time to fall.
+- Caveat: bias (0.5 vs 1) and release-phase lr (0.0053 -> 0.0005 vs run 51's 0.0065 -> 0.0011) changed together; a bias-1 control under
+  the same two-phase 1000-epoch schedule would isolate the bias. Notebook 2 section 7 filled.
