@@ -5825,3 +5825,11 @@ Try the following variant of run 49. Different protocol. Cues are frozen for the
 ### Decisions
 - Anchor run: run 49 (as of 2026-10-14). Run 50 recorded as a negative result.
 - The lr schedule of run 51 is one cosine over 1200 epochs (run 49's over 1000), so the final free phase runs at lr 0.0012 -> 0.0005.
+
+### Results (run 51, finished 2026-10-14, 80 min)
+- All 30 probes on their own node, all 32 cues on their own normal (0 on ancestors), 31/31 nodes, test error 0.12% (best; run 49:
+  0.17%), loss 0.0050, level-3 spread 0.08 (run 49: 0.34), no spikes.
+- Phase 1: probes capture all nodes by epoch 40 (faster than run 49) but the loss plateaus at 0.07 with the cues frozen (15 nodes);
+  phase 2: all 32 cues go to their own normal, none climbs (no vacancy with the probes in place), loss 0.011; phase 3: 0.0050.
+- Reading: the cue climbs of run 49 were a competition artefact of simultaneous training; the ordered protocol yields the designed
+  assignment and the most symmetric end state. Notebook 2 section 6 filled.
