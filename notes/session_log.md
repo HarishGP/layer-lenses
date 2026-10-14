@@ -5902,3 +5902,20 @@ Can you interpret the 60 units now clearly and analyse/break it down? How exactl
 - The network implements the tree as a sum over the 32 (leaf, sign) cells of readout x background x 1[x reaches m, sign(a_m) = s],
   with membership computed by vetoes on the wrong side of every split on the path and the sign by a veto on the wrong cue; the lower
   levels add margin.
+
+## 2026-10-14 — Run 53: what moves in phase 2, and the epoch-500 / epoch-1000 hybrid (Q&A with a check)
+
+### User prompts (verbatim)
+- "In phase 1, all of W2, W3 and Wout are free to move, and the cue part of W1 alone is frozen. In phase 2 everything is free to move. I can see that the probes part of W1 does not move, what about W2,W3 and Wout? 
+
+What would actually be implemented if we took the W2, W3 and Wout of epoch 500, with the W1 of epoch 1000?"
+
+### Checks (run 53, 100k test points)
+- Phase 2 relative changes: W1 probe rows 8%, W1 cue rows 113% (they rotate from v + u_m to u_m); W2 probe columns 6%, W2 cue columns
+  62-80% (cue block norm 16.1 -> 13.7); W3 10% (cos 0.996); output 21.7 / -21.8 -> 22.5 / -22.6.
+- The level-3 units' cue block already has its veto structure at epoch 500 (strongest cue weight negative in all 32 units, -2.3) but
+  carries positive cue weights up to 1.7 that read the frozen cues' common v part as background (positive mass on cues 5.2 vs 1.3 on
+  probes at epoch 500; 0.4 vs 0.8 at epoch 1000). Phase 2 drops those, moves the background onto the probes and sharpens the vetoes.
+- Hybrid W1(1000) + W2/W3/Wout(500): test error 8.9%, log loss 1.12, logit rms 38 (overconfident); the 32 level-3 units still serve 32
+  distinct (leaf, sign) cells but only 63% of their active points fall in their cell (89% at epoch 1000). Epoch 500 itself: 2.2% error.
+  Reverse hybrid W1(500) + rest(1000): 35% error.
