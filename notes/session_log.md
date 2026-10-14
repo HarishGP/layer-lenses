@@ -5833,3 +5833,18 @@ Try the following variant of run 49. Different protocol. Cues are frozen for the
   phase 2: all 32 cues go to their own normal, none climbs (no vacancy with the probes in place), loss 0.011; phase 3: 0.0050.
 - Reading: the cue climbs of run 49 were a competition artefact of simultaneous training; the ordered protocol yields the designed
   assignment and the most symmetric end state. Notebook 2 section 6 filled.
+
+## 2026-10-14 — Run 52: cue bias 0.5, two phases (cues frozen 0-500, free 500-1000)
+
+### User prompts (verbatim)
+- "Repeat run 51, with the bias that the cues have towards the the level 4 ODT nodes reduced by a factor 2. i.e v+0.5 u_j instead of v+u_j.
+
+Also, the second phase where the probes are frozen seems redundant. Just have two phases with phase 1 only freezing cues, and phase 2 freezing nothing."
+
+### Changes
+- `run_hd2_phased.py`: `--cue-bias`, `--phases` with 2 (cues frozen / none) or 3 values. Run 52 launched 2026-10-14: cue bias 0.5
+  (cue cosine 0.36 with its normal, logit rms at init 0.026), phases 500 + 500 (cosine over 1000 epochs as run 49). Smoke-tested.
+- Notebook 2 section 7 with a three-run by-phase table (49, 51, 52); registry, gitignore, regeneration entries.
+
+### Decisions
+- Total length 1000 epochs (500 + 500) so the schedule matches run 49's, rather than run 51's 1200.

@@ -59,6 +59,7 @@ $PY $S/hd2_run48_l3x2_readout/run_hd2_l3x2.py --out hd2_run48_l3x2_readout --tag
 $PY $S/hd2_run49_l3x2_readout_10M/run_hd2_l3x2.py --out hd2_run49_l3x2_readout_10M --tag hd2_run49_l3x2_readout_10M_seed0 --w3-entry 1.633 --out-weight 0.5 --n-train 10000000 --epochs 1000 --snap 1   # run 49 (section 4)
 $PY $S/hd2_run50_pluscues_10M/run_hd2_l3x2.py --out hd2_run50_pluscues_10M --tag hd2_run50_pluscues_10M_seed0 --w3-entry 1.633 --out-weight 0.5 --plus-cues-only --n-train 10000000 --epochs 1000 --snap 1   # run 50 (section 5)
 $PY $S/hd2_run51_phased_10M/run_hd2_phased.py --out hd2_run51_phased_10M --tag hd2_run51_phased_10M_seed0   # run 51 (section 6: phased freezing)
+$PY $S/hd2_run52_phased2_cue05_10M/run_hd2_phased.py --out hd2_run52_phased2_cue05_10M --tag hd2_run52_phased2_cue05_10M_seed0 --cue-bias 0.5 --phases 500 500   # run 52 (section 7)
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"
