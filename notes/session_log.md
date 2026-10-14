@@ -5931,3 +5931,10 @@ The W2 at init is negative of run 53."
 - `run_hd2_phased.py --negate-w2`; run 54 launched (`hd2_run54_phased2_w2neg_10M`): probe weights +1, cue blocks B -> -B, flip test
   unchanged. Notebook 2 section 9 with a pole-outcome comparison cell against run 53; registry, gitignore, regeneration entries.
 - Expectation (pole rule of runs 24-25): every probe pulled to the opposite pole of its node.
+
+### Results (run 54, finished 2026-10-14, 38 min)
+- Collapse: phase 1 ends at 0.179 (11% test error), phase 2 reaches 0.089 (3-4%) then three spikes at epochs 593-604 kill both
+  third-layer neurons: all logits exactly zero from epoch 620, loss 0.693, test error 50%.
+- Poles unchanged (30/30 at the designed pole: negating W2 flips the probe weight and the block side together). The units become the
+  dense additive family (95% active, +20..+26 on the path features instead of -30..-54 vetoes); the released cues shrink to norm 0.29
+  and capture nothing. Notebook 2 section 9 filled.
