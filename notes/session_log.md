@@ -6256,3 +6256,15 @@ Can you run a quick experiment solely in phase 1 of run 56, where you project al
   init and output gradient x80; the same integrated effective lr as run 56 at every epoch. Bookkeeping: gitignore, regeneration line,
   script copy, notebook 2 section 15 with a three-run cross cell (56 / 59 / 60: loss vs epoch and vs integrated effective lr, capture
   epochs, cue rotation, end state, loss std over the last 100 epochs as a stability measure).
+
+## 2026-10-15 — Run 60 results: plain SGD at the matched effective step reproduces run 56
+
+### Changes
+- Run 60 (`hd2_run60_sgd_lr1_1000`, 22 min): loss 0.0188 (phase 1 end 0.098), test error 0.40%, 31/31 nodes, exact designed assignment;
+  capture epochs 10 / 40 / 22 / 31 (run 56: 10 / 41 / 22 / 31); cues rotated by epoch 650-700 (slightly earlier than run 56); stable
+  (max epoch-to-epoch loss rise 0.002, std over the last 100 epochs 0.0010 vs 0.0009). Scale a little smaller: readout 36 vs 54,
+  vetoes -28 vs -36, probe norms 12 / 9 / 7 / 5.5 vs 18 / 12 / 9 / 7. Notebook 2 section 15 findings filled (unexecuted); memory updated.
+
+### Decisions
+- Momentum is only a step-size factor for this protocol. Minimal model of run 53's solution as of now: 62-60 ReLU net, equivariant
+  quadruple init, plain SGD with cosine step 0.1 -> 0.005, output-row lr x80, cues frozen for the first 500 of 1000 epochs, 10M points.

@@ -1,0 +1,57 @@
+{
+  "arch": "62-60",
+  "two_layer": true,
+  "out_scale": 80.0,
+  "schedule_epochs": 1000,
+  "project_out": [],
+  "init": "run 49's",
+  "cue_bias": 1.0,
+  "phases": {
+    "cues": [
+      0,
+      500
+    ],
+    "none": [
+      500,
+      1000
+    ]
+  },
+  "n_train": 10000000,
+  "epochs": 1000,
+  "batch": 10000,
+  "lr": 0.1,
+  "eta_min_ratio": 0.05,
+  "momentum": 0.0,
+  "snapshot_every_epochs": 1,
+  "design": {
+    "seed": 0,
+    "cue_mode": "linear",
+    "subset_mode": "all",
+    "units_per_level": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "width1": 80,
+    "width2": 30,
+    "width3": 40,
+    "cue_offspan_ratio": 0.2,
+    "output_signs": "balanced",
+    "path_sign_cues": true,
+    "layer3_mode": "balanced_paths",
+    "layer3_majority": 15,
+    "cue_block_scale": "inv_sqrt"
+  },
+  "data": {
+    "kind": "sweep_chunked",
+    "tree_seed": 5178,
+    "data_seed": 5178,
+    "n_train": 10000000,
+    "chunk_size": 1000000,
+    "eval_seed": 999777,
+    "n_eval": 200000,
+    "dim": 100,
+    "depth": 5
+  }
+}
