@@ -6111,3 +6111,21 @@ From the run53 network anatomy analysis, am I right in saying that a two hidden 
 - Under the phased protocol the third layer supplies only the readout's growth rate; the 62-60 network with a direct path-sign
   readout and the output row's lr x80 reproduces run 53's structure and exact assignment, at 2.7x the loss (the constant rate
   matches the factorised readout's initial rate 30e^2 + 2w^2 but not its later growth). Minimal model of the run 53 solution.
+
+## 2026-10-15 — Anatomy notebook for run 56 (the new anchor run)
+
+### User prompts (verbatim)
+- "Can you change the the run53_network_anatomy to work on Run 56 instead. It makes sense to have 56 as the anchor run now."
+
+### Changes
+- `notebooks/run56_network_anatomy.ipynb` (executed in place; the run 53 notebook is left as it is): the run 53 anatomy redone on the
+  two-layer anchor, with the third-layer parts replaced by the direct readout and two cells added for this session's findings: the shared
+  ancestor tilt of each pole pair (section 1) and the sharp-veto limit on snapped rows (section 5). `EPOCH` in the first cell selects the
+  snapshot (default: last).
+- Run 56 anatomy: 62 rows on normals (probe norms 17.8 / 12.4 / 9.4 / 7.2, cues 0.95; run 53: 12.8 / 9.0 / 7.0 / 5.7 / 1.6); pole pairs share
+  an ancestor tilt with delta = 3-4% of |a_j| (probes) / 14% (cues), twice run 53's; vetoes 77 / 51 / 43 / 39 / 3 (run 53: 54 / 36 / 30 /
+  30 / 4); readout by level 7.8 / 15 / 33 / 80 with the path sign on every unit; level-0 units output ~20 |a_0| (a +20 weight on the
+  right-side u_0 feature) rather than a constant; 32 leaf detectors as before (background 0.12, cv 0.7, output 0.17, active on 30% of
+  wrong-sign points vs 9%); ablation ladder 1.8% -> 0.97% -> 0.71% -> 0.37%; decision slope 436 in a_m, crossing spread 0.006 (run 53:
+  300 / 0.0013); sharp-veto limit: snapped rows + vetoes x1000 -> 0 errors, log loss 0.0004; trained rows + vetoes x10 -> 4.4%.
+- Memory: anchor run is now 56.
