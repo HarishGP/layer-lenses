@@ -6220,3 +6220,15 @@ Can you run a quick experiment solely in phase 1 of run 56, where you project al
   each probe from the start); the top-down order in run 56 is pace, not dependence. The ancestors set the scale (loss, norms, vetoes,
   readout), not the direction or timing. The earlier conjecture of a structural gating dependence is refuted for this design; for a
   random W2 the initial push formula has no gating term either, so the dependence, if any, would be in the growth, not the direction.
+
+## 2026-10-15 — Run 59: run 56 with plain SGD, lr x2, epochs x2
+
+### User prompts (verbatim)
+- "Good, I want to simplify run 56 further. Can you rerun 56 with just plain SGD? twice the learning rate and twice the number of epochs?"
+
+### Changes
+- `run_hd2_phased.py --lr --momentum` (defaults 0.01 / 0.9 as before). Run 59 launched (`hd2_run59_sgd_lr02_2000`): momentum 0,
+  lr 0.02 -> 0.001 cosine over 2000 epochs, phases 1000 + 1000, 10M points (~45 min). Note: run 56's momentum 0.9 made its effective
+  step 10x the lr, so run 59 has about 1/2.5 of run 56's integrated effective learning rate.
+- Bookkeeping: gitignore, regeneration line, script copy, notebook 2 section 14 with a cross-run cell against run 56 (loss against
+  epoch and against the integrated effective lr, capture epochs by level, end state).
