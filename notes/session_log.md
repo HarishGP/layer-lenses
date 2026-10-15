@@ -6328,3 +6328,11 @@ In the Weff visualisation, Just label the units U0 to U59 as the rowids (no need
 - `notebooks/run56_network_anatomy.ipynb` removed (superseded by `two_layer_network_anatomy.ipynb`).
 - Heatmap cell: no reordering, Weff plotted as is; row labels U0-U59; column labels p0-p29 for the probes and the designed cue identity
   (+-u_j from `cue_row_identity` at epoch 0) for the 32 cues; separator lines dropped. Re-executed in place for run 56.
+
+## 2026-10-15 — Anatomy notebook: probe | cue separator kept, re-executed
+
+### User prompts (verbatim)
+- "Thanks. I terminated the kernel. The separor lines between probes and cues is useful. Keep it."
+
+### Changes
+- Heatmap: vertical line between the probe and cue columns restored; notebook re-executed in place for run 56 (EPOCH_VIEW = 0 as the user left it).
