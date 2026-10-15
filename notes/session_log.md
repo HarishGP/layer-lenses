@@ -6300,3 +6300,17 @@ This way the probes previously going towards +u_1 and -u_1 are now left without 
 - A probe finds its node only if its init push toward it exceeds the leaf push (threshold ~1x); the design gives 30-40x, a random cue
   vector 0.3-0.8x. Below threshold the probe is taken by the level-4 pull and the node is filled, if at all, by the lineage mechanism
   (children's probes climbing to the parent).
+
+## 2026-10-15 — Generalised two-layer anatomy notebook
+
+### User prompts (verbatim)
+- "Can you generalise the run56_network_anatomy notebook to take in other runs too? Only the two hidden layer ones."
+
+### Changes
+- `notebooks/two_layer_network_anatomy.ipynb` (executed in place for run 56): `RUN` selects among the two-hidden-layer runs 42-46 and
+  55-61 (registry in the first cell), `EPOCH` the snapshot (default last); `use_epoch(e)` reloads all globals, and the heatmap cell has
+  an `EPOCH_VIEW` override (the user's own edit of the run 56 notebook, kept). Cells no longer assume the converged structure: section 1
+  reports missing / duplicated (node, pole) rows and computes tilts only for complete pairs; section 3 reports level-3 units without a cue
+  veto and the cells served; sections 4-5 guard empty veto lists, missing (+, -) pairs and zero-variance units. Written findings are
+  marked "(run 56, last epoch)". Validated headlessly on runs 61, 42 and 55 (no cell errors). `run56_network_anatomy.ipynb` is left as it
+  is (it carries the user's uncommitted edits).
