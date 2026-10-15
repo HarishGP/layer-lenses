@@ -6086,3 +6086,14 @@ From the run53 network anatomy analysis, am I right in saying that a two hidden 
 - The third layer's fast factorised readout is what lets capture-the-top complete node by node under the phased protocol; it is
   needed for the structure, not just the loss scale. Candidate follow-up: output-row gradient scale ~80 (run 43 style) to match the
   readout's growth rate rather than its initial value.
+
+## 2026-10-15 — Run 56: run 55 with the output row's gradient scaled by 80
+
+### User prompts (verbatim)
+- "Run 56 with the output gradient scale 80"
+
+### Changes
+- `run_hd2_phased.py --out-scale`: mask value on `output_layer.weight` in every phase (80 = 30 e^2 + 2 w^2, run 53's shared-mode readout
+  growth rate at init). Smoke-tested; run 56 launched (`hd2_run56_phased2_2L_outx80_10M`, two-layer, phases 500 + 500, ~21 min).
+- Bookkeeping: gitignore negations, regeneration line, tracked script copies (run 55's copy refreshed to the same script version),
+  notebook 2 section 11 with a three-run cross cell (53 / 55 / 56: capture epochs by level, readout growth, outcomes); cells unexecuted.

@@ -63,6 +63,7 @@ $PY $S/hd2_run52_phased2_cue05_10M/run_hd2_phased.py --out hd2_run52_phased2_cue
 $PY $S/hd2_run53_phased2_cue1_10M/run_hd2_phased.py --out hd2_run53_phased2_cue1_10M --tag hd2_run53_phased2_cue1_10M_seed0 --cue-bias 1.0 --phases 500 500   # run 53 (section 8: bias-1 control of run 52)
 $PY $S/hd2_run54_phased2_w2neg_10M/run_hd2_phased.py --out hd2_run54_phased2_w2neg_10M --tag hd2_run54_phased2_w2neg_10M_seed0 --negate-w2 --phases 500 500   # run 54 (section 9: W2 negated)
 $PY $S/hd2_run55_phased2_2L_10M/run_hd2_phased.py --out hd2_run55_phased2_2L_10M --tag hd2_run55_phased2_2L_10M_seed0 --two-layer --phases 500 500   # run 55 (section 10: no third layer, Wout = path sign x 0.816)
+$PY $S/hd2_run56_phased2_2L_outx80_10M/run_hd2_phased.py --out hd2_run56_phased2_2L_outx80_10M --tag hd2_run56_phased2_2L_outx80_10M_seed0 --two-layer --out-scale 80 --phases 500 500   # run 56 (section 11: run 55 with the output gradient x80)
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"
