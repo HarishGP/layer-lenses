@@ -6049,3 +6049,24 @@ From the run53 network anatomy analysis, am I right in saying that a two hidden 
 
 ### Decisions
 - None; discussion only.
+
+## 2026-10-15 — Run 55: run 53 without the third hidden layer (direct path-sign readout)
+
+### User prompts (verbatim)
+- "Start run 54 which is same as run 53 except there is no third hidden layer and the units are directly connected (at init) to the output by either positive or negative weights based on the run 53 inits' effective path-weight to the logit. Choose the scale at init for the new Wout appropriately."
+
+### Changes
+- Numbered **55**, not 54: run 54 (run 53 with W2 negated) already exists (notebook 2 section 9); the global numbering must stay unique.
+- `run_hd2_phased.py --two-layer`: HIDDEN = [62, 60]; Wout[u] = path sign(u) x w3_entry x out_weight = +-0.816, the effective path
+  weight Wout . W3[:, u] of run 53's init, so the logit function at init is run 53's up to the third-layer ReLU gating (logit rms
+  0.049 at init). Flip test passes the output row as W3 (2e-15). Smoke-tested (2 epochs, 20k points) and launched:
+  `hd2_run55_phased2_2L_10M`, phases 500 + 500, 10M points (~45 min).
+- Scale choice: function-matching (+-0.816 per unit). The alternative of matching the factorised readout's *growth* (shared-mode
+  rate 30e^2 + 2w^2 = 80, run 43's output gradient x41) is a second knob, deliberately left out so the run isolates the third layer's
+  role under the phased protocol; runs 42-46 (free training, 1M points) found the readout growth, not the ReLUs, is what the layer adds.
+- Bookkeeping: gitignore negations, regeneration-script line, tracked script copy under `notebooks/results/designed_init/hd2_run55_phased2_2L_10M/`,
+  notebook 2 section 10 (registry entry 55 with dims [62, 60]; load / trajectory / network view / cross-run cell against run 53
+  comparing loss, test error, probe and cue outcomes and the effective readout per unit over epochs; cells unexecuted).
+
+### Decisions
+- Runs keep global numbers; a requested number that is already taken is bumped to the next free one and said so.
