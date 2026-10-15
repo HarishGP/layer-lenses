@@ -6245,3 +6245,14 @@ Can you run a quick experiment solely in phase 1 of run 56, where you project al
 ### Decisions
 - Plain SGD does not change the mechanism; the doubled lr and epochs replace momentum's factor 10 by 4, which suffices for the
   probe phase and not for the cue rotation. Matched control if wanted: plain SGD at lr 0.1 over 1000 epochs, or lr 0.02 over ~5000.
+
+## 2026-10-15 — Run 60: run 56 with plain SGD at lr 0.1 over 1000 epochs (matched effective step)
+
+### User prompts (verbatim)
+- "Run 60 with plain SGD at lr 0.1 over 1000 epochs"
+
+### Changes
+- Run 60 launched (`hd2_run60_sgd_lr1_1000`): momentum 0, lr 0.1 -> 0.005 cosine over 1000 epochs, phases 500 + 500, 10M points, run 56's
+  init and output gradient x80; the same integrated effective lr as run 56 at every epoch. Bookkeeping: gitignore, regeneration line,
+  script copy, notebook 2 section 15 with a three-run cross cell (56 / 59 / 60: loss vs epoch and vs integrated effective lr, capture
+  epochs, cue rotation, end state, loss std over the last 100 epochs as a stability measure).
