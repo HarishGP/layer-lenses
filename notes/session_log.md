@@ -6203,3 +6203,20 @@ Can you run a quick experiment solely in phase 1 of run 56, where you project al
 
 ### Decisions
 - None; discussion.
+
+## 2026-10-15 — Runs 57 / 58 results: capture of a node does not need its ancestors
+
+### Changes
+- Run 57 (u_0 projected out of every first-layer update, phase 1 of run 56): loss 0.466 at epoch 500 (run 56: 0.077), 25% error,
+  all 14 other internal nodes captured on run 56's timetable (node 1 and 2 at epoch 15 as in run 56; level 2 at 23-24 vs 21-22; level 3
+  at 33-34 vs 29-31). Root probes go to level-4 nodes (18, 17). Scale collapses: probe norms 1.7 / 6.8 / 4.7 / 3.4, vetoes ~ -9,
+  readout 21 (run 56: 16 / 11 / 9 / 7, -30, 52).
+- Run 58 (u_1 projected out): loss 0.271, 13.5% error; u_1's subtree captured on time (nodes 3-4 at 23-24, 7-10 at 32-33), right
+  subtree and root exactly on schedule; u_1 probes go to nodes 29 / 15; norms 12.6 / 6.5 / 6.9 / 5.2, vetoes -15 to -24, readout 35.
+- Notebook 2 sections 12-13 findings filled (unexecuted); memory updated.
+
+### Decisions
+- In the equivariant design the capture of every internal node is independent of the others (the coherent cue-block contrast drives
+  each probe from the start); the top-down order in run 56 is pace, not dependence. The ancestors set the scale (loss, norms, vetoes,
+  readout), not the direction or timing. The earlier conjecture of a structural gating dependence is refuted for this design; for a
+  random W2 the initial push formula has no gating term either, so the dependence, if any, would be in the growth, not the direction.
