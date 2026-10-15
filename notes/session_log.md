@@ -6097,3 +6097,17 @@ From the run53 network anatomy analysis, am I right in saying that a two hidden 
   growth rate at init). Smoke-tested; run 56 launched (`hd2_run56_phased2_2L_outx80_10M`, two-layer, phases 500 + 500, ~21 min).
 - Bookkeeping: gitignore negations, regeneration line, tracked script copies (run 55's copy refreshed to the same script version),
   notebook 2 section 11 with a three-run cross cell (53 / 55 / 56: capture epochs by level, readout growth, outcomes); cells unexecuted.
+
+## 2026-10-15 — Run 56 results: the output gradient x80 restores run 53's structure in the two-layer network
+
+### Changes
+- Run 56 (`hd2_run56_phased2_2L_outx80_10M`, 22 min): loss 0.0169 (phase 1 end 0.077), test error 0.38%, 31/31 nodes, 30/30 probes
+  and 32/32 cues on their own node (the exact designed assignment, as run 53). Capture epochs by level 10 / 41 / 22 / 31 (run 53:
+  15 / 29 / 20 / 23; run 55: 20 / 174 / never / never). Readout per unit 25 / 52 / 54 at epochs 50 / 500 / 1000 (run 53: 57 / 106 /
+  111; run 55: 1.6 / 6.1 / 6.9); vetoes 36 at the end (run 53: 25); cue norms 0.95 (1.64).
+- Notebook 2 section 11 findings filled (cells unexecuted); memory updated.
+
+### Decisions
+- Under the phased protocol the third layer supplies only the readout's growth rate; the 62-60 network with a direct path-sign
+  readout and the output row's lr x80 reproduces run 53's structure and exact assignment, at 2.7x the loss (the constant rate
+  matches the factorised readout's initial rate 30e^2 + 2w^2 but not its later growth). Minimal model of the run 53 solution.
