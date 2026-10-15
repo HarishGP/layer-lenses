@@ -6314,3 +6314,17 @@ This way the probes previously going towards +u_1 and -u_1 are now left without 
   veto and the cells served; sections 4-5 guard empty veto lists, missing (+, -) pairs and zero-variance units. Written findings are
   marked "(run 56, last epoch)". Validated headlessly on runs 61, 42 and 55 (no cell errors). `run56_network_anatomy.ipynb` is left as it
   is (it carries the user's uncommitted edits).
+
+## 2026-10-15 — Anatomy notebook: run 56 notebook deleted, Weff heatmap simplified
+
+### User prompts (verbatim)
+- "Delete the run56_network_anatomy notebook. 
+
+Also, the lexsort is very confusing, just remove it. Just plot Weff as a regular matrix. 
+
+In the Weff visualisation, Just label the units U0 to U59 as the rowids (no need for the extra stuff like n7 (-B,+) etc.  As for the column labels in the bottom, just label the cues from +u_15 to -u_15.  The first 30 columns can be labelled just p0 to p29 for probes."
+
+### Changes
+- `notebooks/run56_network_anatomy.ipynb` removed (superseded by `two_layer_network_anatomy.ipynb`).
+- Heatmap cell: no reordering, Weff plotted as is; row labels U0-U59; column labels p0-p29 for the probes and the designed cue identity
+  (+-u_j from `cue_row_identity` at epoch 0) for the 32 cues; separator lines dropped. Re-executed in place for run 56.
