@@ -6268,3 +6268,21 @@ Can you run a quick experiment solely in phase 1 of run 56, where you project al
 ### Decisions
 - Momentum is only a step-size factor for this protocol. Minimal model of run 53's solution as of now: 62-60 ReLU net, equivariant
   quadruple init, plain SGD with cosine step 0.1 -> 0.005, output-row lr x80, cues frozen for the first 500 of 1000 epochs, 10M points.
+
+## 2026-10-15 — Run 61: phase 1 of run 60 with node 1's units reading a random cue vector (v, v, -v, -v)
+
+### User prompts (verbatim)
+- "Great repeat  run 60  only phase 1, with the following init change. 
+
+Only the connections between units 4,5,6,7 and the cue neurons will change. Set the connections be such that the weights between unit 4 and cues is a random vector (call it v). Weights between unit 5 and cues is also v. Weights between unit 6 and cues is  -v. Weights between unit7 and cues is also -v.
+
+This way the probes previously going towards +u_1 and -u_1 are now left without clear direction. Do they still end up going towards +u_1 and -u_1 is the question."
+
+### Changes
+- `run_hd2_phased.py --random-cue-block NODE --cue-block-seed S`: the node's four units get cue weights v, v, -v, -v with v Gaussian over
+  the 32 cue columns scaled to the design block's norm (rows renormalised to sqrt 2 afterwards as usual); the flip assert is skipped
+  for this option; the script prints the lens prediction (side-signed cue contrast of v under every internal node). Smoke-tested.
+- Run 61 launched (`hd2_run61_phase1_randcue_n1`): run 60's phase 1 alone (plain SGD lr 0.1, cosine over 1000, cues frozen, 500 epochs).
+  Lens prediction for seed 61: contrast -1.48 on u_0, -1.02 on u_2, -0.81 / -0.78 on u_4 / u_5, +0.74 on u_1 (design: 2.75 on u_1,
+  0 elsewhere); probes 2 and 3 are pushed in opposite directions as in the design. Bookkeeping: gitignore, regeneration line, script
+  copy, notebook 2 section 16 (probe 2 / 3 cosines with u_0, u_1, u_2 over phase 1; capture table; node 1's units at epoch 500).

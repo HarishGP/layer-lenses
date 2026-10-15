@@ -68,6 +68,7 @@ $PY $S/hd2_run57_phase1_proj_u0/run_hd2_phased.py --out hd2_run57_phase1_proj_u0
 $PY $S/hd2_run58_phase1_proj_u1/run_hd2_phased.py --out hd2_run58_phase1_proj_u1 --tag hd2_run58_phase1_proj_u1_seed0 --two-layer --out-scale 80 --phases 500 --schedule-epochs 1000 --project-out 1   # run 58 (section 13: ... projected off u_1)
 $PY $S/hd2_run59_sgd_lr02_2000/run_hd2_phased.py --out hd2_run59_sgd_lr02_2000 --tag hd2_run59_sgd_lr02_2000_seed0 --two-layer --out-scale 80 --momentum 0 --lr 0.02 --phases 1000 1000   # run 59 (section 14: run 56 with plain SGD, lr x2, epochs x2)
 $PY $S/hd2_run60_sgd_lr1_1000/run_hd2_phased.py --out hd2_run60_sgd_lr1_1000 --tag hd2_run60_sgd_lr1_1000_seed0 --two-layer --out-scale 80 --momentum 0 --lr 0.1 --phases 500 500   # run 60 (section 15: plain SGD at lr 0.1, run 56 effective lr)
+$PY $S/hd2_run61_phase1_randcue_n1/run_hd2_phased.py --out hd2_run61_phase1_randcue_n1 --tag hd2_run61_phase1_randcue_n1_seed0 --two-layer --out-scale 80 --momentum 0 --lr 0.1 --phases 500 --schedule-epochs 1000 --random-cue-block 1   # run 61 (section 16: phase 1 of run 60, node 1 units read a random cue vector v, v, -v, -v)
 $PY $S/check_init_gradient_variance.py   # init-gradient variance ladder (session log 2026-10-15); prints a table
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
