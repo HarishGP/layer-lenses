@@ -6000,3 +6000,29 @@ From the run53 network anatomy analysis, am I right in saying that a two hidden 
 ### Decisions
 - None; discussion only. Candidate follow-up if asked: measure how the own-sign cue weight of the leaf detectors evolves (whether
   the flow ever moves toward the |a_m|-output form), and whether adding biases lets the indicator form reach zero error.
+
+## 2026-10-15 — Run 53 with the first layer snapped onto exact ±u_j: the rows' shared ancestor tilt is a manufactured bias (Q&A with checks)
+
+### User prompts (verbatim)
+- "What would happen to the above table if the first layer was replaced by exactly +u_j and -u_j? (i.e. make the cosine similarity exactly equal to 1, when it is something like 0.99)"
+
+### Checks (no training; scripts `results/designed_init/check_run53_leaf32_snapped.py`, `check_run53_row_residuals.py`, `check_run53_shared_tilt.py`, `check_run53_tilt_sign.py`, gitignored; 400k / 200k fresh points, data seed 424242)
+- Snapping every row to ||w|| x pole x u_top (cosines were 0.9992-1.0) with W2/W3/Wout unchanged makes things worse: 32 leaf
+  detectors with +-1 readout 0.34% -> 0.80% error (log-loss floor 0.008 -> 0.031), full network 0.14% -> 0.44%. The clean
+  construction table is unchanged (it was already built on the exact normals).
+- Residual decomposition: in-span part 2.5% of the row norm, off-span 0.3%. Removing only the off-span part slightly helps
+  (0.33%); removing only the in-span part does the full damage (0.82%). The in-span residual sits on the row's *ancestors*
+  (probes: 0.008 per ancestor, cues: 0.017 per ancestor; descendants and unrelated nodes < 0.0005).
+- The two pole rows of each node share the same tilt vector (cosine 0.99-1.00 at levels 1-4; level 0 has no ancestors and its
+  pair's tilts are unrelated): rows are u_j + t_j and -u_j + t_j with t_j = sum over ancestors a of c_a side_a(j) u_a, every c_a > 0.
+  Hence delta_j(x) = t_j . x > 0 on 98-100% of j's own subtree, with |delta| about 2% of |a_j| for probes and 7% for cues. The pair
+  computes relu(a_j + delta_j) and relu(-a_j + delta_j): a subtree-local positive bias manufactured from the path coordinates
+  (the model has no biases). Near the leaf split (|a_m| < delta_m) both cue features are active, their sum is 2 delta_m and
+  their difference 2 a_m. Keeping only the cues' ancestor components after snapping recovers most of the loss (0.475%); keeping
+  the probes' descendant components recovers nothing.
+- So the 0.99 cosines are not approximation error that exact normals would fix; the second layer is co-adapted to the tilt, and
+  the honest "exact normals" comparison needs W2 refitted (not done; run 22's frozen ideal first layer on the old design floored
+  at 0.152, a different setting).
+
+### Decisions
+- None; discussion only. Noted in memory (designed-init lens lesson): pole pairs share an ancestor-signed tilt = manufactured bias.
