@@ -6232,3 +6232,16 @@ Can you run a quick experiment solely in phase 1 of run 56, where you project al
   step 10x the lr, so run 59 has about 1/2.5 of run 56's integrated effective learning rate.
 - Bookkeeping: gitignore, regeneration line, script copy, notebook 2 section 14 with a cross-run cell against run 56 (loss against
   epoch and against the integrated effective lr, capture epochs by level, end state).
+
+## 2026-10-15 — Run 59 results: plain SGD reproduces phase 1 on a slower clock; the cue phase is under-powered
+
+### Changes
+- Run 59 (`hd2_run59_sgd_lr02_2000`, 49 min): loss 0.087 (phase 1 end 0.099), test error 1.55%, 15/31 nodes: all 30 probes on their
+  nodes (captured root first at epochs 46 / 73 / 108 / 154; run 56: 10 / 41 / 22 / 31), no cue on its node (mean |cos| 0.46 -> 0.56
+  over phase 2; run 56 reaches 0.985 within 200 epochs of release). Scale at the end of phase 1: probe norms 12 / 8.6 / 6.5 / 4.9,
+  vetoes -18, readout 43 (run 56: 16 / 11 / 9 / 7, -31, 52). Integrated effective lr (sum lr / (1 - momentum)): phase 1 16.6 vs 41.4,
+  phase 2 4.5 vs 11.2. Notebook 2 section 14 findings filled (unexecuted); memory updated.
+
+### Decisions
+- Plain SGD does not change the mechanism; the doubled lr and epochs replace momentum's factor 10 by 4, which suffices for the
+  probe phase and not for the cue rotation. Matched control if wanted: plain SGD at lr 0.1 over 1000 epochs, or lr 0.02 over ~5000.
