@@ -6336,3 +6336,25 @@ In the Weff visualisation, Just label the units U0 to U59 as the rowids (no need
 
 ### Changes
 - Heatmap: vertical line between the probe and cue columns restored; notebook re-executed in place for run 56 (EPOCH_VIEW = 0 as the user left it).
+
+## 2026-10-15 — Run 62: run 60 with every cue block perturbed in the complement of the blocks' span
+
+### User prompts (verbatim)
+- "I want to test how dependent on the initial W2, the run 60 final model is.
+
+Let the current initial connection between unit j and the cue block be v_j (which is a 32 dimensional vector). Replace v_j by n_j  + v_j where n_j is a random 32 dimensional vector orthogonal to v_0, v_1, v_2,...,v_59.
+
+Normalise so that the unit-cue part of the W2 matrix has same row norms as before.
+
+Run with same protocol as run 60 (which is our new anchor run)."
+
+### Changes
+- `run_hd2_phased.py --cue-noise-ratio R --cue-noise-seed S`: V = W2[:, cues] (60 x 32); Q = orthonormal basis of span{v_j} (rank 15);
+  n_j = (I - QQ^T) g_j scaled to R |v_j|; v_j + n_j rescaled to |v_j|. The noise scale was not specified: R = 1 chosen (cos 0.707 with
+  the design block). Verified: probe part identical to run 60, cue-part norms preserved to 2e-16, n_j . v_k = 0 to 1e-15. Logit rms
+  at init 0.27 (run 60: 0.05): the complement contains the pole-signed constant pattern, which breaks the design's cancellations.
+- Run 62 launched (`hd2_run62_cuenoise_r1`, run 60's protocol). Bookkeeping: gitignore, regeneration line, script copy, notebook 2
+  section 17 with a cross-run cell against run 60 (capture epochs, cue rotation, fraction of the cue blocks in the design span at init
+  and at the end, end-state W2 cosines between the runs).
+- Lens prediction recorded in the section: n_j has zero side-contrast on every internal node, so the first-order pushes keep their
+  directions and shrink by 1 / sqrt 2.
