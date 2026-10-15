@@ -6358,3 +6358,18 @@ Run with same protocol as run 60 (which is our new anchor run)."
   and at the end, end-state W2 cosines between the runs).
 - Lens prediction recorded in the section: n_j has zero side-contrast on every internal node, so the first-order pushes keep their
   directions and shrink by 1 / sqrt 2.
+
+## 2026-10-15 — Run 62 results: the function is robust to the cue-block noise, the designed assignment is not
+
+### Changes
+- Run 62 (`hd2_run62_cuenoise_r1`, 23 min): loss 0.0208 (phase 1 end 0.082), test error 0.58%, 30/31 nodes (leaf 29 missing). 19/30 probes
+  on their node, 11 deviated (7 to descendants, mostly leaves, 3 unrelated, 1 ancestor), 7 internal nodes with mixed pairs; all internal
+  nodes covered (root at 19, last at 152); 6 leaves taken by probes in phase 1; after release 10 cues on own node, 22 unaligned
+  (|cos| 0.55). Noise part of the cue blocks 0.71 -> 0.99 in norm, rewritten (cosine 0.16 with the initial), design-span fraction
+  0.71 -> 0.88. End W2 cosine with run 60: 0.65 (probe columns) / 0.45 (cue columns); readout cosine 0.75. Notebook 2 section 17
+  findings filled (unexecuted); memory updated.
+
+### Decisions
+- Run 60's function (loss, error) is robust to a half-norm rotation of every cue block out of the design span; the exact row-to-node
+  assignment is not (it needs the blocks in the 15-dim contrast span). The design margin on the probe push is spent on keeping probes
+  off the leaves. The theorem's equivalence should be up to row role exchanges (probes doing cue work), not the designed map.
