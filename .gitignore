@@ -147,3 +147,7 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/hd2_run55_phased2_2L_10M/replay/meta.pkl
 !results/designed_init/hd2_run56_phased2_2L_outx80_10M/
 !results/designed_init/hd2_run56_phased2_2L_outx80_10M/replay/meta.pkl
+!results/designed_init/hd2_run57_phase1_proj_u0/
+!results/designed_init/hd2_run57_phase1_proj_u0/replay/meta.pkl
+!results/designed_init/hd2_run58_phase1_proj_u1/
+!results/designed_init/hd2_run58_phase1_proj_u1/replay/meta.pkl

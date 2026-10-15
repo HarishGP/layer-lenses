@@ -6160,3 +6160,28 @@ Any thoughts so far? Just discuss for now."
   The theorem should be existence with a width condition (pool of pairs growing with width vs. 2^l nodes needing pairs of variance 2^(4-l)).
 - Proposed cheap check (no training): population gradient of the first layer at a random (He) init, projected on the 31 normals, per
   row, to test the 16 : 8 : 4 : 2 variance ladder and the lens formula for the push.
+
+## 2026-10-15 — Init-gradient variance ladder (check) and runs 57 / 58 (phase 1 of run 56 with updates projected off u_0 / u_1)
+
+### User prompts (verbatim)
+- "Go ahead do the cheap check and measure the variance. Also, do the same for the run 56 init, with only W2 randomised.
+
+While that happens you touched on something I wanted to test. Is the capture of u_1 and u_2 after u_1 just an issue of nodes 1 and 2 being slower to capture due to smaller gradient norms, or is a u_0 capture by some other probe essential for it? 
+
+Can you run a quick experiment solely in phase 1 of run 56, where you project all updates to the first layer neurons onto the orthogonal complement of u_0. Does u_1 and u_2 still get learned? Another experiment where the updates are projected onto the orthogonal complement of u_1 to see if only the left subtree capture is affected."
+
+### Changes
+- `results/designed_init/check_init_gradient_variance.py` (tracked copy under `notebooks/results/designed_init/`): population gradient
+  (1M points) on the first layer at init, projected on the 31 normals; rms by node level over rows x nodes. Cases: He 62-60 (10 seeds),
+  He 256-256 (3), run 56's init with W2 Gaussian rows of norm sqrt 2 (10; probes only), run 56's designed init. Results, variance
+  ratio L0 : L1 : L2 : L3 with L3 = 1: He 62-60 3.3 : 2.1 : 1.6 : 1; He 256-256 4.0 : 2.2 : 1.5 : 1; run 56 init + random W2
+  2.9 : 1.7 : 1.3 : 1; designed init 7.6 : 3.9 : 2.0 : 1 (the leaf-count prediction is 8 : 4 : 2 : 1). The ladder exists in every random
+  case but is flatter than the prediction (about its square root in variance); the means over rows per node are 10-100x below the
+  rms (zero in expectation); the coherent level-4 components are 3-6x the root rms (first-order v signal); the designed init puts
+  98% of the root probe's gradient on u_0 vs 0.2-0.6 for the best random row. Lens formula (sum over units of W2[u,r] Wout[u] x
+  side-signed cue contrast under the node) vs measured internal components: correlation -0.65 to -0.73 (sign = loss gradient vs push).
+- `run_hd2_phased.py`: `--phases` may have one value (cues frozen only), `--schedule-epochs` (cosine length independent of the phases
+  run), `--project-out NODES` (gradient hook on the first layer: g -> g - (g U_S^T) U_S, before the mask and the momentum step; verified
+  on a smoke run: change along u_0 at 2e-8 vs 2e-5 elsewhere). Runs 57 (project off u_0) and 58 (project off u_1) launched together:
+  phase 1 of run 56 alone, 500 epochs, schedule of 1000. Bookkeeping: gitignore, regeneration lines, script copies, notebook 2
+  sections 12-13 with a cross-run cell (capture epoch of every internal node in phase 1 for runs 56 / 57 / 58).

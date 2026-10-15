@@ -64,6 +64,9 @@ $PY $S/hd2_run53_phased2_cue1_10M/run_hd2_phased.py --out hd2_run53_phased2_cue1
 $PY $S/hd2_run54_phased2_w2neg_10M/run_hd2_phased.py --out hd2_run54_phased2_w2neg_10M --tag hd2_run54_phased2_w2neg_10M_seed0 --negate-w2 --phases 500 500   # run 54 (section 9: W2 negated)
 $PY $S/hd2_run55_phased2_2L_10M/run_hd2_phased.py --out hd2_run55_phased2_2L_10M --tag hd2_run55_phased2_2L_10M_seed0 --two-layer --phases 500 500   # run 55 (section 10: no third layer, Wout = path sign x 0.816)
 $PY $S/hd2_run56_phased2_2L_outx80_10M/run_hd2_phased.py --out hd2_run56_phased2_2L_outx80_10M --tag hd2_run56_phased2_2L_outx80_10M_seed0 --two-layer --out-scale 80 --phases 500 500   # run 56 (section 11: run 55 with the output gradient x80)
+$PY $S/hd2_run57_phase1_proj_u0/run_hd2_phased.py --out hd2_run57_phase1_proj_u0 --tag hd2_run57_phase1_proj_u0_seed0 --two-layer --out-scale 80 --phases 500 --schedule-epochs 1000 --project-out 0   # run 57 (section 12: phase 1 of run 56, first-layer updates projected off u_0)
+$PY $S/hd2_run58_phase1_proj_u1/run_hd2_phased.py --out hd2_run58_phase1_proj_u1 --tag hd2_run58_phase1_proj_u1_seed0 --two-layer --out-scale 80 --phases 500 --schedule-epochs 1000 --project-out 1   # run 58 (section 13: ... projected off u_1)
+$PY $S/check_init_gradient_variance.py   # init-gradient variance ladder (session log 2026-10-15); prints a table
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"
