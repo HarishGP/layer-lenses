@@ -6026,3 +6026,26 @@ From the run53 network anatomy analysis, am I right in saying that a two hidden 
 
 ### Decisions
 - None; discussion only. Noted in memory (designed-init lens lesson): pole pairs share an ancestor-signed tilt = manufactured bias.
+
+## 2026-10-15 — Snapped first layer with run 53's W2 negatives scaled: sharp vetoes on exact normals give arbitrarily low error (Q&A with a check)
+
+### User prompts (verbatim)
+- "Consider the snapped first layer with W2 from run 53's end but modified so that all the negative numbers in W2 are multiplied by 10. How would this work?"
+
+### Check (no training; `results/designed_init/check_run53_snapped_vetoes_scaled.py`, gitignored; 400k fresh points, data seed 424242)
+- Rows snapped to ||w|| pole u_top; W2 negatives x K; W3 / Wout unchanged. Full network / 32 leaf detectors with +-1 readout:
+  K=1 0.44% / 0.80%; K=2 0.24% / 0.38%; K=3 0.19% / 0.27%; K=10 0.30% / 0.30%; K=30 4.6% / 4.7%; K=100 17% / 17% (30% units dead).
+  Scaling only the vetoes (|Weff| > 1, 1-5 per unit) and leaving the ~10 small negatives (mean -0.03) alone: K=3 0.10% / 0.23%;
+  K=10 0.026% / 0.069%; K=100 0.003% / 0.009%; K=1000 0 / 1 in 400k, log-loss floor 0.0000. Leaf units stay active on 100% of
+  their (region, sign) set and the off-region activity falls as 1/K.
+- Mechanism: on region m the pair's logit is (b_+ - b_-)(x) + 4K a_m, so the zero crossing (b_+ - b_-)/(4K) shrinks as 1/K; the
+  leak band at internal splits shrinks the same way. Scaling vetoes alone is not a homogeneous rescaling, so it does change the
+  sign pattern (the earlier "no rescaling fixes it" applies to layer-wise scaling). The small negatives belong to the background
+  balance; scaled x30 or more they kill units inside their own cell (dead units 3% at x30, 30% at x100).
+- With the *trained* (tilted) first layer the same scaling hurts: vetoes x10 gives 2.4% / 2.9% error, units active on only 94% of
+  their set, because the shared ancestor tilt makes each vetoed feature relu(-side a_j + delta_j) positive on a band inside the
+  cell (delta_j > 0 there), and sharp vetoes cut into the cell. Manufactured biases and sharp vetoes are incompatible; exact
+  normals and sharp vetoes are the clean limit.
+
+### Decisions
+- None; discussion only.
