@@ -6185,3 +6185,21 @@ Can you run a quick experiment solely in phase 1 of run 56, where you project al
   on a smoke run: change along u_0 at 2e-8 vs 2e-5 elsewhere). Runs 57 (project off u_0) and 58 (project off u_1) launched together:
   phase 1 of run 56 alone, 500 epochs, schedule of 1000. Bookkeeping: gitignore, regeneration lines, script copies, notebook 2
   sections 12-13 with a cross-run cell (capture epoch of every internal node in phase 1 for runs 56 / 57 / 58).
+
+## 2026-10-15 — Tail probabilities of the init-gradient push per level (check)
+
+### User prompts (verbatim)
+- "The standard deviation scaling per level might be gentle, but I think the relevant question might be an something similar to "Is the push along u_j greater than some threshold (say) leaf direction average push.?". For this the probability of a yes answer might be significantly higher for the root node, even if the standard deviation is only about 1.3 times higher per level."
+
+### Check (`results/designed_init/check_init_gradient_tails.py`, tracked copy under notebooks/results/designed_init/; components saved in `init_gradient_components.npz`, gitignored)
+- Per (row, internal node): |push along u_j| divided by the row's leaf push (rms of its 16 level-4 components). Sigma relative to the
+  leaf push, root : L1 : L2 : L3 = 0.66 : 0.48 : 0.40 : 0.32 (He 62-60), 0.67 : 0.46 : 0.35 : 0.28 (He 256-256), 0.30 : 0.25 : 0.21 :
+  0.14 (run 56 init, W2 random, probes): sigma ratio root / level 3 = 2.0-2.4 once the row scale is normalised out.
+- Tail probabilities P(|push| > t x leaf push): at t = 1, root 8.2% / level 3 1.8% (He 62-60; ratio 4.7), 8.2% / 1.1% (256-256; 7.5),
+  1.7% / 0.17% (run 56 + random W2; 10); at t = 2 the ratios are 22, 28 and infinite (no level-3 pair crosses in 300 rows). Empirical
+  tails are heavier than Gaussian (P(> 2) at the root 2.3% vs 0.2% Gaussian), so the per-node odds of a qualifying row among 62 rows
+  are 99.5% at the root vs 67% / 49% at level 3 for the He inits, and 65% vs 10% for the run 56 first layer with random W2.
+- Confirms the user's point: the relevant statistic is a threshold crossing, and the root's advantage in that is 5-30x, not 1.3x.
+
+### Decisions
+- None; discussion.
