@@ -6129,3 +6129,34 @@ From the run53 network anatomy analysis, am I right in saying that a two hidden 
   wrong-sign points vs 9%); ablation ladder 1.8% -> 0.97% -> 0.71% -> 0.37%; decision slope 436 in a_m, crossing spread 0.006 (run 53:
   300 / 0.0013); sharp-veto limit: snapped rows + vetoes x1000 -> 0 errors, log loss 0.0004; trained rows + vetoes x10 -> 4.4%.
 - Memory: anchor run is now 56.
+
+## 2026-10-15 — Theorem discussion, part 2: the cue design, the W2 design and the variance argument for random W2 (discussion)
+
+### User prompts (verbatim)
+- "Let's get back to discussing the theorem-like statement using run 56.
+
+The cue design is motivated based on a similar reasoning as the DLGN init design. The level 4 node directions are the only globally available (but weak) signal. In the absence of any coherent lens (as during init) the first layer would move along this, as the later layers are essentially linear during this phase. Just imbalance at init is sufficient for some cue neuron to prefer a given level 4 ODT node by a small amount. 
+
+The W2 init design is made carefully so that initial gradient to a given probe is dominated by its corresponding target direction. But the current design is too facile for it. 
+
+In a symmetric/purely random W2 situation, the expected push for any probe towards any internal ODT node direction is zero (by symmetry) but one can argue the variance of the gradient component along u_0 is greater, and it is reasonable to expect a random W2 to contain a few "probe" neurons that have some imbalance towards the coverage of the (as yet partially discovered) cues in the same layer via some unit in the second hidden layer. But is is slightly less reasonable to assume so for u_1 and u_2 , and even less so for other internal nodes as the variance in gradioent components is likely lesser.  
+
+Any thoughts so far? Just discuss for now."
+
+### Assessment (no repo changes)
+- Linear-phase signal: E[y x] = (E|a_m| / 16) sum_m u_m, i.e. v with norm ~0.02 (4x weaker than a lone hyperplane); internal nodes have
+  zero first-order signal. The coherent v-growth gives every row the same component on every u_m, which cancels in every internal
+  contrast; the m-specific imbalance the design writes as v + u_j comes from the rows' random init components along the u_m (O(1/sqrt d)),
+  self-amplified through the row's own gate. The init's randomness along the level-4 normals, not the flow, seeds the assignment.
+- W2 design in a formula: the push on a probe through unit u along u_a is proportional to sum over leaves m under a of side_a(m) c_{u,m};
+  with the block c_m ∝ side_j(m) this is 2^(4-l) for a = j and 0 for every other internal node. "Facile" = all competing components are
+  zeroed by construction.
+- Random W2: the same sum has 2^(4-level) random terms, variance 16 : 8 : 4 : 2 by level (std ratio sqrt 2 per level, 2.8 root to
+  level 3) — the user's intuition quantified. Compounded by the exponential loop and by an extreme-value effect (the root needs one good
+  (probe, unit) pair, level 3 needs eight distinct ones from a pool the upper levels have partly claimed). Second, stronger reason for
+  the top-down order: a random unit is gated to a subtree only after the ancestor probes exist and its weights on them have grown, so
+  deep capture waits on upper capture structurally, not only by variance. Level 4 is different in kind (coherent pull on every row).
+- Consistency with the init sweep: the variance argument gives existence of a u_0 winner, not its identity (winner decided mid-escape).
+  The theorem should be existence with a width condition (pool of pairs growing with width vs. 2^l nodes needing pairs of variance 2^(4-l)).
+- Proposed cheap check (no training): population gradient of the first layer at a random (He) init, projected on the 31 normals, per
+  row, to test the 16 : 8 : 4 : 2 variance ladder and the lens formula for the push.
