@@ -5972,3 +5972,31 @@ Capture the top and capture the rest phases are analogous to the phase 1 and 2 i
   change afterwards); capture-the-rest = phase 2 (W2 cue columns change 62-80%, cues rotate onto their normals). Caveats: the
   equivariant init has no chance element; in random inits the u_0 winner is decided mid-escape, not at init (init sweep); the dense
   family of W2 > 0 units (run 54) must be the part removed; free training overlaps the phases (run 49's cue climbs).
+
+## 2026-10-15 — Can run 53's 32 leaf detectors alone, with a ±1 readout, classify perfectly? (Q&A with a check)
+
+### User prompts (verbatim)
+- "Let's discuss a bit more before running experiments. 
+
+From the run53 network anatomy analysis, am I right in saying that a two hidden layer network with just the last 32 units in the second hidden layer connected directly to the output based on the sign of the class label corresponding to its selected leaf label in the ODT would achieve 100% test accuracy and arbitrarily low log loss based on the norms of the weight vectors?"
+
+### Check (no training; scripts `results/designed_init/check_run53_leaf32_readout.py`, `check_run53_leaf32_clean.py`, gitignored)
+- Run 53's final 62-row first layer plus its 32 level-3 units, read out by the served label sign (±1), on 400k fresh points
+  (data seed 424242): test error 0.34% (full network 0.14%). Scaling the readout (or any layer) leaves the error unchanged
+  (homogeneity); log loss 0.0081 at x300, 0.0165 at x1000, rising beyond (0.15 at x10 000): a floor, not arbitrarily low.
+- Why: on region m the pair's logit is (b_+ - b_-)(x) + 4.5 a_m; the zero crossing per region is at |a_m| ~ 0.0002 on average but
+  its spread across x is 0.0013 (sd of b_+ - b_- is 0.006, the background's cv 0.55), so points with |a_m| < 0.001 are misclassified
+  28% of the time, 0.001-0.003 2.8%, beyond 0.003 under 0.1%. The background is a sum of positive weights over unrelated features,
+  a noisy stand-in for a bias (no biases in the model), so it does not scale away.
+- A clean two-layer construction on the same 62 features does what the user describes: unit(m,s) = relu(relu(s a_m) - K sum over
+  the path of relu(wrong-side a_j)), readout s. Its only error is the leak band near internal boundaries (width ~ 1/K): error
+  29% / 5.1% / 0.56% / 0.056% / 0.005% for K = 1 / 10 / 100 / 1000 / 10 000, with log loss then arbitrarily low by scaling the
+  readout. So "arbitrarily low" holds in the limit of veto strength / own-cue weight -> infinity, never exactly at finite weights.
+- Difference between the two: run 53's detectors output the background (~0.07, near-constant), the construction outputs |a_m| itself
+  (it uses the own-sign cue feature as the positive input). Run 53's units have the cue veto on the wrong-sign cue but no
+  comparable positive weight on the right-sign cue; the mean |a_m| ~ 0.08 would make such a unit's output vary 0..0.3 instead of
+  the flat 0.07, so the network chose the indicator form.
+
+### Decisions
+- None; discussion only. Candidate follow-up if asked: measure how the own-sign cue weight of the leaf detectors evolves (whether
+  the flow ever moves toward the |a_m|-output form), and whether adding biases lets the indicator form reach zero error.
