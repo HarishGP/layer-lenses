@@ -6070,3 +6070,19 @@ From the run53 network anatomy analysis, am I right in saying that a two hidden 
 
 ### Decisions
 - Runs keep global numbers; a requested number that is already taken is bumped to the next free one and said so.
+
+## 2026-10-15 — Run 55 results: without the third layer the capture-the-top phase stalls
+
+### Changes
+- Run 55 (`hd2_run55_phased2_2L_10M`, 21 min) done: loss 0.0908 (phase 1 end 0.245), test error 2.75%, 28/31 nodes, 19/30 probes on
+  their own node, 9 deviated (5 to descendants, 2 to ancestors, 2 to a sibling leaf), 12 cues on their own node and 11 on ancestors.
+  Run 53: 0.0063 / 0.13%, 31 nodes, exact assignment.
+- Mechanism: effective readout per unit 0.82 -> 6.9 over the run (run 53: -> 111; 57 already at epoch 50). Level-0 probes captured
+  by epoch 20 (run 53: 15), level 1 by 174 (29), levels 2-3 never complete in phase 1 (4/8 and 5/16 at epoch 500; 11 nodes covered
+  vs 15). Probe norms grow top-heavy (20 / 13 / 11 / 5 by level). After release the cues fill the uncovered internal nodes.
+- Notebook 2 section 10 findings filled (cells unexecuted); memory updated.
+
+### Decisions
+- The third layer's fast factorised readout is what lets capture-the-top complete node by node under the phased protocol; it is
+  needed for the structure, not just the loss scale. Candidate follow-up: output-row gradient scale ~80 (run 43 style) to match the
+  readout's growth rate rather than its initial value.

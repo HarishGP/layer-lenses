@@ -1,0 +1,7 @@
+hd2_run55_phased2_2L_10M_seed0: 62-60 (run 49's init, cue bias 1.0, no third layer, Wout = path sign x 0.8165); phases (frozen rows, epochs): [('cues', (0, 500)), ('none', (500, 1000))]; 10000000 points, 1000 steps per epoch, cosine lr over 1000 epochs; flip test 2.2e-15; logit rms 0.0493
+phase 0: epochs 0-500 in 11.0 min; loss at end 0.2448
+/home/harish/researchcodes/layer-lenses/src/layer_lenses/relu_analysis.py:1574: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  scheduler.step()
+phase 1: epochs 500-1000 in 20.9 min; loss at end 0.0908
+hd2_run55_phased2_2L_10M_seed0: final epoch loss 0.0908 (end of phases: [0.2448, 0.0908]), test error 0.0275; epochs to 0.3/0.2/0.1/0.05/0.03/0.01: 294/515/784/-1/-1/-1; nodes covered 28/31; on-target end [1.0, 1.0, 0.5, 0.56]; 21.0 min
+ALL DONE
