@@ -6286,3 +6286,17 @@ This way the probes previously going towards +u_1 and -u_1 are now left without 
   Lens prediction for seed 61: contrast -1.48 on u_0, -1.02 on u_2, -0.81 / -0.78 on u_4 / u_5, +0.74 on u_1 (design: 2.75 on u_1,
   0 elsewhere); probes 2 and 3 are pushed in opposite directions as in the design. Bookkeeping: gitignore, regeneration line, script
   copy, notebook 2 section 16 (probe 2 / 3 cosines with u_0, u_1, u_2 over phase 1; capture table; node 1's units at epoch 500).
+
+## 2026-10-15 — Run 61 results: without the designed contrast the node-1 probes go to the leaves; the children's probes climb to u_1
+
+### Changes
+- Run 61 (`hd2_run61_phase1_randcue_n1`, 10 min): loss 0.121 at epoch 500 (run 60: 0.098), 4.1% error, 15 nodes but nodes 3 and 4
+  never captured; node 1 captured at epoch 37 by probes 6-9 (designed for nodes 3 / 4; on their own nodes at epoch 20, on u_1 by 40).
+  Probes 2 and 3 never exceed |cos| 0.06 with u_1 and end on leaves 15 / 18 (|cos| 1.0, norms 3.9 / 4.1). Node 1's units end weak.
+- Init-gradient check on the two inits: probe 2 / 3 push on u_1 = 43 / 31 x leaf rms with the design, 0.34 / 0.29 with the random v
+  (largest internal component 0.78 / 0.48, below the leaf push). Notebook 2 section 16 findings filled (unexecuted); memory updated.
+
+### Decisions
+- A probe finds its node only if its init push toward it exceeds the leaf push (threshold ~1x); the design gives 30-40x, a random cue
+  vector 0.3-0.8x. Below threshold the probe is taken by the level-4 pull and the node is filled, if at all, by the lineage mechanism
+  (children's probes climbing to the parent).

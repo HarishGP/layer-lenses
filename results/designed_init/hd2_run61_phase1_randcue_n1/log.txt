@@ -1,0 +1,5 @@
+random cue block on node 1 (seed 61): side-signed cue contrast of v for each internal node (lens prediction of the push on probes 2, 3; the design gives 2.75 on node 1 and 0 elsewhere): n0: -1.48, n1: +0.74, n2: -1.02, n3: +0.53, n4: -0.81, n5: -0.78, n6: -0.14, n7: -0.27, n8: -0.67, n9: -0.45, n10: -0.06, n11: +0.13, n12: +0.07, n13: -0.39, n14: -0.08
+hd2_run61_phase1_randcue_n1_seed0: 62-60 (run 49's init, cue bias 1.0, no third layer, Wout = path sign x 0.8165, output gradient x 80.0, random cue block on node 1); phases (frozen rows, epochs): [('cues', (0, 500))]; 10000000 points, 1000 steps per epoch, SGD momentum 0.0 lr 0.1 cosine over 1000 epochs; flip test 8.3e-01; logit rms 0.0632
+phase 0: epochs 0-500 in 10.0 min; loss at end 0.1213
+hd2_run61_phase1_randcue_n1_seed0: final epoch loss 0.1213 (end of phases: [0.1213]), test error 0.0406; epochs to 0.3/0.2/0.1/0.05/0.03/0.01: 44/118/-1/-1/-1/-1; nodes covered 15/31; on-target end [1.0, 0.5, 0.5, 1.0]; 10.0 min
+ALL DONE
