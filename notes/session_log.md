@@ -6396,3 +6396,25 @@ The singular strong negative connection from probes to units seems to persist, b
   2x the row norm^2 at 80, 4.6x at 500; the readout x80 breaks the units' invariant from the start).
 - Hand-over: readouts of level-0 / 1 / 2 units peak at 9.4 / 13.2 / 19.6 (epochs 20-80) and fall to 3.9 / 3.3 / 10.8 by 500 while
   level 3 grows to 57; the lower units' gradient (proportional to their readout) on everything but their vetoes fades.
+
+## 2026-10-16 — Run 60, early phase 1: why p0 . u_0 accelerates (analysis, no repo changes)
+
+### User prompts (verbatim)
+- "Consider the early stage phase 1 of run 60. The component of the gradient of p0 (say) along u_0 seems to be increasing -- the trajectory of p0.u_0 is non-linear and curving upwards). e.g. the slope of p_o.u_0 w.r.t. at epoch 6 seems almost quadruple that at epoch 0. 
+
+What causes this? none of the other norms (W2 or Wo) seems to have jumped that much.
+
+Just analyse. No need to write into notebooks yet."
+
+### Analysis (population gradient on row p0 at the stored epochs, 400k points, decomposed per unit as Wo[u] W2[u, p0] E[resid 1{u active} 1{row active} a_0])
+- Push along u_0: 4.1e-4 (epoch 0) -> 2.0e-3 (5) -> 2.7e-3 (6), x6.5; the cos increments per epoch 0.038 -> 0.157 (x4.1), matching
+  the user's observation. Only p0's two own units (0 and 2, W2 = -1) matter until epoch 8 (the other 58 units acquire weights of
+  1e-3 order on p0 from epoch 1 and contribute < 7% of the push by epoch 6).
+- Factors for the own units: W2 entry -1.000 -> -1.001 (none); readout 0.82 -> 2.15 (5) -> 3.19 (6), x3.9 (the output lr x80; the
+  root units' readouts are the first to grow, 4 entries of 60, so the Wo norm hardly shows it); gated correlation
+  E[resid 1u 1row a_0] 2.5e-4 -> 4.5e-4 (4-5) -> 3.9e-4 (6), x1.5-1.8, because the units open up (active fraction 0.28 -> 0.58) as they
+  acquire a positive background on the other probes (sum of other-probe weights 0 -> 0.5 by epoch 5), raising the overlap "unit and row
+  both active" from 2.6% to 11%. The row's own alignment (cos 0.48 at epoch 6) adds nothing yet.
+- Turnover at epochs 6-10: once the veto is sharp the overlap collapses (0.11 -> 0.055 -> 0.018), the gate term falls to 4e-5 and the
+  push along u_0 to 1e-3, 30% of the row's gradient; from epoch 15 the other units' vetoes (push 8e-4) exceed the own units' (1e-4):
+  the row's further growth comes from its fan-out, not from the designed connection.
