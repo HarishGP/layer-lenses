@@ -6418,3 +6418,28 @@ Just analyse. No need to write into notebooks yet."
 - Turnover at epochs 6-10: once the veto is sharp the overlap collapses (0.11 -> 0.055 -> 0.018), the gate term falls to 4e-5 and the
   push along u_0 to 1e-3, 30% of the row's gradient; from epoch 15 the other units' vetoes (push 8e-4) exceed the own units' (1e-4):
   the row's further growth comes from its fan-out, not from the designed connection.
+
+## 2026-10-16 — Notebook: population gradients at designed parameter configurations (two inits)
+
+### User prompts (verbatim)
+- "Ok, I want to create several inits of the run 60 architecture and analyse the gradients wr.t log loss at those points. 
+
+Create a notebook for doing this. No need for training functionality or runs, Just analyse population gradients at specific parameter configs. 2 such inits for now.
+
+1. W1 is the full ideal feature base , i.e. 62 neurons at +u_j or -u_j. Norms scaled by 2^{-distance from root}.  W2 is a random matrix. Wout is an alternate +-1 vector. I am particularly interested in looking at loss gradient w.r.t W2. We have designed W2 so that probes get aligned to ODT vectors. Does the reverse hold?
+2. W2, Wout is as in run 60. Each neuron in hidden layer 1 is chosen to be a scalar multiple of v=u_15+...+u_30. The scalar is chosen to minimise the training log loss. Add a small component corresponding to level four ODT nodes +u_j or -u_j to the cue neurons.  How does the gradient for the probes look like now?"
+
+### Changes
+- `notebooks/population_gradients_at_inits.ipynb` (executed in place): helpers `population_gradient` (full-batch over 400k points),
+  `cue_readings` / `half_readings` (the lens quantities c_u(m), S_u(j, pole), C_u(j)), `ideal_first_layer`, `v_first_layer`; section 1
+  (ideal W1 with norms sqrt 2 x 2^-level, He W2, Wout = (-1)^u, 5 seeds; actual gradient and its label part at f -> 0) and section 2
+  (run 60's W2 / Wout, probes s x pole x alpha v, cues pole x (alpha v + eps u_m); loss curves over alpha; probe pushes on the 31 normals
+  for eps 0 .. 0.5 and for alpha 0.1 / 0.35 / 1 and both signs; heatmap).
+- Section 1 results: leaf columns' descent sign = Wout x pole on 96-98% (label part); internal columns correlate with Wout x S_u(j, pole)
+  at 0.7-0.8 (root) down to 0.35 (level 3); opposite-sign descent on the two poles of a node at chance (0.4-0.5), so no vetoes in the first
+  step; per-norm magnitude ladder flat. The actual gradient at this point is dominated by a label-independent part (logit rms 0.12-0.19).
+- Section 2 results: the loss is flat in alpha (log 2 + O(1e-5); quadruple symmetry) so the loss-minimising scalar is 0 and the analysis
+  is done at row norm sqrt 2; there every probe's population push is along its designed node with the designed pole (30/30 for eps >= 0.05),
+  the push along v is zero (cancels within the quadruple) and the leaf / off-span / other-internal components are sampling noise (scale as
+  1 / sqrt n: 400k -> 1.6M halves them, target push unchanged at 6.5e-5). Target push ladder 18 / 13 / 10 / 6 leaf-rms units by level at
+  eps 0.1 (lower bounds), growing with eps to 0.2, larger at smaller alpha.
