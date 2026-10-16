@@ -6373,3 +6373,26 @@ Run with same protocol as run 60 (which is our new anchor run)."
 - Run 60's function (loss, error) is robust to a half-norm rotation of every cue block out of the design span; the exact row-to-node
   assignment is not (it needs the blocks in the 15-dim contrast span). The design margin on the probe push is spent on keeping probes
   off the leaves. The theorem's equivalence should be up to row role exchanges (probes doing cue work), not the designed map.
+
+## 2026-10-16 — Run 60, phase 1: why the cue blocks of units 0-27 look discarded while the probe veto persists (discussion with a check)
+
+### User prompts (verbatim)
+- "Back to run 60. Just discuss for now.
+
+I want to explore the evolution of W2 during phase 1.
+
+The connections from cues to unts were set to carefully induce the probe movement. But once that happened, the cue to unit0 to unit27 part of the W2 matrix seems to be almost discarded in favour of the connection from probes to units.
+
+The singular strong negative connection from probes to units seems to persist, but other parts change. What do you think is the mechanistic reason behind this?"
+
+### Check (run 60 replay, phase 1, per unit level; no repo changes besides this entry)
+- In raw W2 the cue blocks of the level-0/1/2 units are not discarded: norm 1.0 -> 1.76 / 2.04 / 2.14 by epoch 500, coefficient on the
+  own init block 1.6 / 1.9 / 1.8 (grown), orthogonal part 0.7 / 0.8 / 1.1 (level 3: 3.4 and 2.8, the cue veto). The own-probe weight in
+  raw W2 goes only -1 -> -1.8 / -2.45 / -2.9 (-5.6 at level 3). What makes Weff = W2 x row norm look lopsided is the first layer: probe
+  norms 1.41 -> 9.9 / 7.5 / 6.1 / 4.8, cue rows frozen at 1.41. So the cue block is outgrown, not removed.
+- The probe rows grow through their fan-out: the own unit's share of sum_u W2[u, r]^2 for the root probes is 1.00 / 0.52 / 0.06 / 0.01
+  at epochs 0 / 20 / 80 / 500 (level-3 probes stay at 1.00: nothing below them); the ancestor vetoes of every unit under a node are what
+  hold its probe. Layer-balance invariant |w_r|^2 - sum_u W2[u, r]^2 exact to epoch 20, then broken by the discrete step (fan-out sum
+  2x the row norm^2 at 80, 4.6x at 500; the readout x80 breaks the units' invariant from the start).
+- Hand-over: readouts of level-0 / 1 / 2 units peak at 9.4 / 13.2 / 19.6 (epochs 20-80) and fall to 3.9 / 3.3 / 10.8 by 500 while
+  level 3 grows to 57; the lower units' gradient (proportional to their readout) on everything but their vetoes fades.
