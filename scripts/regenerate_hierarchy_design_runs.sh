@@ -74,6 +74,9 @@ $PY $S/hd2_run63_gradcue/run_hd2_phased.py --out hd2_run63_gradcue --tag hd2_run
 $PY $S/hd2_run64_gradcue_zero_readout/run_hd2_phased.py --out hd2_run64_gradcue_zero_readout --tag hd2_run64_gradcue_zero_readout_seed0 --two-layer --out-scale 80 --momentum 0 --lr 0.1 --phases 500 500 --gradient-cue-blocks --zero-readout   # run 64 (section 19: run 63 with the readouts at 0 at init)
 $PY $S/hd2_run65_gradcue_outx1/run_hd2_phased.py --out hd2_run65_gradcue_outx1 --tag hd2_run65_gradcue_outx1_seed0 --two-layer --momentum 0 --lr 0.1 --phases 500 500 --gradient-cue-blocks   # run 65 (section 20: run 63 without the x80 output rate)
 $PY $S/hd2_run66_gradcue_scaled/run_hd2_phased.py --out hd2_run66_gradcue_scaled --tag hd2_run66_gradcue_scaled_seed0 --two-layer --out-scale 80 --momentum 0 --lr 0.1 --phases 500 500 --gradient-cue-blocks --gradient-cue-scale 0.0075   # run 66 (section 21: run 63 with blocks of norm 0.0075)
+# runs 64-66 were launched and killed by a system restart; superseded by the symmetric-block runs below (not rerun)
+$PY $S/hd2_run67_symcue_pilot/run_hd2_phased.py --out hd2_run67_symcue_pilot --tag hd2_run67_symcue_pilot_seed0 --two-layer --out-scale 80 --momentum 0 --lr 0.1 --phases 20 --schedule-epochs 1000 --symmetric-cue-blocks 0.2 0.1 --w3-entry 1 --out-weight 0.01   # run 67 pilot (section 22)
+$PY $S/hd2_run68_symcue_outx1/run_hd2_phased.py --out hd2_run68_symcue_outx1 --tag hd2_run68_symcue_outx1_seed0 --two-layer --momentum 0 --lr 0.1 --phases 500 500 --symmetric-cue-blocks 0.2 0.1   # run 68 (section 23: majority-label blocks, readouts +-0.816, output rate x1)
 $PY $S/check_init_gradient_variance.py   # init-gradient variance ladder (session log 2026-10-15); prints a table
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"

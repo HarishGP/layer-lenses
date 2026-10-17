@@ -6594,3 +6594,15 @@ I am still not confident about the relative scalar values of everything involved
   of run 60's 0.8, and the side contrast of the blocks ((0.2 - 0.1) x 8 = 0.8 per pole vs the design's 8) is 5x smaller; the push is the
   product. Scaling the blocks does not help (readout scales inversely at the plateau); only the open/other asymmetry and the readout
   level do.
+
+## 2026-10-17 — Run 68: majority-label blocks with readouts +-0.816 and output rate x1
+
+### User prompts (verbatim)
+- "Try the second option."
+
+### Changes
+- Run 68 launched (`hd2_run68_symcue_outx1`, tmux): symmetric cue blocks 0.2 / 0.1, probe links -1, readouts +-0.816 (initial logit ~5),
+  plain SGD lr 0.1 cosine over 1000 epochs, no x80 on the output row, phases 500 + 500, 10M points.
+- Bookkeeping: gitignore, regeneration lines (runs 67 pilot and 68; runs 64-66 noted as killed and superseded), notebook 2: sections
+  19-21 marked "not run", their five-run cross cell removed, registry entries 64-66 replaced by 67 and 68; section 22 (run 67 pilot
+  with its findings) and section 23 (run 68) with a cross-run cell tracking the blocks' coherent reading and side contrast over time.
