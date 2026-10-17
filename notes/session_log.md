@@ -6643,3 +6643,17 @@ I am still not confident about the relative scalar values of everything involved
 - Run 69 launched (`hd2_run69_symcue_flipped`, tmux): `--symmetric-cue-blocks 0.1 0.2`, otherwise run 68's protocol. Bookkeeping:
   gitignore, regeneration line, script copy, notebook 2 section 24 with a three-run cross cell (60 / 68 / 69) that also counts the
   probes on their node at the designed vs the opposite pole.
+
+## 2026-10-17 — Run 69 results: flipped doubling, probes go to neither pole
+
+### Changes
+- Run 69 (`hd2_run69_symcue_flipped`, 22 min): loss 0.221 (phase 1 end 0.499), 7.9% error, 17 nodes, 0 probes on their own node at either
+  pole, 24 deviated (10 ancestors, 10 unrelated, 4 descendants), 6 cues own. Root probes' cos with u_0 = 0.00 through epoch 100 (run 68:
+  0.76 / -0.53), end on nodes 5 / 8; root captured by four climbing level-3 probes. Initial logit 9.0 -> 0.42 in one epoch; plateau at
+  0.673 to epoch 200 (run 68: 50); readouts 2.9 at the end; block contrast -0.10 -> -0.064 (never flipped or built). Notebook 2 section
+  24 findings filled (unexecuted); memory updated.
+
+### Decisions
+- With majority-aligned cue paths the side asymmetry is a small correction on a large coherent reading; its sign decides only whether the
+  root / level-1 probes get a weak nudge (run 68) or none (run 69); deeper levels are noise in both. The design's zero-coherence,
+  full-contrast blocks are what makes the probe push dominate at every level.
