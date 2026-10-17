@@ -159,3 +159,5 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/hd2_run61_phase1_randcue_n1/replay/meta.pkl
 !results/designed_init/hd2_run62_cuenoise_r1/
 !results/designed_init/hd2_run62_cuenoise_r1/replay/meta.pkl
+!results/designed_init/hd2_run63_gradcue/
+!results/designed_init/hd2_run63_gradcue/replay/meta.pkl

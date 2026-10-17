@@ -6517,3 +6517,25 @@ W1 is such that all neurons have same fan-in norm norm and at +u_j or -u_j. W2 i
   c = -0.1: the same weakly (89% active, probe's side 1.4e-3). Ancestors: no veto asymmetry beyond 1-2 noise units.
 - Conclusion: a probe gate plus a uniform leaf reading produces the designed cue block in one step (and freezes the probe weight); the
   loop gate -> contrast -> push is self-seeding at the unit level. Next-level vetoes still absent at one step.
+
+## 2026-10-17 — Run 63: run 60 with gradient-generated cue blocks
+
+### User prompts (verbatim)
+- "Ok. Start a new run, 63 I think.
+
+The init from 60 only changes in W2.
+
+The edge weights from probes to units stays the same. The cue-unit edge weights are supposed to mimic how they would look like if they were updated by gradient descent using the above init with c=-1. 
+
+Is my specification clear. Can you explicitly write out the init before you begin the run?"
+
+### Changes
+- `run_hd2_phased.py --gradient-cue-blocks [--gradient-cue-points N]`: per unit, the descent direction of the single-unit network at the
+  ideal first layer (rows +-u_j, norm sqrt 2, design row identities), unit = -1 on its probe + 1/100 on all cue rows, readout = the unit's
+  run-60 readout; actual population gradient over 400k training points; cue-column part normalised to norm 1, baseline dropped; probe
+  links and zeros unchanged; rows renormalised to sqrt 2; flip assert skipped. Choices made (stated to the user): per-unit readout sign,
+  actual gradient (logit tiny at that point), block norm 1, baseline dropped.
+- Smoke test: blocks for the root units = pole-signed leaf reading (+0.27 / -0.22) on the open side, ~0 on the probe's side; cosine with
+  the design blocks ~0.6; initial logit rms 6.7 (run 60: 0.05) because the gradient blocks do not cancel in the quadruple.
+- Run 63 launched (`hd2_run63_gradcue`, run 60's protocol). Bookkeeping: gitignore, regeneration line, script copy, notebook 2 section
+  18 with a cross-run cell against run 60 (capture, cues, block cosines init/end, logit rms over the first epochs).
