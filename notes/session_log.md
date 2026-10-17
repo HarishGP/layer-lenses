@@ -6619,3 +6619,17 @@ I am still not confident about the relative scalar values of everything involved
 - Gradient descent does not turn majority-aligned cue blocks into the design's side contrasts; the contrasts are the symmetry breaking
   the flow must be given (or find by chance per unit, as in population_gradients_at_inits sections 1 and 6). The "unnatural" balanced
   blocks are what a lucky random unit looks like.
+
+## 2026-10-17 — Run 68: the gradient on the probes at init (analysis, no repo changes)
+
+### User prompts (verbatim)
+- "At init what does the gradient for the probes look like?"
+
+### Analysis (population gradient over 400k points, probes' descent decomposed; run 60's init for comparison)
+- Run 68 epoch 0 (logit rms 5.1): the descent on every probe is almost entirely along the row itself, +5.5e-3 to +6.9e-3 by level (norm
+  growth: a stronger veto shrinks the units' outputs and hence the too-large logit), i.e. 99% of its norm; the push toward the target is
+  +5.3e-5 / +5.1e-5 / +2.2e-5 / +1.5e-5 by level (run 60: +4.1e-4 / 2.9e-4 / 2.1e-4 / 1.5e-4, 95% of the norm). The label part has the
+  row component negative (-2e-3: shrink) and the same small target push.
+- Epoch 1 (logit 0.42, plateau): target push +4.5e-5 (root), +4.3e-5 (L1), +6e-6 (L2), +6e-7 (L3), against 'other internal' components of
+  2.7e-5 / 2e-5 / 1.3e-5 / 4e-6 and leaves of the same size: directed only at the root and level 1, 8x weaker than run 60 there, and lost in
+  the noise from level 2 down. Epoch 20: unchanged. Side-signed ancestor component negative at levels 1-2 (-3e-5 to -4e-5).
