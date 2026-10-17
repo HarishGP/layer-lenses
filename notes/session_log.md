@@ -6633,3 +6633,13 @@ I am still not confident about the relative scalar values of everything involved
 - Epoch 1 (logit 0.42, plateau): target push +4.5e-5 (root), +4.3e-5 (L1), +6e-6 (L2), +6e-7 (L3), against 'other internal' components of
   2.7e-5 / 2e-5 / 1.3e-5 / 4e-6 and leaves of the same size: directed only at the root and level 1, 8x weaker than run 60 there, and lost in
   the noise from level 2 down. Epoch 20: unchanged. Side-signed ancestor component negative at levels 1-2 (-3e-5 to -4e-5).
+
+## 2026-10-17 — Run 69: run 68 with the doubling flipped (0.1 open side, 0.2 elsewhere)
+
+### User prompts (verbatim)
+- "Run with a flipped init of W2,  i.e. change the +0.2 to 0.1 and -0.2 to -0.1 and  +0.1 to +0.2 and -0.1 to -0.2"
+
+### Changes
+- Run 69 launched (`hd2_run69_symcue_flipped`, tmux): `--symmetric-cue-blocks 0.1 0.2`, otherwise run 68's protocol. Bookkeeping:
+  gitignore, regeneration line, script copy, notebook 2 section 24 with a three-run cross cell (60 / 68 / 69) that also counts the
+  probes on their node at the designed vs the opposite pole.
