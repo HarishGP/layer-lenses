@@ -6502,3 +6502,18 @@ W1 is such that all neurons have same fan-in norm norm and at +u_j or -u_j. W2 i
   negative (2.6e-2 on every entry), label part = leaf reading (sign = pole 100%, rms 1.8e-3), internal columns incl. the probe at noise
   (3-9e-5): independent of c and probe. Variant c = -3: unit vetoed by the probe (active 55%, gate corr -0.90), probe weight descent 0
   (freeze), leaf reading reduced (1.0-1.3e-3), no ancestor-side asymmetry.
+
+## 2026-10-17 — Population-gradient notebook: section 6, one unit with c on one probe and 1/100 on the cues
+
+### User prompts (verbatim)
+- "Ok, same setup as before. Same W1. For W2, the unit has a single edge to a probe with weight c, and edges to all the cue neurons (i.e. the last 32 neurons in the first layer) are a small positive value say 1/100. Other edge weights (to other probes) are zero."
+
+### Changes
+- Section 6 added (executed): c in {+-0.1, +-3}, probes +-u_0, +-u_1, +-u_7; label-part descent on the probe, on the cue columns split by
+  the side of u_j (probe's side / other side / outside the subtree), on the ancestors by side; probe-row descent; heatmap.
+- Results: c > 0: open unit, full pole-signed leaf reading on all 32 cues (+1.8e-3), probe and internal columns at noise. c = -3: unit
+  vetoed on the probe's side (active 52%, gate corr -0.97), probe weight descent exactly 0, cue reading one-sided: open side +1.8e-3,
+  probe's side ~0 (noise), outside the subtree +9e-4: one step writes the design's side-contrast block B_j into the cue weights.
+  c = -0.1: the same weakly (89% active, probe's side 1.4e-3). Ancestors: no veto asymmetry beyond 1-2 noise units.
+- Conclusion: a probe gate plus a uniform leaf reading produces the designed cue block in one step (and freezes the probe weight); the
+  loop gate -> contrast -> push is self-seeding at the unit level. Next-level vetoes still absent at one step.
