@@ -6489,3 +6489,16 @@ W1 is such that all neurons have same fan-in norm norm and at +u_j or -u_j. W2 i
   correlation 0.58 -> 0.01-0.1 with c (gates set by v . x through the link). Alternating pattern = a wrong-sign v-reader (loss up to 0.713,
   |dL/dW2| 10x), "all +" the right sign (0.6925). Probe rows: frozen along themselves, leaf pull 4-6e-4 dominant; own-node push 1-3e-5
   positive for 63-67% under the pole-signed pattern (and the v part removed), negative for most under "all +" (v part grown).
+
+## 2026-10-17 — Population-gradient notebook: section 5, one unit with weight c on one probe and +1 elsewhere
+
+### User prompts (verbatim)
+- "Ok. Consider a simple setup. W1 is as before (+u_j or -u_j) With only one unit in the second hidden layer. It is connected to one of the probes , but with a weight c (that can be positve or negative). It is connected to all other neurons in the first layer by positive weight of +1. How does the gradient of W2 (which is a single 62-dimensional feature vector) vary with c and the connected probe +u_j or -u_j?) Try for a 4 different c values small/large and positve/negative."
+
+### Changes
+- Section 5 added (executed): c in {+-0.1, +-3}, probes +-u_0, +-u_1, +-u_7, readout +1; table and heatmaps (actual and label part); variant
+  with the other weights 1/61 so that c = -3 gates the unit.
+- Results: with +1 elsewhere the unit is always active (preactivation ~3.5), logit +3.3-3.6, loss 1.68-1.84; actual descent uniformly
+  negative (2.6e-2 on every entry), label part = leaf reading (sign = pole 100%, rms 1.8e-3), internal columns incl. the probe at noise
+  (3-9e-5): independent of c and probe. Variant c = -3: unit vetoed by the probe (active 55%, gate corr -0.90), probe weight descent 0
+  (freeze), leaf reading reduced (1.0-1.3e-3), no ancestor-side asymmetry.
