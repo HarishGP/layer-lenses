@@ -1,0 +1,5 @@
+symmetric cue blocks a_open 0.2, a_other 0.1: block norms by unit level L0: 0.894, L1: 0.748, L2: 0.663, L3: 0.616; unit 0 cue row: [-0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1]
+hd2_run67_symcue_pilot_seed0: 62-60 (run 49's init, cue bias 1.0, no third layer, Wout = path sign x 0.01, output gradient x 80.0, symmetric cue blocks [0.2, 0.1]); phases (frozen rows, epochs): [('cues', (0, 20))]; 10000000 points, 1000 steps per epoch, SGD momentum 0.0 lr 0.1 cosine over 1000 epochs; flip test 2.2e-15; logit rms 0.0629
+phase 0: epochs 0-20 in 0.5 min; loss at end 0.6731
+hd2_run67_symcue_pilot_seed0: final epoch loss 0.6731 (end of phases: [0.6731]), test error 0.4187; epochs to 0.3/0.2/0.1/0.05/0.03/0.01: -1/-1/-1/-1/-1/-1; nodes covered 0/31; on-target end [1.0, 0.5, 0.25, 0.06]; 0.5 min
+ALL DONE

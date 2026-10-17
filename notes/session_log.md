@@ -6564,3 +6564,33 @@ Is my specification clear. Can you explicitly write out the init before you begi
   (readouts from 0, x80), 65 `hd2_run65_gradcue_outx1` (blocks norm 1, readouts +-0.816, output rate x1), 66 `hd2_run66_gradcue_scaled`
   (blocks norm 0.0075, x80). Bookkeeping: gitignore, regeneration lines, script copies, notebook 2 sections 19-21 and a five-run cross
   cell (60, 63-66: capture, cues, readout growth, sign flips, block cosines, logit over the first epochs).
+
+## 2026-10-17 — Run 67 pilot: majority-label cue weights (0.2 on the open side, 0.1 elsewhere), phase 1 for 20 epochs
+
+### User prompts (verbatim)
+- "Ok, make the cue-unit weights more symmetric. e.g. for unit 0: it should be something like: -0.2,+0.2 alternating for the 16 cue neurons, and then -0.1,+0.1 alternating for the next 16 cue neurons. 
+
+And so on for all weights between cues and units. 
+
+Is the specification clear?"
+- "I meant the literal example. As that is the variation I intend to apply to run 60's init. The edge from each first layer neuron (sign).u_j to a unit is such that its product of weights with the readout agrees with the majority label of the set {x:(sign)u_j.x > 0}. But this weight is doubled for neurons that are on the same side as the intended target for the probes. 
+
+in run 60 init W2 row for probe 0 was : -c,+c alternating for 16 neurons and then +c,-c for the next 16. This is too drastic and unreasonable as a starting point as that would indicate the path weight from (say) the neuron corresponding to +u_30 or  to the logit through unit 0 has the opposite sign as would be indicated by the majority label for {x:u_30. x > 0}.
+
+This modified init is set to correct only this seemingly unnatural parameter config. 
+
+I am still not confident about the relative scalar values of everything involved: probe-to-unit veto strength, cue-to-unit weight scales, readout scales and learning rate. Choose sensible value for all of these, and run a a few hundred iterations in phase 1 to see if there are any obvious issues."
+
+### Changes
+- `run_hd2_phased.py --symmetric-cue-blocks A_OPEN A_OTHER`: W2[u, cue(m, pole)] = sign(readout_u) x pole x (A_OPEN if m is under the
+  unit's node on its open side else A_OTHER); probe links -1, rows not renormalised. Unit 0's row = the user's example exactly; the init
+  is equivariant (flip test 2e-15). Block norms 0.89 / 0.75 / 0.66 / 0.62 by level.
+- Pilot run 67 (`hd2_run67_symcue_pilot`, tmux): a_open 0.2, a_other 0.1, veto -1, readouts +-0.01 (so the coherent initial logit is
+  0.063, not ~5), run 60's plain SGD lr 0.1 with the x80 output rate, phase 1 for 20 epochs (20k steps) on 10M points.
+- Result: frozen. Loss 0.673 from epoch 1 to 20 (the v-reader plateau; run 60 leaves it by epoch 8), readouts 0.01 -> 0.06 in the first
+  epoch and then stuck there with an oscillating gradient (|grad| 9e-4 vs 1e-5 in run 60), logit rms 0.38 constant, probes do not move
+  (|cos| with target 0.01 at epoch 20; run 60: root 0.99 by epoch 10). Population push on the root probes toward u_0: 5e-6 vs 4-5e-4 in
+  run 60 (100x smaller): the coherent blocks make every unit's output large, so the readouts settle at the plateau optimum 0.06 instead
+  of run 60's 0.8, and the side contrast of the blocks ((0.2 - 0.1) x 8 = 0.8 per pole vs the design's 8) is 5x smaller; the push is the
+  product. Scaling the blocks does not help (readout scales inversely at the plateau); only the open/other asymmetry and the readout
+  level do.
