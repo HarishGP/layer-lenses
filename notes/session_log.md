@@ -6539,3 +6539,15 @@ Is my specification clear. Can you explicitly write out the init before you begi
   the design blocks ~0.6; initial logit rms 6.7 (run 60: 0.05) because the gradient blocks do not cancel in the quadruple.
 - Run 63 launched (`hd2_run63_gradcue`, run 60's protocol). Bookkeeping: gitignore, regeneration line, script copy, notebook 2 section
   18 with a cross-run cell against run 60 (capture, cues, block cosines init/end, logit rms over the first epochs).
+
+## 2026-10-17 — Run 63 results: the non-cancelling init logit collapses the readout; the blocks were never tested
+
+### Changes
+- Run 63 (`hd2_run63_gradcue`, 23 min): loss 0.197 (phase 1 end 0.566), 6.9% error, 14 nodes, 6/30 probes on their node (6 deviated),
+  4/32 cues. Initial logit rms 6.7 -> the x80 readout rate drives |w_out| to 0.0 by epoch 5 (0.1 through epoch 100), loss flat at 0.673
+  through phase 1, root captured at epoch 180 only; phase 2: readouts regrow to 13.5 with 21 sign flips, cues do not rotate (|cos| 0.24,
+  norm 2.55), block cosine with the design 0.35 -> 0.26. Notebook 2 section 18 findings filled (unexecuted).
+
+### Decisions
+- The quadruple cancellation of the design (logit 0 at init) is what lets the readout rate be x80; gradient-generated blocks cannot
+  cancel. A fair test needs the init logit controlled: readouts from 0, or no x80, or blocks scaled to logit rms 0.05. Proposed, not run.

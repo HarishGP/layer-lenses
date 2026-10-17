@@ -1,0 +1,12 @@
+gradient cue blocks: cosine with the design blocks mean 0.354 (min 0.257, max 0.636); block norm 1, probe links -1, other probe weights 0
+   unit 0 (node 0, probe 0 = +u0, readout +0.817): mean block entry probe side, pole +: +0.001 (n 8), probe side, pole -: -0.045 (n 8), other side, pole +: +0.226 (n 8), other side, pole -: -0.267 (n 8)
+   unit 1 (node 0, probe 1 = -u0, readout -0.817): mean block entry probe side, pole +: -0.049 (n 8), probe side, pole -: +0.002 (n 8), other side, pole +: -0.269 (n 8), other side, pole -: +0.224 (n 8)
+   unit 2 (node 0, probe 0 = +u0, readout -0.817): mean block entry probe side, pole +: -0.033 (n 8), probe side, pole -: +0.014 (n 8), other side, pole +: -0.260 (n 8), other side, pole -: +0.237 (n 8)
+   unit 3 (node 0, probe 1 = -u0, readout +0.817): mean block entry probe side, pole +: +0.017 (n 8), probe side, pole -: -0.034 (n 8), other side, pole +: +0.239 (n 8), other side, pole -: -0.258 (n 8)
+hd2_run63_gradcue_seed0: 62-60 (run 49's init, cue bias 1.0, no third layer, Wout = path sign x 0.8165, output gradient x 80.0, gradient cue blocks (c = -1, 1/100 cues, ideal W1)); phases (frozen rows, epochs): [('cues', (0, 500)), ('none', (500, 1000))]; 10000000 points, 1000 steps per epoch, SGD momentum 0.0 lr 0.1 cosine over 1000 epochs; flip test 4.2e-02; logit rms 6.7347
+phase 0: epochs 0-500 in 11.6 min; loss at end 0.5655
+/home/harish/researchcodes/layer-lenses/src/layer_lenses/relu_analysis.py:1574: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  scheduler.step()
+phase 1: epochs 500-1000 in 23.0 min; loss at end 0.1965
+hd2_run63_gradcue_seed0: final epoch loss 0.1965 (end of phases: [0.5655, 0.1965]), test error 0.0681; epochs to 0.3/0.2/0.1/0.05/0.03/0.01: 602/936/-1/-1/-1/-1; nodes covered 14/31; on-target end [1.0, 0.75, 0.25, 0.0]; 23.1 min
+ALL DONE
