@@ -6551,3 +6551,16 @@ Is my specification clear. Can you explicitly write out the init before you begi
 ### Decisions
 - The quadruple cancellation of the design (logit 0 at init) is what lets the readout rate be x80; gradient-generated blocks cannot
   cancel. A fair test needs the init logit controlled: readouts from 0, or no x80, or blocks scaled to logit rms 0.05. Proposed, not run.
+
+## 2026-10-17 — Runs 64-66: run 63's gradient blocks with the initial logit under control
+
+### User prompts (verbatim)
+- "All 3 sound reasonable. Implement them as separate runs."
+
+### Changes
+- `run_hd2_phased.py --zero-readout` (Wout = 0 after the blocks are built with the design readout signs) and `--gradient-cue-scale S`
+  (block norm S; rows not renormalised, probe links stay -1). Smoke tests: initial logit rms 0.000 (64), 6.69 (65), 0.030 (66).
+- Runs launched together (detached with setsid after a Claude Code restart killed the first launch): 64 `hd2_run64_gradcue_zero_readout`
+  (readouts from 0, x80), 65 `hd2_run65_gradcue_outx1` (blocks norm 1, readouts +-0.816, output rate x1), 66 `hd2_run66_gradcue_scaled`
+  (blocks norm 0.0075, x80). Bookkeeping: gitignore, regeneration lines, script copies, notebook 2 sections 19-21 and a five-run cross
+  cell (60, 63-66: capture, cues, readout growth, sign flips, block cosines, logit over the first epochs).
