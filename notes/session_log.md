@@ -6443,3 +6443,17 @@ Create a notebook for doing this. No need for training functionality or runs, Ju
   the push along v is zero (cancels within the quadruple) and the leaf / off-span / other-internal components are sampling noise (scale as
   1 / sqrt n: 400k -> 1.6M halves them, target push unchanged at 6.5e-5). Target push ladder 18 / 13 / 10 / 6 leaf-rms units by level at
   eps 0.1 (lower bounds), growing with eps to 0.2, larger at smaller alpha.
+
+## 2026-10-17 — Population-gradient notebook: section 1b, W2 = 0 with ReLU'(0) = 1
+
+### User prompts (verbatim)
+- "Can you redo init 1, with W2 being identically 0? If the ReLU gets gradient cut-off due to standard relu subgradient definition, can you make it so that the relu derivative at 0 is 1 instead of 0?"
+
+### Changes
+- `population_gradient(..., relu_sub1=True)`: custom autograd ReLU with subgradient 1 at 0. Section 1b added (executed): ideal W1,
+  W2 = 0, Wout = (-1)^u. Standard subgradient: all gradients zero. ReLU'(0) = 1: only W2 moves, exactly Wout[u] x pole x ||row|| x E|a_m| / 64
+  on the leaf columns (ratio 1.000, sign 100%), zero on internal columns (sample noise, identical across units), rank one. After one small
+  step the units read all 16 leaves alike (contrast 1% of the reading), f becomes a v-reader (corr 0.44 with v . x), and the next descent
+  on internal columns is the same on both poles (difference at noise level; label part sign-agreement with the readout 0.50); the pole-sum
+  part is the logit-shrinking term. W2 = 0 is a symmetric fixed subspace: no side contrast can ever form, so no probe push toward internal
+  nodes and no vetoes. The random W2 is needed for the symmetry breaking between units, not for the leaf reading.
