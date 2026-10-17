@@ -6457,3 +6457,21 @@ Create a notebook for doing this. No need for training functionality or runs, Ju
   on internal columns is the same on both poles (difference at noise level; label part sign-agreement with the readout 0.50); the pole-sum
   part is the logit-shrinking term. W2 = 0 is a symmetric fixed subspace: no side contrast can ever form, so no probe push toward internal
   nodes and no vetoes. The random W2 is needed for the symmetry breaking between units, not for the leaf reading.
+
+## 2026-10-17 — Population-gradient notebook: section 3, equal-norm ideal W1 with W2 = a random + b probe links
+
+### User prompts (verbatim)
+- "Ok, another init.
+
+W1 is such that all neurons have same fan-in norm norm and at +u_j or -u_j. W2 is a random matrix, except the probe unit links which are the same as init 60. Scale the two components of W2 (the random part and probe-unit links) separately and report it for a few different scales."
+
+### Changes
+- Section 3 added (executed): W1 rows +-u_j all of norm sqrt 2; W2 = a x N(0, 2/62) with run 60's -1 probe links set to b; Wout = run 60's;
+  grid a in {0, 0.1, 0.3, 1}, b in {0, 0.3, 1, 3}; label-part statistics: designed-link descent, ancestor-veto formation, cue / internal
+  column structure, probe-row descent split; heatmap for a = 0.3, b = 1.
+- Results: a scales all gradients linearly, b only reduces unit activity (0.46 -> 0.23). Designed links: descent < 0 on 45-55% (chance),
+  mean 0-7% of the rms -> 0 with b (self-gating freeze). Ancestor vetoes: chance (0.47-0.50 / 0.40-0.43). Cue columns sign = Wout x pole on
+  90-97%; internal columns corr 0.55-0.62 with the half-readings; level-3 cue veto 100% (= the leaf-reading rule). Probe rows: no growth
+  along themselves (1e-6 vs 2e-4), 90% of the off-row descent on the leaves, side-signed ancestor tilt positive on 61-68%.
+- Conclusion: the converse of the design holds for the leaf reading and the half-reading structure, not for the vetoes (designed link or
+  ancestor), which are products of the dynamics (readout growth, hand-over), not of the gradient at an ideal point.
