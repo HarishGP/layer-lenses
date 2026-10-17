@@ -6606,3 +6606,16 @@ I am still not confident about the relative scalar values of everything involved
 - Bookkeeping: gitignore, regeneration lines (runs 67 pilot and 68; runs 64-66 noted as killed and superseded), notebook 2: sections
   19-21 marked "not run", their five-run cross cell removed, registry entries 64-66 replaced by 67 and 68; section 22 (run 67 pilot
   with its findings) and section 23 (run 68) with a cross-run cell tracking the blocks' coherent reading and side contrast over time.
+
+## 2026-10-17 — Run 68 results: majority-label blocks are not balanced by gradient descent; the hierarchy forms randomly
+
+### Changes
+- Run 68 (`hd2_run68_symcue_outx1`, 23 min): loss 0.167 (phase 1 end 0.355), 5.3% error, 21 nodes, 7/30 probes on their node, 21 deviated
+  (15 unrelated, 5 ancestors), 10 cues on their node, no cue rotation. Logit 5.1 -> 0.42 in one epoch by halving the blocks' coherent
+  reading (0.23 -> 0.13; 0.08-0.10 later), readouts 0.82 -> 0.72; side contrast stays 0.10 -> 0.12 -> 0.03 (run 60: 0.81 -> 2.3); plateau
+  at 0.673 for 50 epochs, no level captured by its own probes. Notebook 2 section 23 findings filled (unexecuted); memory updated.
+
+### Decisions
+- Gradient descent does not turn majority-aligned cue blocks into the design's side contrasts; the contrasts are the symmetry breaking
+  the flow must be given (or find by chance per unit, as in population_gradients_at_inits sections 1 and 6). The "unnatural" balanced
+  blocks are what a lucky random unit looks like.

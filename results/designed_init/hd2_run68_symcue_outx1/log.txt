@@ -1,0 +1,8 @@
+symmetric cue blocks a_open 0.2, a_other 0.1: block norms by unit level L0: 0.894, L1: 0.748, L2: 0.663, L3: 0.616; unit 0 cue row: [-0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1]
+hd2_run68_symcue_outx1_seed0: 62-60 (run 49's init, cue bias 1.0, no third layer, Wout = path sign x 0.8165, symmetric cue blocks [0.2, 0.1]); phases (frozen rows, epochs): [('cues', (0, 500)), ('none', (500, 1000))]; 10000000 points, 1000 steps per epoch, SGD momentum 0.0 lr 0.1 cosine over 1000 epochs; flip test 2.2e-15; logit rms 5.1343
+phase 0: epochs 0-500 in 12.0 min; loss at end 0.3554
+/home/harish/researchcodes/layer-lenses/src/layer_lenses/relu_analysis.py:1574: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  scheduler.step()
+phase 1: epochs 500-1000 in 22.9 min; loss at end 0.1665
+hd2_run68_symcue_outx1_seed0: final epoch loss 0.1665 (end of phases: [0.3554, 0.1665]), test error 0.0525; epochs to 0.3/0.2/0.1/0.05/0.03/0.01: 514/638/-1/-1/-1/-1; nodes covered 21/31; on-target end [0.5, 0.25, 0.5, 0.06]; 23.0 min
+ALL DONE
