@@ -6475,3 +6475,17 @@ W1 is such that all neurons have same fan-in norm norm and at +u_j or -u_j. W2 i
   along themselves (1e-6 vs 2e-4), 90% of the off-row descent on the leaves, side-signed ancestor tilt positive on 61-68%.
 - Conclusion: the converse of the design holds for the leaf reading and the half-reading structure, not for the vetoes (designed link or
   ancestor), which are products of the dynamics (readout growth, hand-over), not of the gradient at an ideal point.
+
+## 2026-10-17 — Population-gradient notebook: section 4, probes with a +-c v component
+
+### User prompts (verbatim)
+- "Repeat the above init but now the probes have an additional component of +cv or -cv , where v= u_15+...+u_30.  Try for a few different values of c. Try for a few different sign patterns: all get +v, all get -v, alternate +v-v, random +v-v mainly"
+
+### Changes
+- Section 4 added (executed): section 3's W2 (a = 0.3, b = 1, seed 0) and readout; probe rows pole u_j sqrt 2 + s_p c v, c in {0.1, 0.3, 1},
+  patterns all +, all -, alternating (= pole), random; `analyse_config` reports the W2 statistics and the probe-row descent split (own node
+  signed by pole, v signed by s_p, along the row, leaves, ancestors).
+- Results: W2 structure unchanged (links and ancestor vetoes at chance); cue-column sign agreement falls 0.93 -> 0.5 and the half-reading
+  correlation 0.58 -> 0.01-0.1 with c (gates set by v . x through the link). Alternating pattern = a wrong-sign v-reader (loss up to 0.713,
+  |dL/dW2| 10x), "all +" the right sign (0.6925). Probe rows: frozen along themselves, leaf pull 4-6e-4 dominant; own-node push 1-3e-5
+  positive for 63-67% under the pole-signed pattern (and the v part removed), negative for most under "all +" (v part grown).
