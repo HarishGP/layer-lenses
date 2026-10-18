@@ -1,0 +1,2 @@
+tag,init_run,symmetrised,phases,schedule_epochs,lr,final_epoch_loss,min_epoch_loss,test_error_end,nodes_covered_end,on_target_L0_end,on_target_L1_end,on_target_L2_end,on_target_L3_end,wall_min
+hd2_run72_sym_pgf_phase1,hd2_run70_symcue_partner,True,[500],1000,0.1,0.2899148959517479,0.2899148959517479,0.09403499960899353,15,1.0,1.0,1.0,1.0,13.061264363924662

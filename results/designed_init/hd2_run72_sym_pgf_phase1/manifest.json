@@ -1,0 +1,17 @@
+{
+  "tag": "hd2_run72_sym_pgf_phase1",
+  "init_run": "hd2_run70_symcue_partner",
+  "symmetrised": true,
+  "phases": "[500]",
+  "schedule_epochs": 1000,
+  "lr": 0.1,
+  "final_epoch_loss": 0.2899148959517479,
+  "min_epoch_loss": 0.2899148959517479,
+  "test_error_end": 0.09403499960899353,
+  "nodes_covered_end": 15,
+  "on_target_L0_end": 1.0,
+  "on_target_L1_end": 1.0,
+  "on_target_L2_end": 1.0,
+  "on_target_L3_end": 1.0,
+  "wall_min": 13.061264363924662
+}

@@ -6812,3 +6812,17 @@ Is this a even feasible? Just run phase 1 for now."
   gradient is projected onto the symmetric subspace at every step (W1 through the 61-dim basis), cues frozen in phase 1, saved in the
   'hier' format. Run 72 launched (`hd2_run72_sym_pgf_phase1`, tmux): run 70's init, phase 1 (500 of the 1000-epoch cosine), batch 10k,
   10M points. Bookkeeping: gitignore, regeneration line, notebook 2 section 27 with a cross-run cell against run 70's phase 1.
+
+## 2026-10-18 — Run 72 results: the symmetrised flow from run 70's init captures the whole hierarchy in phase 1
+
+### Changes
+- Run 72 (`hd2_run72_sym_pgf_phase1`, 13 min): loss 0.290 at epoch 500 (run 70: 0.312), 9.4% error (13.0%), all 30 probes on their designed
+  nodes (|cos| 0.98-1.00, spread 0), capture epochs root 99 / level 2 329 / level 3 432 / level 1 448 (run 70: root only); the root
+  trajectory identical to run 70's; the level-1 probes dip (0.51 -> 0.13 between epochs 100 and 200) before completing; the blocks'
+  side contrast grows 0.10 -> 4.09 (run 70: 0.14); readouts 6.0; units stay in the signed-coordinate family. Notebook 2 section 27
+  findings filled (unexecuted); memory updated. The 20 MB snapshot file is gitignored.
+
+### Decisions
+- Run 70's random phase 1 was the sample's asymmetry: the population flow's direction is right from the majority-label init, only
+  10-40x slower than run 60's, which lets a 10M-point sample's noise win below the root. The design's contrast supplies the margin, not
+  the direction.
