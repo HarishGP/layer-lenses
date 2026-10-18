@@ -6688,3 +6688,14 @@ I am still not confident about the relative scalar values of everything involved
   by epoch 100 (both poles; run 68: 0.76 / -0.53), root captured at epoch 99; level 1 half (probe 3 at -0.88, probe 2 climbs to the root);
   deeper levels still noise. Units end as -a_j readers (-13.3 own / +13.1 partner x norm); side contrast 0.1 -> 0.15; plateau as run 68.
   Notebook 2 section 25 findings filled (unexecuted). Run 71 (halved probe edges) running in tmux.
+
+## 2026-10-18 — Run 71 results: halved probe edges halve the push; root at epoch 125, fewer directed captures
+
+### Changes
+- Run 71 (`hd2_run71_symcue_partner_half`, 21 min): loss 0.148 (phase 1 end 0.324), 4.3% error, 18 nodes, 7/30 probes on their node
+  (run 70: 14), 18 deviated (10 unrelated, 6 ancestors, 2 descendants), 6 cues own. Root probes' cos 0.67 at epoch 100 (run 70: 0.96),
+  root captured at 125 (99); level 1 half; deeper levels noise. Units regrow the edges to -14.2 / +10.0 by the end. Notebook 2 section
+  26 findings filled (unexecuted); memory updated.
+
+### Decisions
+- The probe-edge / cue-block balance only scales the directed push (factor 2 for the halving); the depth problem is the contrast size.
