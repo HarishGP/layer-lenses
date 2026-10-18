@@ -6893,3 +6893,17 @@ Once all of that is done do all three PGF runs in a single phase without freezin
   (16/134/68/64), cues by 275, 31 nodes; 78 (one phase, partner): 0.0762 / 1.75%, 30 probes, 0 cues, 15 nodes. In all four the
   symmetric flow grew the partner edges and switched level 1 to the support mode (own 0 / partner +59 to +70), unlike run 60's SGD.
   Chain B relaunched with `--out-scale 80` (launcher and regeneration lines updated); notebook 2 sections 29 / 30 / 32 / 33 carry a note.
+
+## 2026-10-18 — Runs 74 / 75 / 77 / 78 results (symmetrised flow from run 60's init, x80 output rate)
+
+### Changes
+- 74 (two phases): 0.029 / 0.46%, 31 nodes, all probes (9 / 15 / 21 / 30: level 1 faster than run 60's 40) and all cues (by 801 vs 653);
+  readouts 62; level-0 units grow a +30 partner edge. 75 (+ partner links): 0.033 / 0.40%, 27 nodes, 18 probes, 12 deviated (levels 1-2
+  incomplete), cues by 631; all units signed-coordinate readers. 77 (one phase): 0.055 / 0.61%, 15 nodes, 14 probes, no cue rotation,
+  level-3 units dead. 78 (partner + one phase): 0.069 / 1.0%, 13 nodes, 10 probes, no cues, level-1 support mode. Notebook 2 sections
+  29 / 30 / 32 / 33 findings filled (unexecuted); memory updated.
+
+### Decisions
+- From the design init the population flow reproduces run 60 (1.5x the loss, faster probe phase, slower cue phase); the cue freeze is a
+  requirement of the flow (free cues never rotate and level 3 dies in 76 / 77 / 78); the partner links trade the designed map for an
+  equally good function (75). The majority-label init (73 / 76) builds the probes but not the leaf stage.
