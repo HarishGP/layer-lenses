@@ -6657,3 +6657,15 @@ I am still not confident about the relative scalar values of everything involved
 - With majority-aligned cue paths the side asymmetry is a small correction on a large coherent reading; its sign decides only whether the
   root / level-1 probes get a weak nudge (run 68) or none (run 69); deeper levels are noise in both. The design's zero-coherence,
   full-contrast blocks are what makes the probe push dominate at every level.
+
+## 2026-10-18 — Run 70: run 68 with each unit reading its probe's pole partner with +1
+
+### User prompts (verbatim)
+- "Back to init of run 68. Add a positive edge between p1 and units 0, 2. And between p0 and units 1,3. p2 And  so on. Is my specification clear?"
+
+### Changes
+- `run_hd2_phased.py --partner-probe-weight W`: every unit gets W on the other probe of its node (pole partner of its own probe). The
+  magnitude was not specified: +1 chosen (mirror of the veto; the unit reads -a_j once the probes are on their normals). Row norms 1.67,
+  flip test 2e-15, initial logit rms 6.1. Run 70 launched (`hd2_run70_symcue_partner`, tmux) with run 68's protocol. Bookkeeping:
+  gitignore, regeneration line, script copy, notebook 2 section 25 with a cross-run cell (60 / 68 / 70) tracking the own-probe and
+  partner weights (x row norm) from init to end.
