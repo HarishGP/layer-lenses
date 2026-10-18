@@ -79,6 +79,7 @@ $PY $S/hd2_run67_symcue_pilot/run_hd2_phased.py --out hd2_run67_symcue_pilot --t
 $PY $S/hd2_run68_symcue_outx1/run_hd2_phased.py --out hd2_run68_symcue_outx1 --tag hd2_run68_symcue_outx1_seed0 --two-layer --momentum 0 --lr 0.1 --phases 500 500 --symmetric-cue-blocks 0.2 0.1   # run 68 (section 23: majority-label blocks, readouts +-0.816, output rate x1)
 $PY $S/hd2_run69_symcue_flipped/run_hd2_phased.py --out hd2_run69_symcue_flipped --tag hd2_run69_symcue_flipped_seed0 --two-layer --momentum 0 --lr 0.1 --phases 500 500 --symmetric-cue-blocks 0.1 0.2   # run 69 (section 24: run 68 with 0.1 on the open side and 0.2 elsewhere)
 $PY $S/hd2_run70_symcue_partner/run_hd2_phased.py --out hd2_run70_symcue_partner --tag hd2_run70_symcue_partner_seed0 --two-layer --momentum 0 --lr 0.1 --phases 500 500 --symmetric-cue-blocks 0.2 0.1 --partner-probe-weight 1   # run 70 (section 25: run 68 + each unit reads its probe's pole partner with +1)
+$PY $S/hd2_run71_symcue_partner_half/run_hd2_phased.py --out hd2_run71_symcue_partner_half --tag hd2_run71_symcue_partner_half_seed0 --two-layer --momentum 0 --lr 0.1 --phases 500 500 --symmetric-cue-blocks 0.2 0.1 --probe-link-scale 0.5 --partner-probe-weight 0.5   # run 71 (section 26: run 70 with veto -0.5 and partner +0.5)
 $PY $S/check_init_gradient_variance.py   # init-gradient variance ladder (session log 2026-10-15); prints a table
 
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"

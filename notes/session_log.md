@@ -6669,3 +6669,13 @@ I am still not confident about the relative scalar values of everything involved
   flip test 2e-15, initial logit rms 6.1. Run 70 launched (`hd2_run70_symcue_partner`, tmux) with run 68's protocol. Bookkeeping:
   gitignore, regeneration line, script copy, notebook 2 section 25 with a cross-run cell (60 / 68 / 70) tracking the own-probe and
   partner weights (x row norm) from init to end.
+
+## 2026-10-18 — Run 71 (chained after run 70): veto and partner edge halved
+
+### User prompts (verbatim)
+- "Ok. Chain another run where the veto and the positve vote are both scaled down. i.e. +1,-1 become +0.5,-0.5. Other values stay same."
+
+### Changes
+- `run_hd2_phased.py --probe-link-scale S` (multiplies the designed -1 links after the row renormalisation). Run 71 queued in tmux
+  behind run 70 (`hd2_run71_symcue_partner_half`): `--probe-link-scale 0.5 --partner-probe-weight 0.5`, cue blocks 0.2 / 0.1, readouts
+  +-0.816, output rate x1. Bookkeeping: gitignore, regeneration line, script copy, notebook 2 section 26 with a cross-run cell (68 / 70 / 71).
