@@ -6842,3 +6842,18 @@ Also, am I right in saying that these are just full gradient descent runs with d
 - Answer recorded in the reply: the runs are minibatch SGD (batch 10k) with the gradient averaged over the group orbits, which at a
   symmetric parameter equals SGD on the batch augmented by the full group (65 536 images per point, label negated under N); not
   full-batch, so noise remains inside the symmetric subspace.
+
+## 2026-10-18 — Run 72's unit modes by level (Q&A with a check)
+
+### User prompts (verbatim)
+- "Interesting. There seems to be a qualitative difference between  units 4 to 11 and other units. The other units are operating in the veto mode, while these units are operating in the support mode."
+- "Well unit 0 to 3 seem to operating in both support and veto modes simultaneuosly.."
+
+### Check (run 72 at epoch 500, weights x row norm)
+- Level 0 (units 0-3): own probe -26.4, partner +26.6: veto and support at once, a reader of the signed root coordinate; active on 50%.
+- Level 1 (units 4-11): own probe -0.1, partner +26.2, +22.4 on the root's +u_0 feature and -5.6 on -u_0: pure support, active on 75%,
+  output uncorrelated with the label (0.00): background suppliers. The veto died between epochs 150 and 350 (own -2.5 -> -0.1) while the
+  partner and +u_0 weights grew, during the level-1 probes' excursion toward -u_0 (signed cos with u_0: -0.73 at 150, -0.83 at 200, back
+  to -0.21 at 500) and their return to u_1 (0.98 at 500).
+- Levels 2-3 (units 12-59): own probe -18.2 / -7.1, partner 0.0, vetoes on the ancestors (-23.9 on +u_0 for unit 12): pure veto, active
+  on 12% / 7%. Run 70 (sampled) does not show the split: its level-1 units keep both modes (-19 / +19).
