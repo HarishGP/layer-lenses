@@ -6716,3 +6716,18 @@ I am still not confident about the relative scalar values of everything involved
 - Definitions given in the reply: task symmetry / anti-symmetry Q in O(d) (y(Qx) = +-y(x)); parameter action
   g.theta = (P1 W1 Q^T, P2 W2 P1^T, s Wout P2^T); equivariant init = fixed point of the action; consequences f(Qx) = s f(x) and
   invariance of the fixed-point set under population gradient flow and full-batch GD (not under finite-sample SGD).
+
+## 2026-10-18 — Selective (piecewise) symmetries vs global ones (Q&A with a check)
+
+### User prompts (verbatim)
+- "This means we only consider symmetries that are global in nature? i.e replace all x by Qx?  How about selective transformations like "rotate all data that enter node 7 to enter node 14 while preserving class label, and all data that enter node 14 to enter node 7 while preserving class label, leave data that don't enter either of these nodes untouched""
+
+### Check
+- Built T = g on region 7, g^-1 on region 14, identity elsewhere, with g = F_6 F_2 F_0 (the tree automorphism mapping node 7 to 14)
+  extended to the off-span complement by the permutation of the probes' off-span directions. T preserves the uniform measure (piecewise
+  isometry) and the labels (verified on 400k points). Function-level invariance rms(f(Tx) - f(x)) / rms f on the moved regions:
+  inits of runs 60 / 56 / 70: 0.0000 (exact, since T coincides with the global automorphism g on the moved regions and the init is
+  g-equivariant); ends: 0.070 / 0.050 / 0.39 (sign changes 0.3% / 0.3% / 3.9%), the same size as the global deviation (0.081 / 0.090 /
+  0.36): the sample-induced breaking of the global symmetry is what breaks the selective one.
+- Note: a first attempt used the root flip on regions 7 and 14, which maps 7 -> 11 and 14 -> 10 (not a swap); and the in-span flip alone
+  without the off-span permutation is not a symmetry of the init's function (rms 1.46 at init).
