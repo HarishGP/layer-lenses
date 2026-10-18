@@ -3,7 +3,7 @@ step onto the symmetric subspace (average over the orbits of the tree-flip / lab
 set to 0; see layer_lenses.symmetric_flow). The projection removes the sample's asymmetric part of the gradient, so the trajectory is an
 estimate of the population flow (plain SGD discretisation, noise only within the 157-dim symmetric subspace).
   run 72: --init-run hd2_run70_symcue_partner --phases 500 --schedule-epochs 1000 (phase 1 of run 70's protocol: plain SGD lr 0.1 cosine over
-          1000 epochs, batch 10k, 10M points, cues frozen, output rate x1), snapshots every epoch, saved in the 'hier' format (runs/<tag>.npz).
+          1000 epochs, batch 10k, 10M points, cues frozen, output rate x1), snapshots every epoch, saved in the replay format (replay/weights.npz, meta.pkl) like the other runs.
 """
 import argparse, json, os, pickle, time, numpy as np, pandas as pd, torch
 from layer_lenses.designed_init import cue_row_identity, hierarchy_probe_table, NODE_LEVEL, HIERARCHY_TARGETS
@@ -47,7 +47,21 @@ for ep in range(TOTAL):
     losses.append(run_loss / steps_per_epoch); lrs.append(lr); snaps[ep + 1] = [p.detach().cpu().numpy().copy() for p in P]
     if (ep + 1) % 25 == 0 or ep == 0: print(f"epoch {ep + 1}: loss {losses[-1]:.4f}, {(time.time() - t0) / 60:.1f} min", flush=True)
 with torch.no_grad(): fe = (torch.relu(torch.relu(Xe @ P[0].T) @ P[1].T) @ P[2].T).squeeze(1); te = float(((fe >= 0) != (Ye > 0)).float().mean())
-eps = np.array(sorted(snaps)); np.savez(f"{OUT}/runs/{args.tag}.npz", epochs=eps, epoch_losses=np.array(losses), lr_history=np.array(lrs), **{f"w__{k}": np.stack([snaps[e][i] for e in eps]) for i, k in enumerate(["hidden_layers.0.weight", "hidden_layers.1.weight", "output_layer.weight"])})
+eps = np.array(sorted(snaps)); names = ["hidden_layers.0.weight", "hidden_layers.1.weight", "output_layer.weight"]
+def save_replay(folder):
+    """Write the trajectory in the replay format of save_designed_run (weights.npz, an empty optimizer_state.npz, meta.pkl), so load_designed_run,
+    the notebooks' load_replay_run and the anatomy notebook read it like any other run. Plain SGD has no optimizer state."""
+    from layer_lenses.relu_training import ReLUTrainConfig
+    os.makedirs(folder, exist_ok=True); np.savez(f"{folder}/weights.npz", epochs=eps, **{f"w__{k}": np.stack([snaps[e][i] for e in eps]).astype(np.float32) for i, k in enumerate(names)}); np.savez(f"{folder}/optimizer_state.npz", epochs=eps)
+    L = np.full(EPOCHS, np.nan); L[:TOTAL] = losses; LR = np.full(EPOCHS, np.nan); LR[:TOTAL] = lrs
+    cfg = ReLUTrainConfig(epochs=EPOCHS, lr=args.lr, batch_size=args.batch, seed=1000, device="cuda", snapshot_epochs=tuple(int(e) for e in eps), lr_scheduler_eta_min_ratio=0.05, optimizer="sgd", momentum=0.0, show_progress=False)
+    design = {**{k: (list(v) if isinstance(v, tuple) else v) for k, v in d.items()}, "init_run": args.init_run, "symmetrised_gradient": not args.no_symmetrise, "phases": args.phases, "schedule_epochs": EPOCHS, "out_scale": args.out_scale, "w2_scale": args.w2_scale}
+    meta_out = {"tag": args.tag, "tree": tree, "data_spec": {"kind": "sweep_chunked", "tree_seed": 5178, "data_seed": args.data_seed, "n_train": args.n_train, "chunk_size": 1_000_000, "eval_seed": 999_777, "n_eval": 200_000, "dim": 100, "depth": 5},
+                "model_spec": {"input_dim": 100, "hidden_dims": [62, 60], "bias": False, "activation": "relu"}, "train_config": cfg, "design": design,
+                "out": {"epoch_losses": L.tolist(), "lr_history": LR.tolist(), "model_state_final": {k: torch.as_tensor(snaps[int(eps[-1])][i]) for i, k in enumerate(names)}},
+                "parameter_names": names, "optimizer_state_keys": [], "optimizer_param_group": {"lr": args.lr, "momentum": 0.0, "dampening": 0, "weight_decay": 0.0, "nesterov": False, "maximize": False, "foreach": None, "differentiable": False, "fused": None}}
+    pickle.dump(meta_out, open(f"{folder}/meta.pkl", "wb"))
+save_replay(f"{OUT}/replay")
 per = []
 for e in eps:
     W1e = snaps[e][0]; t = hierarchy_probe_table(W1e, tree); Ce = W1e / np.linalg.norm(W1e, axis=1, keepdims=True) @ U.T
@@ -55,5 +69,5 @@ for e in eps:
 pe = pd.DataFrame(per); pe.to_csv(f"{OUT}/per_epoch_{args.tag}.csv", index=False)
 rec = {"tag": args.tag, "init_run": args.init_run, "symmetrised": not args.no_symmetrise, "phases": str(args.phases), "schedule_epochs": EPOCHS, "lr": args.lr, "final_epoch_loss": losses[-1], "min_epoch_loss": float(np.min(losses)), "test_error_end": te, "nodes_covered_end": int(pe.nodes_covered.iloc[-1]), **{f"on_target_L{l}_end": float(pe[f"on_target_L{l}"].iloc[-1]) for l in range(4)}, "wall_min": (time.time() - t0) / 60}
 pd.DataFrame([rec]).to_csv(f"{OUT}/summary.csv", index=False); json.dump({k: (v if not isinstance(v, np.generic) else float(v)) for k, v in rec.items()}, open(f"{OUT}/manifest.json", "w"), indent=2)
-pickle.dump({"design": d, "cue_identity": {str(k): v for k, v in cid.items()}, "basis_off_span": O}, open(f"{OUT}/identities.pkl", "wb"))
+pickle.dump({"design": d, "cue_identity": {str(k): v for k, v in cid.items()}, "basis_off_span": O}, open(f"{OUT}/identities.pkl", "wb"))   # the off-span basis used for the projection
 print(f"{args.tag}: final loss {losses[-1]:.4f}, test error {te:.4f}, nodes {rec['nodes_covered_end']}/31, on-target {[round(rec[f'on_target_L{l}_end'], 2) for l in range(4)]}; {rec['wall_min']:.1f} min", flush=True); print("ALL DONE", flush=True)

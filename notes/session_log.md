@@ -6826,3 +6826,19 @@ Is this a even feasible? Just run phase 1 for now."
 - Run 70's random phase 1 was the sample's asymmetry: the population flow's direction is right from the majority-label init, only
   10-40x slower than run 60's, which lets a 10M-point sample's noise win below the root. The design's contrast supplies the margin, not
   the direction.
+
+## 2026-10-18 — Symmetrised-flow runs in the replay format (Q&A)
+
+### User prompts (verbatim)
+- "Can you make these runs also similar to the replay runs that can be analysed in the anatomy notebook?
+
+Also, am I right in saying that these are just full gradient descent runs with data that has been symmetrised carefully?"
+
+### Changes
+- `run_symmetric_gd.py` now writes the replay format (replay/weights.npz, an empty optimizer_state.npz, meta.pkl with design / train
+  config / losses / final state) instead of the 'hier' npz; run 72's existing trajectory converted in place and checked with
+  `load_designed_run` (501 snapshots) and the anatomy notebook's reads. Notebook 2 registry entry 72 switched to "replay"; the anatomy
+  notebook's RUNS registry extended with runs 62, 63, 67-72.
+- Answer recorded in the reply: the runs are minibatch SGD (batch 10k) with the gradient averaged over the group orbits, which at a
+  symmetric parameter equals SGD on the batch augmented by the full group (65 536 images per point, label negated under N); not
+  full-batch, so noise remains inside the symmetric subspace.

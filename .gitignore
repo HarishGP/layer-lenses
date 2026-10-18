@@ -178,5 +178,7 @@ results/designed_init/hierarchy_branch750_adam_frozenL1/replay/
 !results/designed_init/hd2_run71_symcue_partner_half/
 !results/designed_init/hd2_run71_symcue_partner_half/replay/meta.pkl
 !results/designed_init/hd2_run72_sym_pgf_phase1/
-results/designed_init/hd2_run72_sym_pgf_phase1/runs/*.npz
+results/designed_init/hd2_run72_sym_pgf_phase1/replay/weights.npz
+results/designed_init/hd2_run72_sym_pgf_phase1/replay/optimizer_state.npz
 !results/designed_init/hd2_run72_sym_pgf_phase1/identities.pkl
+!results/designed_init/hd2_run72_sym_pgf_phase1/replay/meta.pkl
