@@ -6752,3 +6752,44 @@ It has some equalities at init, and some symmetries due to the data. So there re
 - Refined (the off-span part of each row lives in the 30-dim span of the probes' initial off-span directions, which PGF preserves by the
   rotational symmetry of the complement; 30 coordinates per row): 7562 coordinates -> 203 orbits, 46 forced, **157 free** (probe
   off-span 46, cue off-span 14).
+
+## 2026-10-18 — The alpha parametrisation of the two-layer inits; off-span dynamics (Q&A with code)
+
+### User prompts (verbatim)
+- "Let's assume the off-span components of all the first layer neurons are orthogonal to each other at init and have equal components, so there really is no reason for W1's component along any off-span direction to have any different behaviour than any other.  The 69 off-span components are split into 30 and 39, but the 39 are going to stay identically zero, the compoents along the 30 off-span directions with compoents at init will likely be a non-increasing function of time. 
+
+Is my reading correct?
+
+Consider the run 70 init, and generalise it to have the following signed scalar parameters:
+
+\alpha_1 : norm of the probe vectors at init.
+\alpha_2: norm of the cue vectors at init.
+\alpha_3: the ratio of the dominant leaf direction vs non-dominant leaf direction component in the cues.
+\alpha_4: weight connecting the units to cue neurons under its designed target. e.g. wt connecting the -u_15 cue to Unit 0. (the wt connect the negative direction of the cue is negated)
+\alpha_5: weight connecting the units to cue neurons in the opposite side of its designed target. e.g. wt connecting the -u_23 cue to Unit 0. (the wt connect the negative direction of the cue is negated)
+\alpha_6:  weight connecting the units to cue neurons that are not descendants of its designed target, e.g. wt connecting -u_23 cue to Unit 4.
+alpha_7: weight connecting probes to their units. e.g. Probe0 to Unit 0.
+alpha_8: weight connecting probes to their opposite units e.g Probe0 to unit 1.
+alpha_9: Readout from top half of units (units 0 to 27)
+alpha_10 : readout form bottom half : (units 28 to 59).
+alpha_11: Relative learning rate of the readout layer to the W1 layer.
+alpha_12: relative learning rate of the W2 layer to the W1 layer
+
+Runs 60, 68, 69 and 70 fit into the above scheme. Is the above system clear? Any issues? Can you give the setting of above constants for run 60 , 68, 69and 70?  Also write a short program that takes these values and converts them into full parameters.
+ 
+
+f:"
+
+### Changes
+- `src/layer_lenses/alpha_init.py`: `AlphaInit` (12 alphas; alpha_4..6 scalar or per-level), `build_alpha_init(alphas, tree, orth_seed)`
+  -> W1 / W2 / Wout / update masks / identities, `RUN_ALPHAS` for runs 60, 68, 69, 70. Cue-weight sign convention: s_u x pole x alpha
+  (readout sign); run 60's design is alpha_4 = +c, alpha_5 = -c, alpha_6 = 0 with c = 2^-(5-level)/2 (0.177 / 0.25 / 0.354 / 0.5: the
+  inv_sqrt block equalisation), runs 68 / 69 / 70 = (0.2, 0.1, 0.1) / (0.1, 0.2, 0.2) / (0.2, 0.1, 0.1) with alpha_8 = 0 / 0 / 1.
+  All runs: alpha_1 = alpha_2 = sqrt 2, alpha_3 = 2, alpha_7 = -1, alpha_9 = alpha_10 = 0.8165 (signs = path signs), alpha_12 = 1;
+  alpha_11 = 80 (run 60) or 1. `tests/test_alpha_init.py`: reproduces the saved inits of the four runs (W2, Wout exact; W1 in-span
+  parts and probe Gram) — passes.
+- Off-span check (runs 60, 70): the part outside the 30-dim span stays at the 1e-2 level (SGD noise); the probes' components along their
+  own initial direction fall monotonically to 0 (run 60: 0.19 at the root by epoch 10, all 0 by 50; run 70: level by level, 100-500);
+  the components along the other probes' directions grow from 0 to 0.06-0.15 and then decay to 0.01; the cues acquire 0.003-0.025 of
+  off-span part only in phase 2. So "39 stay zero" yes, "non-increasing" only for the own-direction component, and the directions are
+  tied only within group orbits (46 free off-span orbits for the probes), not all alike.
