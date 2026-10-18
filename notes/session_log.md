@@ -6879,3 +6879,17 @@ Once all of that is done do all three PGF runs in a single phase without freezin
   75 run 60's init + partner links +1, 1000 / 500; 76 / 77 / 78 the same inits with nothing frozen (1500 / 1000 / 1000 epochs).
 - Bookkeeping: gitignore (folders tracked except weights / optimizer state), regeneration lines, notebook 2 sections 28-33 with a
   cross-run cell per group (73-75 and 76-78).
+
+## 2026-10-18 — Runs 73 and 76 results; runs 74 / 75 / 77 / 78 relaunched with run 60's x80 output rate
+
+### Changes
+- Run 73 (run 70's init, symmetrised, 1000 + 500, 63 min): loss 0.112 (0.123 at release), 2.3% error, 30/30 probes (root 98, L2 313,
+  L3 396, L1 408), 0/32 cues rotated in phase 2, 15 nodes; unit modes L0 -64/+65, L1 0/+70, L2 -52/0, L3 -49/0; readout 11.
+- Run 76 (run 70's init, one phase of 1500, 54 min): loss 0.085, 1.4% error, 14/30 probes (root 33, L1 194, L2 129, L3 never), 0 cues,
+  15 nodes; modes L0 -100/+99, L1 -137/0, L2 0/+133, L3 ~0.
+- Mistake found and corrected: the four run-60-init runs (74, 75, 77, 78) had been launched with the output rate x1 (the runner's
+  default), not run 60's x80. Their x1 results, kept under the folder suffix `_outx1`: 74: 0.0721 / 1.6%, 30 probes (20/153/102/61),
+  cues by 732, 31 nodes; 75: 0.0794 / 1.8%, 30 probes (18/267/156/135), cues by 718; 77 (one phase): 0.0278 / 0.5%, 30 probes
+  (16/134/68/64), cues by 275, 31 nodes; 78 (one phase, partner): 0.0762 / 1.75%, 30 probes, 0 cues, 15 nodes. In all four the
+  symmetric flow grew the partner edges and switched level 1 to the support mode (own 0 / partner +59 to +70), unlike run 60's SGD.
+  Chain B relaunched with `--out-scale 80` (launcher and regeneration lines updated); notebook 2 sections 29 / 30 / 32 / 33 carry a note.

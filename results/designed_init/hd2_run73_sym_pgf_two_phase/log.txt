@@ -1,0 +1,67 @@
+orbits: 203, free 157; init run hd2_run70_symcue_partner
+/home/harish/researchcodes/layer-lenses/results/designed_init/run_symmetric_gd.py:54: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  run_loss += float(loss); step += 1
+epoch 1: loss 0.7125, 0.4 min
+epoch 25: loss 0.6730, 1.5 min
+epoch 50: loss 0.6728, 2.6 min
+epoch 75: loss 0.6724, 3.8 min
+epoch 100: loss 0.6629, 4.9 min
+epoch 125: loss 0.6409, 6.0 min
+epoch 150: loss 0.6188, 7.1 min
+epoch 175: loss 0.6135, 8.2 min
+epoch 200: loss 0.6102, 9.3 min
+epoch 225: loss 0.5942, 10.4 min
+epoch 250: loss 0.5633, 11.6 min
+epoch 275: loss 0.5355, 12.7 min
+epoch 300: loss 0.5207, 13.8 min
+epoch 325: loss 0.5104, 14.9 min
+epoch 350: loss 0.4865, 16.0 min
+epoch 375: loss 0.4466, 17.1 min
+epoch 400: loss 0.3896, 18.2 min
+epoch 425: loss 0.3269, 19.3 min
+epoch 450: loss 0.2775, 20.5 min
+epoch 475: loss 0.2437, 21.6 min
+epoch 500: loss 0.2200, 22.7 min
+epoch 525: loss 0.2026, 23.8 min
+epoch 550: loss 0.1893, 25.0 min
+epoch 575: loss 0.1789, 25.8 min
+epoch 600: loss 0.1704, 26.7 min
+epoch 625: loss 0.1634, 27.5 min
+epoch 650: loss 0.1576, 28.4 min
+epoch 675: loss 0.1526, 29.2 min
+epoch 700: loss 0.1483, 30.0 min
+epoch 725: loss 0.1445, 30.9 min
+epoch 750: loss 0.1413, 31.7 min
+epoch 775: loss 0.1384, 32.5 min
+epoch 800: loss 0.1358, 33.3 min
+epoch 825: loss 0.1336, 34.2 min
+epoch 850: loss 0.1315, 35.0 min
+epoch 875: loss 0.1297, 35.9 min
+epoch 900: loss 0.1281, 36.7 min
+epoch 925: loss 0.1266, 37.6 min
+epoch 950: loss 0.1253, 38.8 min
+epoch 975: loss 0.1241, 39.9 min
+epoch 1000: loss 0.1230, 41.1 min
+epoch 1025: loss 0.1206, 41.9 min
+epoch 1050: loss 0.1196, 43.0 min
+epoch 1075: loss 0.1187, 44.0 min
+epoch 1100: loss 0.1179, 45.2 min
+epoch 1125: loss 0.1172, 46.2 min
+epoch 1150: loss 0.1165, 47.3 min
+epoch 1175: loss 0.1159, 48.5 min
+epoch 1200: loss 0.1154, 49.6 min
+epoch 1225: loss 0.1149, 50.8 min
+epoch 1250: loss 0.1144, 52.1 min
+epoch 1275: loss 0.1140, 53.3 min
+epoch 1300: loss 0.1136, 54.5 min
+epoch 1325: loss 0.1133, 55.6 min
+epoch 1350: loss 0.1130, 56.8 min
+epoch 1375: loss 0.1127, 57.9 min
+epoch 1400: loss 0.1124, 58.9 min
+epoch 1425: loss 0.1121, 60.1 min
+epoch 1450: loss 0.1119, 61.2 min
+epoch 1475: loss 0.1117, 62.1 min
+epoch 1500: loss 0.1115, 62.9 min
+hd2_run73_sym_pgf_two_phase: final loss 0.1115, test error 0.0232, nodes 15/31, on-target [1.0, 1.0, 1.0, 1.0]; 63.0 min
+ALL DONE

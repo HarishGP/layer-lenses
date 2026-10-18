@@ -1,0 +1,19 @@
+{
+  "tag": "hd2_run75_sym_pgf_run60_partner",
+  "init_run": "hd2_run60_sgd_lr1_1000",
+  "symmetrised": true,
+  "epochs": 1000,
+  "freeze_cues": 500,
+  "schedule_epochs": 1000,
+  "partner_probe_weight": 1.0,
+  "lr": 0.1,
+  "final_epoch_loss": 0.07940245258063078,
+  "min_epoch_loss": 0.07940245258063078,
+  "test_error_end": 0.018354998901486397,
+  "nodes_covered_end": 31,
+  "on_target_L0_end": 1.0,
+  "on_target_L1_end": 1.0,
+  "on_target_L2_end": 1.0,
+  "on_target_L3_end": 1.0,
+  "wall_min": 40.41114139556885
+}

@@ -1,0 +1,47 @@
+orbits: 203, free 157; init run hd2_run60_sgd_lr1_1000
+/home/harish/researchcodes/layer-lenses/results/designed_init/run_symmetric_gd.py:54: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  run_loss += float(loss); step += 1
+epoch 1: loss 0.6740, 0.6 min
+epoch 25: loss 0.6053, 1.5 min
+epoch 50: loss 0.3462, 2.4 min
+epoch 75: loss 0.2622, 3.3 min
+epoch 100: loss 0.2202, 4.2 min
+epoch 125: loss 0.1908, 5.1 min
+epoch 150: loss 0.1670, 6.0 min
+epoch 175: loss 0.1473, 6.9 min
+epoch 200: loss 0.1299, 7.8 min
+epoch 225: loss 0.1138, 8.7 min
+epoch 250: loss 0.0989, 9.6 min
+epoch 275: loss 0.0851, 10.5 min
+epoch 300: loss 0.0726, 11.4 min
+epoch 325: loss 0.0625, 12.3 min
+epoch 350: loss 0.0553, 13.3 min
+epoch 375: loss 0.0501, 14.2 min
+epoch 400: loss 0.0462, 15.0 min
+epoch 425: loss 0.0431, 15.9 min
+epoch 450: loss 0.0406, 16.9 min
+epoch 475: loss 0.0386, 17.7 min
+epoch 500: loss 0.0369, 18.6 min
+epoch 525: loss 0.0355, 19.5 min
+epoch 550: loss 0.0343, 20.4 min
+epoch 575: loss 0.0333, 21.3 min
+epoch 600: loss 0.0324, 22.2 min
+epoch 625: loss 0.0316, 23.2 min
+epoch 650: loss 0.0310, 24.1 min
+epoch 675: loss 0.0305, 25.0 min
+epoch 700: loss 0.0300, 25.8 min
+epoch 725: loss 0.0296, 26.7 min
+epoch 750: loss 0.0293, 27.5 min
+epoch 775: loss 0.0290, 28.3 min
+epoch 800: loss 0.0288, 29.2 min
+epoch 825: loss 0.0286, 30.0 min
+epoch 850: loss 0.0284, 30.8 min
+epoch 875: loss 0.0282, 31.7 min
+epoch 900: loss 0.0281, 32.5 min
+epoch 925: loss 0.0280, 33.3 min
+epoch 950: loss 0.0279, 34.2 min
+epoch 975: loss 0.0278, 35.0 min
+epoch 1000: loss 0.0278, 35.7 min
+hd2_run77_sym_pgf_run60_one_phase: final loss 0.0278, test error 0.0048, nodes 31/31, on-target [1.0, 1.0, 1.0, 1.0]; 35.7 min
+ALL DONE
