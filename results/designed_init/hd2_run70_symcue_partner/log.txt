@@ -1,0 +1,9 @@
+symmetric cue blocks a_open 0.2, a_other 0.1: block norms by unit level L0: 0.894, L1: 0.748, L2: 0.663, L3: 0.616; unit 0 cue row: [-0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1]
+partner-probe weight 1.0: unit 0 probe weights [-1.0000000085571357, 1.0, 0.0, 0.0], unit 1 [1.0, -1.0000000085571357, 0.0, 0.0], unit 4 [0.0, 0.0, -1.0, 1.0, 0.0, 0.0]; row norms [1.673, 1.673, 1.673, 1.673]
+hd2_run70_symcue_partner_seed0: 62-60 (run 49's init, cue bias 1.0, no third layer, Wout = path sign x 0.8165, symmetric cue blocks [0.2, 0.1], partner probe weight 1.0); phases (frozen rows, epochs): [('cues', (0, 500)), ('none', (500, 1000))]; 10000000 points, 1000 steps per epoch, SGD momentum 0.0 lr 0.1 cosine over 1000 epochs; flip test 2.2e-15; logit rms 6.1083
+phase 0: epochs 0-500 in 10.1 min; loss at end 0.3119
+/home/harish/researchcodes/layer-lenses/src/layer_lenses/relu_analysis.py:1574: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  scheduler.step()
+phase 1: epochs 500-1000 in 20.4 min; loss at end 0.1405
+hd2_run70_symcue_partner_seed0: final epoch loss 0.1405 (end of phases: [0.3119, 0.1405]), test error 0.0396; epochs to 0.3/0.2/0.1/0.05/0.03/0.01: 504/575/-1/-1/-1/-1; nodes covered 19/31; on-target end [1.0, 0.5, 0.5, 0.5]; 20.5 min
+ALL DONE

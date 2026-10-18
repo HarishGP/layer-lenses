@@ -6679,3 +6679,12 @@ I am still not confident about the relative scalar values of everything involved
 - `run_hd2_phased.py --probe-link-scale S` (multiplies the designed -1 links after the row renormalisation). Run 71 queued in tmux
   behind run 70 (`hd2_run71_symcue_partner_half`): `--probe-link-scale 0.5 --partner-probe-weight 0.5`, cue blocks 0.2 / 0.1, readouts
   +-0.816, output rate x1. Bookkeeping: gitignore, regeneration line, script copy, notebook 2 section 26 with a cross-run cell (68 / 70 / 71).
+
+## 2026-10-18 — Run 70 results: the partner edge doubles the push; the root is captured at epoch 99 by both probes
+
+### Changes
+- Run 70 (`hd2_run70_symcue_partner`, 21 min): loss 0.140 (phase 1 end 0.312), 4.0% error, 19 nodes, 14/30 probes on their node at the
+  designed pole (run 68: 7), 0 opposite, 14 deviated (8 ancestors, 3 descendants, 3 unrelated), 8 cues own. Root probes at cos 0.96 / -0.96
+  by epoch 100 (both poles; run 68: 0.76 / -0.53), root captured at epoch 99; level 1 half (probe 3 at -0.88, probe 2 climbs to the root);
+  deeper levels still noise. Units end as -a_j readers (-13.3 own / +13.1 partner x norm); side contrast 0.1 -> 0.15; plateau as run 68.
+  Notebook 2 section 25 findings filled (unexecuted). Run 71 (halved probe edges) running in tmux.
