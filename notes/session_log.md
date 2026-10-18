@@ -6857,3 +6857,25 @@ Also, am I right in saying that these are just full gradient descent runs with d
   to -0.21 at 500) and their return to u_1 (0.98 at 500).
 - Levels 2-3 (units 12-59): own probe -18.2 / -7.1, partner 0.0, vetoes on the ancestors (-23.9 on +u_0 for unit 12): pure veto, active
   on 12% / 7%. Run 70 (sampled) does not show the split: its level-1 units keep both modes (-19 / +19).
+
+## 2026-10-18 — Runs 73-78: symmetrised-flow runs (two-phase and one-phase) from the inits of runs 70, 60 and 60 + partner links
+
+### User prompts (verbatim)
+- "Redo run 72 on phase1 for either more epochs or increase the learning rate, the loss seems unsaturated still. Then run phase 2 as well.
+
+Then chain another couple of two phase PGF runs. 
+
+1. take the init of run 60 and go ahead.
+2. take the init of run 60 but add the positive partner links between the units and the probes.
+
+
+Once all of that is done do all three PGF runs in a single phase without freezing anything."
+
+### Changes
+- `run_symmetric_gd.py`: `--epochs`, `--freeze-cues N` (replaces `--phases`), `--schedule-epochs` (default = epochs), `--partner-probe-weight`
+  (sets every unit's weight on its probe's pole partner after loading the init). Run 72's regeneration line updated.
+- Launched in two tmux chains (chain A: 73 -> 76; chain B: 74 -> 75 -> 77 -> 78), all plain SGD lr 0.1 cosine, batch 10k, 10M points,
+  output rate x1, symmetrised gradients: 73 run 70's init, 1500 epochs, cues frozen 1000 (phase 1 doubled); 74 run 60's init, 1000 / 500;
+  75 run 60's init + partner links +1, 1000 / 500; 76 / 77 / 78 the same inits with nothing frozen (1500 / 1000 / 1000 epochs).
+- Bookkeeping: gitignore (folders tracked except weights / optimizer state), regeneration lines, notebook 2 sections 28-33 with a
+  cross-run cell per group (73-75 and 76-78).
