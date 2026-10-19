@@ -6947,3 +6947,20 @@ It seems to me that this can be done better in the anatomy notebook itself. Have
 - `notebooks/two_layer_network_anatomy.ipynb`: registry of every two-hidden-layer run (42-46, 55-78 and the x1 variants as "74x1" etc.),
   `RUN` / `EPOCH` selectors, new section 0 (end-of-run numbers, trajectory plots, network view at `GRAPH_EPOCH`) before the anatomy
   sections; executed in place with the user's current selection (RUN = 72). Notebook 2 is left as the chronological record.
+
+## 2026-10-19 — Alpha sweep A launched (runs 79-96, overnight) and a path-analysis section in the anatomy notebook
+
+### User prompts (verbatim)
+- "Ok, can you do several symmetrised PGF runs in the alpha setup we have? Choose interesting alphas (according to you). I want to see what other solutions appear when we try different things. Do both dual phases with cue-freezing and single-phase for all. I am leaving the system running overnight, so you can take 9 hours for running.
+
+Also, I  am interested in analysing what happens in the path-framework we have. 60*62 is a tractable number of paths, and having a section in the anatomy notebook that tracks what happens to the paths during training would be interesting. For example, each path's active-point statistics like the histogram of ODT leaf nodes, path-weights, effective linear function in the active-path region etc."
+
+### Changes
+- `run_symmetric_gd.py --alpha-json` (init built from `alpha_init.RUN_ALPHAS[60]` with overrides, `--orth-seed`; alpha_11 / alpha_12 become
+  the readout / W2 rate scales). `scripts/launch_alpha_sweep_A.sh A|B`: 9 inits x (two-phase 500 + 500, one-phase 1000), runs 79-96:
+  a3 1.5 (79/80), a3 4 (81/82), blocks x0.5 (83/84), blocks x2 (85/86), a6 0.1 (87/88), a5 0 (89/90), veto -2 (91/92), readouts 0.4 / 1.6
+  (93/94), readout rate x8 (95/96); all other alphas run 60's. Two tmux chains (sweepA: 79-88, sweepB: 89-96), ~6-7 h.
+- `src/layer_lenses/path_analysis.py` (`leaf_cells`, `path_relation`, `path_statistics`, `path_group_summary`) with a test; anatomy
+  notebook section 6: per-path active-region statistics at EPOCH (group summary; designed paths by level; heat maps of the signed path
+  weight and of the top-cell share), and the evolution over PATH_EPOCHS of five path groups (probe -> own unit, probe -> ancestor veto,
+  probe -> unrelated, cue -> unit above, cue -> unrelated). Executed in place (the user's selection RUN = 72, EPOCH = 0).
