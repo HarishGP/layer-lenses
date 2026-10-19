@@ -6920,3 +6920,14 @@ Once all of that is done do all three PGF runs in a single phase without freezin
   left on u_1) while all 16 level-3 probes sit at |cos| 0.267 with their target (norm 1.4, never captured, hence counted neither as
   own nor deviated); in run 76 all 16 level-3 probes point weakly at the root (0.151). The per-probe counts hid that a level moves as
   one block, with the mirror images prescribed by the flips.
+
+## 2026-10-19 — Summary table of runs 60, 70, 72-78 and the x1 variants
+
+### User prompts (verbatim)
+- "Can you create a full detailed table putting together results from run 60, 73 to 78 including the x1 learning rate results that we did? I am finding it hard to look at everything simultaneuosly. Also whenever possible do remark on the veto/support structure of converged units."
+
+### Changes
+- `results/designed_init/summarise_symmetric_flow_runs.py` (tracked copy under notebooks/results/designed_init/) builds the table:
+  loss (at release), test error, nodes, capture epochs by level, probe fate by level (target / ancestor / off), cues on their normals
+  (epoch when all are), readout mean, unit mode by level (veto / support / both / inert from the own-probe and partner weights x row
+  norm), unit activity by level. Saved as `notes/symmetric_flow_summary.md` (and results/designed_init/symmetric_flow_summary.md).
