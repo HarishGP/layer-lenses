@@ -6931,3 +6931,19 @@ Once all of that is done do all three PGF runs in a single phase without freezin
   loss (at release), test error, nodes, capture epochs by level, probe fate by level (target / ancestor / off), cues on their normals
   (epoch when all are), readout mean, unit mode by level (veto / support / both / inert from the own-probe and partner weights x row
   norm), unit activity by level. Saved as `notes/symmetric_flow_summary.md` (and results/designed_init/symmetric_flow_summary.md).
+
+## 2026-10-19 — Anatomy notebook as the flexible analysis tool for any two-layer run
+
+### User prompts (verbatim)
+- "Great, the runs notebooks have become a bit too big, and it is a good place to have summaries of runs, but the code cells are repetitive and not convenient for analysis. 
+
+It seems to me that this can be done better in the anatomy notebook itself. Have the anatomy notebook be capable of analysing all these runs, and add a cell for the trajectory analysis and network view as well."
+- "The runs notebooks are fine as they are as a source of chronological evolution. I just want a flexible version of them in the anatomy notebook where I can load any run that is interesting by browsing through the runs notebook."
+
+### Changes
+- `src/layer_lenses/run_analysis.py`: `AnalysisContext` (tree + fixed test sample), `load_replay_run`, `logits_at`, `findings_table`,
+  `trajectory_plots` (with a `stride` for long runs), `network_view`, extracted from notebook 2's setup cell and made run-agnostic
+  (two or three hidden layers for the trajectory / view helpers). `tests/test_run_analysis.py` passes.
+- `notebooks/two_layer_network_anatomy.ipynb`: registry of every two-hidden-layer run (42-46, 55-78 and the x1 variants as "74x1" etc.),
+  `RUN` / `EPOCH` selectors, new section 0 (end-of-run numbers, trajectory plots, network view at `GRAPH_EPOCH`) before the anatomy
+  sections; executed in place with the user's current selection (RUN = 72). Notebook 2 is left as the chronological record.
