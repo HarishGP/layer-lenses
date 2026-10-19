@@ -8,12 +8,15 @@ estimate of the population flow (plain SGD discretisation, noise only within the
   run 74: --init-run hd2_run60_sgd_lr1_1000 --epochs 1000 --freeze-cues 500 (run 60's init and protocol under the symmetrised flow).
   run 75: --init-run hd2_run60_sgd_lr1_1000 --partner-probe-weight 1 --epochs 1000 --freeze-cues 500 (run 60's init + partner links +1).
   runs 76-78: the same three inits in a single phase, nothing frozen (--freeze-cues 0), 1500 / 1000 / 1000 epochs.
+  runs 79-94 (alpha sweep A, 2026-10-19): --alpha-json '{...}' builds the init from layer_lenses.alpha_init (run 60's design = RUN_ALPHAS[60]
+          with the given overrides; off-span directions from --orth-seed); alpha_11 / alpha_12 give the readout / W2 rate scales. Each
+          init is run two-phase (--freeze-cues 500) and one-phase; see scripts/launch_alpha_sweep_A.sh.
 """
 import argparse, json, os, pickle, time, numpy as np, pandas as pd, torch
 from layer_lenses.designed_init import cue_row_identity, hierarchy_probe_table, NODE_LEVEL, HIERARCHY_TARGETS
 from layer_lenses.init_sweep import SweepRunSpec, build_data, build_data_chunked, load_tree, save_tree
 from layer_lenses.symmetric_flow import symmetric_orbits, symmetrise
-ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--init-run", required=True)
+ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--init-run", default="hd2_run60_sgd_lr1_1000"); ap.add_argument("--alpha-json", default=None, help="overrides of run 60's alphas (layer_lenses.alpha_init.RUN_ALPHAS[60]); builds the init instead of loading it"); ap.add_argument("--orth-seed", type=int, default=0)
 ap.add_argument("--epochs", type=int, default=500); ap.add_argument("--freeze-cues", type=int, default=0, help="epochs with the cue rows frozen (phase 1)"); ap.add_argument("--schedule-epochs", type=int, default=None, help="length of the cosine schedule (default: --epochs)"); ap.add_argument("--partner-probe-weight", type=float, default=None, help="if given, set every unit's weight on the pole partner of its own probe to this value"); ap.add_argument("--lr", type=float, default=0.1); ap.add_argument("--out-scale", type=float, default=1.0); ap.add_argument("--w2-scale", type=float, default=1.0)
 ap.add_argument("--n-train", type=int, default=10_000_000); ap.add_argument("--batch", type=int, default=10_000); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--no-symmetrise", action="store_true")
 args = ap.parse_args(); OUT = f"results/designed_init/{args.out}"; os.makedirs(f"{OUT}/runs", exist_ok=True); dev = "cuda"; t0 = time.time()
@@ -21,6 +24,14 @@ src = f"results/designed_init/{args.init_run}/replay"; tree = load_tree(f"result
 z = np.load(f"{src}/weights.npz"); meta = pickle.load(open(f"{src}/meta.pkl", "rb")); d = meta["design"]
 W1, W2, Wo = (z[k][0].astype(np.float64) for k in ["w__hidden_layers.0.weight", "w__hidden_layers.1.weight", "w__output_layer.weight"])
 cid = cue_row_identity(W1, tree, d["cue_rows"]); units = list(zip(d["unit_node"], d["unit_block_sign"], d["unit_path_sign"])); CUE_ROWS = list(d["cue_rows"])
+if args.alpha_json is not None:                                                # alpha-built init (run 60's tree / identities; the probes' off-span directions from --orth-seed)
+    from layer_lenses.alpha_init import AlphaInit, RUN_ALPHAS, build_alpha_init
+    from dataclasses import replace, asdict
+    ALPHAS = replace(RUN_ALPHAS[60], **{k: (tuple(v) if isinstance(v, list) else v) for k, v in json.loads(args.alpha_json).items()}); built = build_alpha_init(ALPHAS, tree, orth_seed=args.orth_seed)
+    W1, W2, Wo = built["W1"], built["W2"], built["Wout"]; d = dict(d); d["cue_rows"] = [built["cue_rows"][k] for k in sorted(built["cue_rows"], key=lambda k: built["cue_rows"][k])]; d["unit_node"] = [u["node"] for u in built["units"]]; d["unit_block_sign"] = [u["block_sign"] for u in built["units"]]; d["unit_path_sign"] = [u["path_sign"] for u in built["units"]]
+    d["alphas"] = {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(ALPHAS).items()}; args.out_scale = ALPHAS.alpha_11; args.w2_scale = ALPHAS.alpha_12
+    cid = cue_row_identity(W1, tree, d["cue_rows"]); units = list(zip(d["unit_node"], d["unit_block_sign"], d["unit_path_sign"])); CUE_ROWS = list(d["cue_rows"])
+    print(f"alpha init: {d['alphas']}; readout rate x{args.out_scale}, W2 rate x{args.w2_scale}", flush=True)
 if args.partner_probe_weight is not None:
     for u_ in range(60):
         pr_ = [p_ for p_ in range(30) if W2[u_, p_] < 0][0]; W2[u_, pr_ + 1 if pr_ % 2 == 0 else pr_ - 1] = args.partner_probe_weight

@@ -92,3 +92,5 @@ $PY $S/check_init_gradient_variance.py   # init-gradient variance ladder (sessio
 echo "All runs regenerated under results/designed_init/. Execute the notebook with:"
 echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inplace hierarchy_design_runs.ipynb"
 $PY $S/check_init_gradient_tails.py   # init-gradient tail probabilities per level (session log 2026-10-15)
+
+# alpha sweep A (runs 79-96): scripts/launch_alpha_sweep_A.sh A ; scripts/launch_alpha_sweep_A.sh B
