@@ -6907,3 +6907,16 @@ Once all of that is done do all three PGF runs in a single phase without freezin
 - From the design init the population flow reproduces run 60 (1.5x the loss, faster probe phase, slower cue phase); the cue freeze is a
   requirement of the flow (free cues never rotate and level 3 dies in 76 / 77 / 78); the partner links trade the designed map for an
   equally good function (75). The majority-label init (73 / 76) builds the probes but not the leaf stage.
+
+## 2026-10-19 — Deviations in the symmetrised runs come in whole levels (Q&A with a check)
+
+### User prompts (verbatim)
+- "How come there is deviation of only some probes in some of the runs? Aren't the run supposed to be symmetric?"
+
+### Check
+- The runs are exactly symmetric: within every level the probes' |cos| with their target and their norms have spread 0.0e+00 at the
+  end of runs 75, 76 and 78. The "12 deviated" of run 75 are all 4 level-1 probes (on the root, |cos| 1.000, norm 15.0) and all 8 level-2
+  probes (on their level-1 parent, |cos| 1.000); the "4 deviated" of run 78 are the 4 level-1 probes (on the root at 0.968, with 0.25
+  left on u_1) while all 16 level-3 probes sit at |cos| 0.267 with their target (norm 1.4, never captured, hence counted neither as
+  own nor deviated); in run 76 all 16 level-3 probes point weakly at the root (0.151). The per-probe counts hid that a level moves as
+  one block, with the mirror images prescribed by the flips.
