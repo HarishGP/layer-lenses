@@ -7076,3 +7076,17 @@ Of course, the convergence is going to be horribly slow for both phase 1 and 2 (
   the side contrast), so capture epochs ~ 1 / B with no threshold in the population flow unless the ancestor climb wins; phase 2 at
   B = 0 is a symmetric fixed point (all cues identical, a larger group), so the escape time should grow like log(1 / B) / rate for a
   linear instability of the own-leaf component.
+
+## 2026-10-20 — Cue-bias sweeps results (runs 99-106)
+
+### Changes
+- Phase 2 (99-103, from run 74's epoch-500 state, constant step 0.1): escape time independent of the bias: all cues past |cos| 0.95 at
+  epoch 101 / 101 / 98 / 98 / 98 for beta 0.5 / 0.25 / 0.1 / 0.05 / 0.02, every cue at 0.47 within 10 epochs whatever its start, same
+  end point (loss 0.0032). The cue identity comes from W2's wiring, not from the initial leaf component; the log(1 / beta) prediction was
+  wrong for this state. Phase 1 (104-106, cues frozen, constant step 0.1): all 30 probes captured at every bias, capture epochs
+  21 / 32 / 46 / 66 (beta 0.25), 50 / 75 / 116 / 273 (0.1), 104 / 165 / 422 / 772 (0.05) against run 74's 9 / 15 / 21 / 30: ~1 / beta at the
+  top, steeper at levels 2-3; no ancestor climbing. Notebook 2 section 37 (tables and findings), anatomy registry 99-106; memory.
+
+### Decisions
+- In the population flow a small cue bias costs phase-1 time (~1 / beta) and nothing in phase 2; there is no threshold. The threshold
+  for sampled runs comes from the noise push (estimated beta ~ 0.03-0.05 at 10M points, batch 10k).
