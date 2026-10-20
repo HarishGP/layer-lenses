@@ -7042,3 +7042,16 @@ Also, I  am interested in analysing what happens in the path-framework we have. 
 ### Decisions
 - Cue bias 0.5 / 1 / 3 sets the duration of the cue stage (141 / 23 / ~525 epochs at the respective steps), not the end point; the
   single-cycle failures (runs 52, 79) were learning-rate artefacts. Quality tracks the training time of the leaf stage at a usable step.
+
+## 2026-10-20 — Cue rotation at bias 0.5: monotone? (Q&A with a check)
+
+### User prompts (verbatim)
+- "So with cue bias of 1.5 (or an extra componet of 0.5 u_j to v), the cosine of the cues with the appropriate leaf node is still monotone increasing in phase2? previouslt in run 79 it went only from 0.36 to 0.39, and now you find that given enough time it approaches 1.0 too?"
+
+### Check
+- Correction of an earlier statement: run 79's cue |cos| with the own normal starts at 0.361 (the bias-0.5 init value, 1.5 / sqrt 17.25),
+  not 0.46 (the bias-1 value); it rose to 0.391 by epoch 1000, so the cues never drifted away.
+- Trend monotone, increments noisy: run 79 phase 2: 0.361 / 0.374 / 0.381 / 0.386 / 0.389 / 0.391 at epochs 500-1000 (decelerating with
+  the cosine step 0.05 -> 0.005), 35% of per-epoch increments negative (SGD noise inside the symmetric subspace, largest -8e-4);
+  run 98: 0.391 / 0.41 / 0.427 / 0.451 / 0.493 / 0.63 / 0.985 / 0.995 at epochs 0 / 25 / 50 / 75 / 100 / 125 / 150 / 250 at a step of 0.1:
+  an S-curve, slow for 100 epochs then a jump within 50, saturating at 0.9999 by the end.
