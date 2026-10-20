@@ -6983,3 +6983,19 @@ Also, I  am interested in analysing what happens in the path-framework we have. 
 ### Decisions
 - The free-cue failure is a readout-balance effect: a leaf-heavy readout (level-3 readout 4x the others) lets the leaf stage form first
   and removes the need for the cue freeze. Candidate new anchor for the single-phase story: run 94.
+
+## 2026-10-20 — Run 73: do the level-1 units 4 and 6 cancel? (Q&A with a check)
+
+### User prompts (verbatim)
+- "Take run 73. I am confused looking at the units corresponding to level 1. e.g. at epoch 1000, wouldn't units 4 and 6 perfectly cancel each other out?  At init, their probe blocks are same, their readout is opposite, but their cue-blocks are also opposite. But around epoch 500, both their cue-blocks have almost vanished, and their units just cancel each other. Why do they still keep growing in size? Why not just stay there? Or go lower?"
+
+### Check (run 73, units 4 and 6, test sample)
+- Their probe weights are identical at every epoch and their cue blocks are exact pole-mirrors (the label negation ties them); the blocks
+  have not vanished (|b| 3.4-4.3, x cue norm 5-6) but are small next to the partner weight (33 at epoch 500, 64 at 1000, 70 at 1500).
+- Outputs cancel 95-97% (unit rms 19 / 45 / 50 at epochs 500 / 1000 / 1500, pair rms 0.88 / 1.15 / 1.34), and the residual is the pair's
+  function: relu(s + c) - relu(s - c) with s the shared probe part (rms 3.3 -> 7.4) and c the cue reading (rms 0.1, odd under label
+  negation, corr +0.03 with y per unit); outside the band |s| < |c| it equals 2 Wo c(x) on {s > 0}, a label reader (corr +0.105 with y)
+  gated by the partner probe, 26% / 17% / 16% of the logit rms. The pair is one gated cue-reading unit, not two cancelling ones.
+- Growth: inside the band the pair outputs Wo (s + c), which carries the label-independent s; the gradient on the partner weight is
+  supported on the band and has a definite sign, so the flow keeps sharpening the gate (shrinking the band ~ |c| / s) with a gradient
+  that vanishes only as the band does: slow persistent growth under the decaying lr, no reason to stop or shrink.
