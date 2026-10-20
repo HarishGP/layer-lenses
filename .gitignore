@@ -242,3 +242,8 @@ results/designed_init/hd2_run{79,8[0-9],9[0-6]}_alpha_*/replay/optimizer_state.n
 !results/designed_init/hd2_run79_alpha_*/identities.pkl
 results/designed_init/hd2_run79_alpha_*/replay/weights.npz
 results/designed_init/hd2_run79_alpha_*/replay/optimizer_state.npz
+!results/designed_init/hd2_run97_sym_pgf_run73_cont/
+!results/designed_init/hd2_run97_sym_pgf_run73_cont/replay/meta.pkl
+!results/designed_init/hd2_run97_sym_pgf_run73_cont/identities.pkl
+results/designed_init/hd2_run97_sym_pgf_run73_cont/replay/weights.npz
+results/designed_init/hd2_run97_sym_pgf_run73_cont/replay/optimizer_state.npz

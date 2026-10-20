@@ -6999,3 +6999,14 @@ Also, I  am interested in analysing what happens in the path-framework we have. 
 - Growth: inside the band the pair outputs Wo (s + c), which carries the label-independent s; the gradient on the partner weight is
   supported on the band and has a definite sign, so the flow keeps sharpening the gate (shrinking the band ~ |c| / s) with a gradient
   that vanishes only as the band does: slow persistent growth under the decaying lr, no reason to stop or shrink.
+
+## 2026-10-20 — Run 97: run 73 continued for 2000 free epochs with a fresh lr cycle
+
+### User prompts (verbatim)
+- "Can you take run 73, and run in phase 2 for another 2000 epochs? Or maybe increase the learning rate and just another 1000 epochs? The cues do seem to be moving towards the desired targets, if ever so slowly. I just want to check if it goes to the same solution as run 74. (the units for level 1 are in the opposite mode (support vs veto), but their readouts are  anyway much smaller than the readout for the level 3 units."
+
+### Changes
+- `run_symmetric_gd.py --init-epoch E`: continue from a stored epoch of --init-run (identities and the off-span basis from its epoch 0).
+  Run 97 launched (tmux): run 73's epoch-1500 state, 2000 free epochs, fresh cosine from 0.1 (both of the user's suggestions at once:
+  more epochs and a higher step than the 0.005 run 73 had ended at). Bookkeeping: gitignore, regeneration line, notebook 2 section 35,
+  anatomy registry.

@@ -16,14 +16,14 @@ import argparse, json, os, pickle, time, numpy as np, pandas as pd, torch
 from layer_lenses.designed_init import cue_row_identity, hierarchy_probe_table, NODE_LEVEL, HIERARCHY_TARGETS
 from layer_lenses.init_sweep import SweepRunSpec, build_data, build_data_chunked, load_tree, save_tree
 from layer_lenses.symmetric_flow import symmetric_orbits, symmetrise
-ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--init-run", default="hd2_run60_sgd_lr1_1000"); ap.add_argument("--alpha-json", default=None, help="overrides of run 60's alphas (layer_lenses.alpha_init.RUN_ALPHAS[60]); builds the init instead of loading it"); ap.add_argument("--orth-seed", type=int, default=0)
+ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--init-run", default="hd2_run60_sgd_lr1_1000"); ap.add_argument("--alpha-json", default=None, help="overrides of run 60's alphas (layer_lenses.alpha_init.RUN_ALPHAS[60]); builds the init instead of loading it"); ap.add_argument("--orth-seed", type=int, default=0); ap.add_argument("--init-epoch", type=int, default=0, help="start from this stored epoch of --init-run (a continuation with a fresh schedule)")
 ap.add_argument("--epochs", type=int, default=500); ap.add_argument("--freeze-cues", type=int, default=0, help="epochs with the cue rows frozen (phase 1)"); ap.add_argument("--schedule-epochs", type=int, default=None, help="length of the cosine schedule (default: --epochs)"); ap.add_argument("--partner-probe-weight", type=float, default=None, help="if given, set every unit's weight on the pole partner of its own probe to this value"); ap.add_argument("--lr", type=float, default=0.1); ap.add_argument("--out-scale", type=float, default=1.0); ap.add_argument("--w2-scale", type=float, default=1.0)
 ap.add_argument("--n-train", type=int, default=10_000_000); ap.add_argument("--batch", type=int, default=10_000); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--no-symmetrise", action="store_true")
 args = ap.parse_args(); OUT = f"results/designed_init/{args.out}"; os.makedirs(f"{OUT}/runs", exist_ok=True); dev = "cuda"; t0 = time.time()
 src = f"results/designed_init/{args.init_run}/replay"; tree = load_tree(f"results/designed_init/{args.init_run}/tree.npz"); save_tree(tree, f"{OUT}/tree.npz"); U = tree.w_list
 z = np.load(f"{src}/weights.npz"); meta = pickle.load(open(f"{src}/meta.pkl", "rb")); d = meta["design"]
-W1, W2, Wo = (z[k][0].astype(np.float64) for k in ["w__hidden_layers.0.weight", "w__hidden_layers.1.weight", "w__output_layer.weight"])
-cid = cue_row_identity(W1, tree, d["cue_rows"]); units = list(zip(d["unit_node"], d["unit_block_sign"], d["unit_path_sign"])); CUE_ROWS = list(d["cue_rows"])
+_i0 = list(z["epochs"]).index(args.init_epoch); W1, W2, Wo = (z[k][_i0].astype(np.float64) for k in ["w__hidden_layers.0.weight", "w__hidden_layers.1.weight", "w__output_layer.weight"])
+cid = cue_row_identity(z["w__hidden_layers.0.weight"][0].astype(np.float64), tree, d["cue_rows"]); units = list(zip(d["unit_node"], d["unit_block_sign"], d["unit_path_sign"])); CUE_ROWS = list(d["cue_rows"])
 if args.alpha_json is not None:                                                # alpha-built init (run 60's tree / identities; the probes' off-span directions from --orth-seed)
     from layer_lenses.alpha_init import AlphaInit, RUN_ALPHAS, build_alpha_init
     from dataclasses import replace, asdict
@@ -36,7 +36,8 @@ if args.partner_probe_weight is not None:
     for u_ in range(60):
         pr_ = [p_ for p_ in range(30) if W2[u_, p_] < 0][0]; W2[u_, pr_ + 1 if pr_ % 2 == 0 else pr_ - 1] = args.partner_probe_weight
     print(f"partner probe weight set to {args.partner_probe_weight}", flush=True)
-O = W1[:30] - (W1[:30] @ U.T) @ U; O /= np.linalg.norm(O, axis=1, keepdims=True); B = np.vstack([U, O]); assert np.allclose(B @ B.T, np.eye(61), atol=1e-6)
+_W1_0 = z["w__hidden_layers.0.weight"][0].astype(np.float64); O = _W1_0[:30] - (_W1_0[:30] @ U.T) @ U; O /= np.linalg.norm(O, axis=1, keepdims=True); B = np.vstack([U, O]); assert np.allclose(B @ B.T, np.eye(61), atol=1e-6)   # the off-span basis of the original init
+if args.init_epoch: print(f"continuing {args.init_run} from epoch {args.init_epoch}; off-span part of W1 outside the basis: {np.linalg.norm(W1 - (W1 @ B.T) @ B):.2e}", flush=True)
 orb = symmetric_orbits(cid, units); print(f"orbits: {orb['n_orbits']}, free {orb['n_free']}; init run {args.init_run}", flush=True)
 Bt = torch.as_tensor(B, dtype=torch.float32, device=dev)
 x, y = build_data_chunked(SweepRunSpec(tree_seed=5178, data_seed=args.data_seed, init_seed=0, batch_size=1, n_train=args.n_train), tree); xe, ye = build_data(SweepRunSpec(tree_seed=5178, data_seed=999_777, init_seed=0, batch_size=1, n_train=200_000), tree)
@@ -74,7 +75,7 @@ def save_replay(folder):
     os.makedirs(folder, exist_ok=True); np.savez(f"{folder}/weights.npz", epochs=eps, **{f"w__{k}": np.stack([snaps[e][i] for e in eps]).astype(np.float32) for i, k in enumerate(names)}); np.savez(f"{folder}/optimizer_state.npz", epochs=eps)
     L = np.full(EPOCHS, np.nan); L[:TOTAL] = losses; LR = np.full(EPOCHS, np.nan); LR[:TOTAL] = lrs
     cfg = ReLUTrainConfig(epochs=EPOCHS, lr=args.lr, batch_size=args.batch, seed=1000, device="cuda", snapshot_epochs=tuple(int(e) for e in eps), lr_scheduler_eta_min_ratio=0.05, optimizer="sgd", momentum=0.0, show_progress=False)
-    design = {**{k: (list(v) if isinstance(v, tuple) else v) for k, v in d.items()}, "init_run": args.init_run, "symmetrised_gradient": not args.no_symmetrise, "epochs": TOTAL, "freeze_cues": args.freeze_cues, "schedule_epochs": EPOCHS, "partner_probe_weight": args.partner_probe_weight, "out_scale": args.out_scale, "w2_scale": args.w2_scale}
+    design = {**{k: (list(v) if isinstance(v, tuple) else v) for k, v in d.items()}, "init_run": args.init_run, "symmetrised_gradient": not args.no_symmetrise, "epochs": TOTAL, "freeze_cues": args.freeze_cues, "schedule_epochs": EPOCHS, "partner_probe_weight": args.partner_probe_weight, "init_epoch": args.init_epoch, "out_scale": args.out_scale, "w2_scale": args.w2_scale}
     meta_out = {"tag": args.tag, "tree": tree, "data_spec": {"kind": "sweep_chunked", "tree_seed": 5178, "data_seed": args.data_seed, "n_train": args.n_train, "chunk_size": 1_000_000, "eval_seed": 999_777, "n_eval": 200_000, "dim": 100, "depth": 5},
                 "model_spec": {"input_dim": 100, "hidden_dims": [62, 60], "bias": False, "activation": "relu"}, "train_config": cfg, "design": design,
                 "out": {"epoch_losses": L.tolist(), "lr_history": LR.tolist(), "model_state_final": {k: torch.as_tensor(snaps[int(eps[-1])][i]) for i, k in enumerate(names)}},

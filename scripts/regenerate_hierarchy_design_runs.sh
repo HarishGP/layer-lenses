@@ -94,3 +94,4 @@ echo "  cd notebooks && uv run jupyter nbconvert --to notebook --execute --inpla
 $PY $S/check_init_gradient_tails.py   # init-gradient tail probabilities per level (session log 2026-10-15)
 
 # alpha sweep A (runs 79-96): scripts/launch_alpha_sweep_A.sh A ; scripts/launch_alpha_sweep_A.sh B
+$PY $S/hd2_run97_sym_pgf_run73_cont/run_symmetric_gd.py --out hd2_run97_sym_pgf_run73_cont --tag hd2_run97_sym_pgf_run73_cont --init-run hd2_run73_sym_pgf_two_phase --init-epoch 1500 --epochs 2000 --freeze-cues 0   # run 97 (section 35: run 73 continued from epoch 1500, fresh cosine from lr 0.1 over 2000 free epochs)
