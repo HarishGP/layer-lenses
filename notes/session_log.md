@@ -7031,3 +7031,14 @@ Also, I  am interested in analysing what happens in the path-framework we have. 
 ### Changes
 - Run 98 launched (tmux): run 79's epoch-1000 state (alpha_3 = 1.5, two-phase, x80), 2000 free epochs with a fresh cosine from 0.1, output
   rate x80 kept. Bookkeeping: gitignore, regeneration line, notebook 2 section 36, anatomy registry.
+
+## 2026-10-20 — Run 98 results: the weak cue bias was learning-rate-starved too; best run of the series
+
+### Changes
+- Run 98 (38 min): loss 0.0027, error 0.02%, 31 nodes, all probes and cues (cues |cos| 0.39 -> 0.49 at epoch 100 -> 0.995 at 250, all past
+  0.95 by 141). Run 74's family (L0 both, L1-3 veto), readouts 21 / 31 / 51 / 108, cue norms 3.2. Notebook 2 section 36 findings filled
+  (unexecuted); memory updated.
+
+### Decisions
+- Cue bias 0.5 / 1 / 3 sets the duration of the cue stage (141 / 23 / ~525 epochs at the respective steps), not the end point; the
+  single-cycle failures (runs 52, 79) were learning-rate artefacts. Quality tracks the training time of the leaf stage at a usable step.

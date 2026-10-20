@@ -1,0 +1,19 @@
+{
+  "tag": "hd2_run98_sym_pgf_run79_cont",
+  "init_run": "hd2_run79_alpha_a3_1.5_2ph",
+  "symmetrised": true,
+  "epochs": 2000,
+  "freeze_cues": 0,
+  "schedule_epochs": 2000,
+  "partner_probe_weight": null,
+  "lr": 0.1,
+  "final_epoch_loss": 0.0026752401354024186,
+  "min_epoch_loss": 0.002675235946662724,
+  "test_error_end": 0.00021999998716637492,
+  "nodes_covered_end": 31,
+  "on_target_L0_end": 1.0,
+  "on_target_L1_end": 1.0,
+  "on_target_L2_end": 1.0,
+  "on_target_L3_end": 1.0,
+  "wall_min": 38.17291933298111
+}
