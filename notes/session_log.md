@@ -7010,3 +7010,15 @@ Also, I  am interested in analysing what happens in the path-framework we have. 
   Run 97 launched (tmux): run 73's epoch-1500 state, 2000 free epochs, fresh cosine from 0.1 (both of the user's suggestions at once:
   more epochs and a higher step than the 0.005 run 73 had ended at). Bookkeeping: gitignore, regeneration line, notebook 2 section 35,
   anatomy registry.
+
+## 2026-10-20 — Run 97 results: run 73 continued reaches 0.0097 / 0.11%, a different solution from run 74's
+
+### Changes
+- Run 97 (46 min): loss 0.0097, error 0.11%, 31 nodes, all probes and cues (cues at |cos| > 0.95 by epoch 23 of the restart; 0.98 at 100,
+  0.999 at 1000). Families: L0 both (-103 / +104), L1 support (0 / +111), L2-3 veto (-86 / -83); readouts 5 / 7 / 9 / 17 (run 74: 20 / 26
+  / 42 / 86); probe norms 28 / 20 / 15 / 11, cue norms 3.9 (run 74: 0.47). Notebook 2 section 35 findings filled (unexecuted); memory.
+
+### Decisions
+- Run 73's slow cue rotation was the decayed step (0.005), not a different attractor. The majority-label init under the symmetrised flow
+  reaches the exact designed assignment at 0.0097 / 0.11%, with the level-1 support family and the scale in the first layers rather than
+  the readouts: a second solution family, better than run 74's and than run 60's.
