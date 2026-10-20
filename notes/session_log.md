@@ -6964,3 +6964,22 @@ Also, I  am interested in analysing what happens in the path-framework we have. 
   notebook section 6: per-path active-region statistics at EPOCH (group summary; designed paths by level; heat maps of the signed path
   weight and of the top-cell share), and the evolution over PATH_EPOCHS of five path groups (probe -> own unit, probe -> ancestor veto,
   probe -> unrelated, cue -> unit above, cue -> unrelated). Executed in place (the user's selection RUN = 72, EPOCH = 0).
+
+## 2026-10-20 — Alpha sweep A results (runs 79-96)
+
+### User prompts (verbatim)
+- "Good morning. What's the status of the runs?"
+
+### Changes
+- All 18 runs finished (~32 min each). Folder names of the one-phase runs fixed (the launcher's `run` function clobbered a global;
+  now `local`); gitignore patterns extended to run 79. Summary table extended to the sweep (`notes/symmetric_flow_summary.md`);
+  notebook 2 section 34 with the table and findings; anatomy registry extended to 79-96.
+- Results: one-phase runs with run 60's readouts all reach the same 15-node solution (0.055 / 0.6%: levels 0-2 captured, level-3 units
+  dead, no cues), whatever alpha_3, the block scale, the veto or alpha_6; run 94 (readouts 0.4 / 1.6, one phase) is the best run of the
+  series: 0.0083 / 0.09%, all probes and cues, cues by epoch 42. Two-phase runs with the design's contrasts = run 74 (0.029-0.034 /
+  0.45%); alpha_3 = 4 (81) 0.0082 / 0.06% with cues by 525; alpha_3 = 1.5 (79) no cue rotation; alpha_6 = 0.1 (87) slow but complete;
+  alpha_5 = 0 (89) levels 1-2 to ancestors, 0.36%, and collapse in one phase (90); readout rate x8 (95) level-1 support mode, 0.049.
+
+### Decisions
+- The free-cue failure is a readout-balance effect: a leaf-heavy readout (level-3 readout 4x the others) lets the leaf stage form first
+  and removes the need for the cue freeze. Candidate new anchor for the single-phase story: run 94.

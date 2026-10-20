@@ -15,6 +15,11 @@ def mode(own, partner):
     if own <= -5: return f"veto ({own:+.0f})"
     if partner >= 5: return f"support ({partner:+.0f})"
     return f"inert ({own:+.0f}/{partner:+.0f})"
+import glob, os
+SWEEP = {"a3_1.5": "alpha_3 = 1.5 (cue bias 0.5)", "a3_4": "alpha_3 = 4 (cue bias 3)", "blocks_x0.5": "cue blocks x 0.5", "blocks_x2": "cue blocks x 2", "a6_0.1": "+ alpha_6 = 0.1 (coherent reading outside the subtree)", "a5_0": "alpha_5 = 0 (open-side blocks only)", "veto_2": "veto -2", "readout_0.4_1.6": "readouts 0.4 (L0-2) / 1.6 (L3)", "a11_8": "readout rate x8"}
+for folder in sorted(glob.glob("results/designed_init/hd2_run*_alpha_*"), key=lambda f: int(os.path.basename(f).split("_")[1][3:])):
+    base = os.path.basename(folder); n = base.split("_")[1][3:]; key = base[len(f"hd2_run{n}_alpha_"):].rsplit("_", 1)[0]; ph = base.endswith("_2ph")
+    RUNS.append((n, base, "design, " + SWEEP[key], "symmetrised", "500 + 500" if ph else "1000, none frozen", 8 if key == "a11_8" else 80))
 rows = []
 for label, f, init, kind, phases, outs in RUNS:
     z = np.load(f"results/designed_init/{f}/replay/weights.npz"); meta = pickle.load(open(f"results/designed_init/{f}/replay/meta.pkl", "rb")); d = meta["design"]; L = np.array(meta["out"]["epoch_losses"], float); L = L[~np.isnan(L)]; cr = d["cue_rows"]; unode = np.array(d["unit_node"]); fc = int(d.get("freeze_cues", 500 if label in ("60", "70") else 0))

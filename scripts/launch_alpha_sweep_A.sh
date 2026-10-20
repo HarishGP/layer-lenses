@@ -3,7 +3,7 @@
 # 1000 epochs) and one-phase (1000 epochs, nothing frozen). Usage: scripts/launch_alpha_sweep_A.sh A | B  (one tmux session each).
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python; S=results/designed_init/run_symmetric_gd.py; R=results/designed_init
-run() { name=$1; shift; mkdir -p $R/$name; $PY $S --out $name --tag $name "$@" > $R/$name/log.txt 2>&1; }
+run() { local name=$1; shift; mkdir -p $R/$name; $PY $S --out $name --tag $name "$@" > $R/$name/log.txt 2>&1; }
 pair() { n2=$1; n1=$2; name=$3; alphas=$4; run hd2_run${n2}_alpha_${name}_2ph --alpha-json "$alphas" --epochs 1000 --freeze-cues 500; run hd2_run${n1}_alpha_${name}_1ph --alpha-json "$alphas" --epochs 1000 --freeze-cues 0; }
 C=(0.17677669529663687 0.25 0.35355339059327373 0.5)
 if [ "$1" = "A" ]; then
