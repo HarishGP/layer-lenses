@@ -16,7 +16,7 @@ import argparse, json, os, pickle, time, numpy as np, pandas as pd, torch
 from layer_lenses.designed_init import cue_row_identity, hierarchy_probe_table, NODE_LEVEL, HIERARCHY_TARGETS
 from layer_lenses.init_sweep import SweepRunSpec, build_data, build_data_chunked, load_tree, save_tree
 from layer_lenses.symmetric_flow import symmetric_orbits, symmetrise
-ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--init-run", default="hd2_run60_sgd_lr1_1000"); ap.add_argument("--alpha-json", default=None, help="overrides of run 60's alphas (layer_lenses.alpha_init.RUN_ALPHAS[60]); builds the init instead of loading it"); ap.add_argument("--orth-seed", type=int, default=0); ap.add_argument("--init-epoch", type=int, default=0, help="start from this stored epoch of --init-run (a continuation with a fresh schedule)")
+ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--init-run", default="hd2_run60_sgd_lr1_1000"); ap.add_argument("--alpha-json", default=None, help="overrides of run 60's alphas (layer_lenses.alpha_init.RUN_ALPHAS[60]); builds the init instead of loading it"); ap.add_argument("--orth-seed", type=int, default=0); ap.add_argument("--init-epoch", type=int, default=0, help="start from this stored epoch of --init-run (a continuation with a fresh schedule)"); ap.add_argument("--cue-bias", type=float, default=None, help="rebuild the cue rows as pole x (v + bias u_m), at the init's cue norm, after loading"); ap.add_argument("--constant-lr", action="store_true", help="no cosine: the step stays at --lr")
 ap.add_argument("--epochs", type=int, default=500); ap.add_argument("--freeze-cues", type=int, default=0, help="epochs with the cue rows frozen (phase 1)"); ap.add_argument("--schedule-epochs", type=int, default=None, help="length of the cosine schedule (default: --epochs)"); ap.add_argument("--partner-probe-weight", type=float, default=None, help="if given, set every unit's weight on the pole partner of its own probe to this value"); ap.add_argument("--lr", type=float, default=0.1); ap.add_argument("--out-scale", type=float, default=1.0); ap.add_argument("--w2-scale", type=float, default=1.0)
 ap.add_argument("--n-train", type=int, default=10_000_000); ap.add_argument("--batch", type=int, default=10_000); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--no-symmetrise", action="store_true")
 args = ap.parse_args(); OUT = f"results/designed_init/{args.out}"; os.makedirs(f"{OUT}/runs", exist_ok=True); dev = "cuda"; t0 = time.time()
@@ -32,6 +32,11 @@ if args.alpha_json is not None:                                                #
     d["alphas"] = {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(ALPHAS).items()}; args.out_scale = ALPHAS.alpha_11; args.w2_scale = ALPHAS.alpha_12
     cid = cue_row_identity(W1, tree, d["cue_rows"]); units = list(zip(d["unit_node"], d["unit_block_sign"], d["unit_path_sign"])); CUE_ROWS = list(d["cue_rows"])
     print(f"alpha init: {d['alphas']}; readout rate x{args.out_scale}, W2 rate x{args.w2_scale}", flush=True)
+if args.cue_bias is not None:                                                  # cue-bias sweeps: cues = pole (v + bias u_m) renormalised, identities unchanged
+    _v = U[15:31].sum(0); _cn = np.linalg.norm(W1[CUE_ROWS], axis=1).mean()
+    for (m_, pole_), r_ in cid.items():
+        w_ = _v + args.cue_bias * U[m_]; W1[r_] = pole_ * w_ / np.linalg.norm(w_) * _cn
+    print(f"cue rows rebuilt with bias {args.cue_bias} (|cos| with own normal {(1 + args.cue_bias) / np.sqrt(16 + 2 * args.cue_bias + args.cue_bias ** 2):.3f}), norm {_cn:.3f}", flush=True)
 if args.partner_probe_weight is not None:
     for u_ in range(60):
         pr_ = [p_ for p_ in range(30) if W2[u_, p_] < 0][0]; W2[u_, pr_ + 1 if pr_ % 2 == 0 else pr_ - 1] = args.partner_probe_weight
@@ -54,7 +59,7 @@ snaps = {0: [p.detach().cpu().numpy().copy() for p in P]}; losses = []; lrs = []
 for ep in range(TOTAL):
     freeze = ep < args.freeze_cues; perm = torch.randperm(args.n_train, generator=gen, device=dev); run_loss = 0.0
     for b in range(steps_per_epoch):
-        lr = args.lr * (0.05 + 0.95 * 0.5 * (1 + np.cos(np.pi * step / total_steps)))                                        # cosine to 5% over EPOCHS, as the runs
+        lr = args.lr if args.constant_lr else args.lr * (0.05 + 0.95 * 0.5 * (1 + np.cos(np.pi * step / total_steps)))      # cosine to 5% over EPOCHS, as the runs (or constant)
         idx = perm[b * args.batch:(b + 1) * args.batch]; xb, yb = X[idx], Y[idx]
         f = (torch.relu(torch.relu(xb @ P[0].T) @ P[1].T) @ P[2].T).squeeze(1); loss = torch.nn.functional.softplus(-yb * f).mean(); loss.backward()
         with torch.no_grad():
@@ -75,7 +80,7 @@ def save_replay(folder):
     os.makedirs(folder, exist_ok=True); np.savez(f"{folder}/weights.npz", epochs=eps, **{f"w__{k}": np.stack([snaps[e][i] for e in eps]).astype(np.float32) for i, k in enumerate(names)}); np.savez(f"{folder}/optimizer_state.npz", epochs=eps)
     L = np.full(EPOCHS, np.nan); L[:TOTAL] = losses; LR = np.full(EPOCHS, np.nan); LR[:TOTAL] = lrs
     cfg = ReLUTrainConfig(epochs=EPOCHS, lr=args.lr, batch_size=args.batch, seed=1000, device="cuda", snapshot_epochs=tuple(int(e) for e in eps), lr_scheduler_eta_min_ratio=0.05, optimizer="sgd", momentum=0.0, show_progress=False)
-    design = {**{k: (list(v) if isinstance(v, tuple) else v) for k, v in d.items()}, "init_run": args.init_run, "symmetrised_gradient": not args.no_symmetrise, "epochs": TOTAL, "freeze_cues": args.freeze_cues, "schedule_epochs": EPOCHS, "partner_probe_weight": args.partner_probe_weight, "init_epoch": args.init_epoch, "out_scale": args.out_scale, "w2_scale": args.w2_scale}
+    design = {**{k: (list(v) if isinstance(v, tuple) else v) for k, v in d.items()}, "init_run": args.init_run, "symmetrised_gradient": not args.no_symmetrise, "epochs": TOTAL, "freeze_cues": args.freeze_cues, "schedule_epochs": EPOCHS, "partner_probe_weight": args.partner_probe_weight, "init_epoch": args.init_epoch, "cue_bias": args.cue_bias, "constant_lr": args.constant_lr, "out_scale": args.out_scale, "w2_scale": args.w2_scale}
     meta_out = {"tag": args.tag, "tree": tree, "data_spec": {"kind": "sweep_chunked", "tree_seed": 5178, "data_seed": args.data_seed, "n_train": args.n_train, "chunk_size": 1_000_000, "eval_seed": 999_777, "n_eval": 200_000, "dim": 100, "depth": 5},
                 "model_spec": {"input_dim": 100, "hidden_dims": [62, 60], "bias": False, "activation": "relu"}, "train_config": cfg, "design": design,
                 "out": {"epoch_losses": L.tolist(), "lr_history": LR.tolist(), "model_state_final": {k: torch.as_tensor(snaps[int(eps[-1])][i]) for i, k in enumerate(names)}},

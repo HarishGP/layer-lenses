@@ -7055,3 +7055,24 @@ Also, I  am interested in analysing what happens in the path-framework we have. 
   the cosine step 0.05 -> 0.005), 35% of per-epoch increments negative (SGD noise inside the symmetric subspace, largest -8e-4);
   run 98: 0.391 / 0.41 / 0.427 / 0.451 / 0.493 / 0.63 / 0.985 / 0.995 at epochs 0 / 25 / 50 / 75 / 100 / 125 / 150 / 250 at a step of 0.1:
   an S-curve, slow for 100 epochs then a jump within 50, saturating at 0.9999 by the end.
+
+## 2026-10-20 — Cue-bias sweeps (runs 99-106): phase-2 escape vs bias, phase-1 capture vs bias
+
+### User prompts (verbatim)
+- "This gives us a natural couple of question to analyse. 
+
+For phase 1: how low can the cue bias go for the probes to still seek out their targets?
+
+For phase 2: assuming a given level of cue bias gets to the perfect probe configuration, is the movement towards the perfectly aligned cue happen for any small edge bias? 
+
+Of course, the convergence is going to be horribly slow for both phase 1 and 2 (if at all it happens) for some really small bias (like O(1/sqrt{d})=0.1). But that can be pushed under the run in a symmetric gradient flow asymptotic analysis."
+
+### Changes
+- `run_symmetric_gd.py --cue-bias B` (rebuild the cue rows as pole (v + B u_m) at the init's cue norm) and `--constant-lr`.
+  `scripts/launch_cue_bias_sweeps.sh P2 | P1`: phase-2 sweep (runs 99-103: run 74's epoch-500 state with the cues replaced at bias
+  0.5 / 0.25 / 0.1 / 0.05 / 0.02, 1000 free epochs at a constant step 0.1, x80) and phase-1 sweep (runs 104-106: run 74's init at bias
+  0.25 / 0.1 / 0.05, cues frozen, 1500 epochs at 0.1). Two tmux chains.
+- Predictions recorded in the reply: phase-1 push on a probe proportional to B / sqrt(16 + 2B + B^2) (the v part of every cue cancels in
+  the side contrast), so capture epochs ~ 1 / B with no threshold in the population flow unless the ancestor climb wins; phase 2 at
+  B = 0 is a symmetric fixed point (all cues identical, a larger group), so the escape time should grow like log(1 / B) / rate for a
+  linear instability of the own-leaf component.
