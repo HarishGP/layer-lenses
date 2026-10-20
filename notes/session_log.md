@@ -7022,3 +7022,12 @@ Also, I  am interested in analysing what happens in the path-framework we have. 
 - Run 73's slow cue rotation was the decayed step (0.005), not a different attractor. The majority-label init under the symmetrised flow
   reaches the exact designed assignment at 0.0097 / 0.11%, with the level-1 support family and the scale in the first layers rather than
   the readouts: a second solution family, better than run 74's and than run 60's.
+
+## 2026-10-20 — Run 98: run 79 (cue bias 0.5) continued with a fresh lr cycle
+
+### User prompts (verbatim)
+- "Another analysis with cue biases. Earlier you had an analysis where with a cue bias of 1.5 instead of 2, the probes learned but the cues did not. Can you do the same kind of learning rate diagnosis there also? See if having a larger learning rate in phase 2 or more epochs fixes issues there too?"
+
+### Changes
+- Run 98 launched (tmux): run 79's epoch-1000 state (alpha_3 = 1.5, two-phase, x80), 2000 free epochs with a fresh cosine from 0.1, output
+  rate x80 kept. Bookkeeping: gitignore, regeneration line, notebook 2 section 36, anatomy registry.

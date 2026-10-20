@@ -95,3 +95,4 @@ $PY $S/check_init_gradient_tails.py   # init-gradient tail probabilities per lev
 
 # alpha sweep A (runs 79-96): scripts/launch_alpha_sweep_A.sh A ; scripts/launch_alpha_sweep_A.sh B
 $PY $S/hd2_run97_sym_pgf_run73_cont/run_symmetric_gd.py --out hd2_run97_sym_pgf_run73_cont --tag hd2_run97_sym_pgf_run73_cont --init-run hd2_run73_sym_pgf_two_phase --init-epoch 1500 --epochs 2000 --freeze-cues 0   # run 97 (section 35: run 73 continued from epoch 1500, fresh cosine from lr 0.1 over 2000 free epochs)
+$PY $S/hd2_run98_sym_pgf_run79_cont/run_symmetric_gd.py --out hd2_run98_sym_pgf_run79_cont --tag hd2_run98_sym_pgf_run79_cont --init-run hd2_run79_alpha_a3_1.5_2ph --init-epoch 1000 --epochs 2000 --freeze-cues 0 --out-scale 80   # run 98 (section 36: run 79 (cue bias 0.5) continued from epoch 1000, fresh cosine from 0.1 over 2000 free epochs)
