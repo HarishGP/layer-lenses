@@ -7137,3 +7137,44 @@ Any thoughts so far?"
   perturbation of size epsilon into the design init and run unsymmetrised GD / SGD, measuring the growth of the asymmetric residual
   per level against the symmetric capture rate (the amplification exponent is the content of "SGD amplifies asymmetry"); (iii) replace
   each cheat by its random counterpart one at a time under the symmetric flow for the rest.
+
+## 2026-10-21 04:50 IST — alpha_13 (cue off-span component) and the alpha_13 sweep (runs 107-122)
+
+### Goal
+Add the third "cheating" component (the cues' off-span part) to the alpha config, rerun the symmetric flow at runs 74's and 73's settings
+over alpha_13, repeat at a smaller cue bias (0.2), and address the low phase-2 learning rate.
+
+### User prompts (verbatim)
+- "Add alpha_13 to the alpha config and rerun the symmetric flow at both run 74 and 73's settings. Once that is done repeat with a smaller beta (0.05 is too aggressive, maybe try 0.2). Also, I made a mistake when I said sqrt{31/100} it should be \sqrt{16/100} as there are only 16 leaf node vectors. So \alpha_13=\sqrt{16}{100} is the base value and \alpha_13=1 is what we have been running for almost all runs. Try some intermediate values for alpha_13.
+
+The lower phase 2 learning rate has been repeatedly a problem for us, maybe we can do something to fix it? e.g. cosine annealing with a higher minimum rate? or just larger learning rates? or restart cosine annealing at phase 2? or even just more epochs?"
+
+### Changes
+- `src/layer_lenses/alpha_init.py`: `alpha_13` (in-span fraction of every cue row, default 1); cue = alpha_2 (alpha_13 w_in + sqrt(1 - alpha_13^2) o_r);
+  62 orthonormal off-span directions drawn at once (the probes' 30 are unchanged, alpha_13 = 1 reproduces runs 60 / 70 to 1e-8).
+- `src/layer_lenses/symmetric_flow.py`: `symmetric_orbits(..., off_rows)`: one off-span direction per listed row (default the 30 probes);
+  with all 62 rows: 227 orbits, 181 free (24 new, all free: 14 probe x cue-direction, 10 cue x cue-direction).
+- `results/designed_init/run_symmetric_gd.py` (+ tracked copy): `--alpha-base 60|70`, `--restart-schedule` (fresh cosine from --lr at the
+  unfreeze epoch over phase 2), `--lr-min-frac`; alpha-built inits now project onto their own 62 off-span directions (the cue-bias commit
+  had switched the basis to the init run's stored epoch-0 probes for continuations, which would have dropped alpha-built probe
+  directions; no completed run used that path, runs 79-96 ran with the built basis). Summary rows carry alpha_base, alpha_13, cue_bias,
+  restart_schedule, lr_min_frac.
+- Tests: `tests/test_alpha_init.py::test_alpha_13_off_span_cues`, `tests/test_symmetric_flow.py::test_orbits_with_cue_off_span_directions`.
+- `scripts/launch_a13_sweep.sh R74 | R73` (runs 107-122, two tmux sessions a13_R74 / a13_R73, started 04:50): 107-109 alpha_13 0.4 / 0.6 / 0.8 at
+  run 74's settings, 110-113 cue bias 0.2 with alpha_13 1.0 / 0.4 / 0.6 / 0.8, 114 alpha_13 = 1 with the restarted cosine; 115-122 the same at
+  run 73's settings (base 70, 1000 + 500). Notebook 2 section 38 (table + trajectories, unexecuted), registry entries 107-122.
+- `.gitignore`: git has no brace expansion, so the `hd2_run{79,8[0-9],9[0-6]}_alpha_*` and `hd2_run{99,10[0-6]}_cuebias_*` negations never
+  matched: the summaries of runs 80-96 and 99-106 were untracked. Replaced by character-class patterns (one per decade), those files
+  committed (8 MB), and a global ignore of `hd2_run*/replay/weights.npz` / `optimizer_state.npz` added (runs 55-71's weights had been
+  showing as untracked).
+
+### Decisions
+- alpha_13's base value is sqrt(16 / 100) = 0.4 (the cues' in-span part lives in the span of the 16 leaf normals), per the user's correction.
+- Cue bias 0.2 is set through alpha_3 = 1.2 (not --cue-bias, which rebuilds the cue rows and would drop their off-span part).
+- The pole pair of a leaf gets two orthogonal off-span directions (equal coefficients), as a random init would; the group permutes the
+  directions with their rows (sign +1).
+- Phase-2 rate: implemented the restart (the fix that worked as a continuation in runs 97 / 98) as a runner option and added one restart run
+  per chain at alpha_13 = 1; the sweep itself keeps runs 73 / 74's schedules so alpha_13 is the only change.
+
+### Open
+- Results of runs 107-122 (ETA ~3.5 h for the R74 chain, ~8.5 h for R73); notebook 2 section 38 to be executed and summarised; memory update.
