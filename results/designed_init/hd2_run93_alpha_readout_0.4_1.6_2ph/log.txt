@@ -1,0 +1,48 @@
+alpha init: {'alpha_1': np.float64(1.4142135623730951), 'alpha_2': np.float64(1.4142135623730951), 'alpha_3': 2.0, 'alpha_4': [0.1767766952966369, 0.25, 0.3535533905932738, 0.5], 'alpha_5': [-0.1767766952966369, -0.25, -0.3535533905932738, -0.5], 'alpha_6': 0.0, 'alpha_7': -1.0, 'alpha_8': 0.0, 'alpha_9': 0.4, 'alpha_10': 1.6, 'alpha_11': 80, 'alpha_12': 1.0}; readout rate x80, W2 rate x1.0
+orbits: 203, free 157; init run hd2_run60_sgd_lr1_1000
+/home/harish/researchcodes/layer-lenses/results/designed_init/run_symmetric_gd.py:65: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  run_loss += float(loss); step += 1
+epoch 1: loss 0.6743, 0.4 min
+epoch 25: loss 0.5077, 1.1 min
+epoch 50: loss 0.1969, 1.9 min
+epoch 75: loss 0.1464, 2.7 min
+epoch 100: loss 0.1245, 3.5 min
+epoch 125: loss 0.1115, 4.4 min
+epoch 150: loss 0.1027, 5.1 min
+epoch 175: loss 0.0962, 6.0 min
+epoch 200: loss 0.0912, 6.8 min
+epoch 225: loss 0.0872, 7.6 min
+epoch 250: loss 0.0838, 8.4 min
+epoch 275: loss 0.0810, 9.2 min
+epoch 300: loss 0.0786, 10.0 min
+epoch 325: loss 0.0765, 10.8 min
+epoch 350: loss 0.0747, 11.6 min
+epoch 375: loss 0.0732, 12.4 min
+epoch 400: loss 0.0718, 13.2 min
+epoch 425: loss 0.0705, 14.1 min
+epoch 450: loss 0.0695, 14.9 min
+epoch 475: loss 0.0685, 15.7 min
+epoch 500: loss 0.0676, 16.5 min
+epoch 525: loss 0.0668, 17.3 min
+epoch 550: loss 0.0660, 18.1 min
+epoch 575: loss 0.0652, 18.9 min
+epoch 600: loss 0.0645, 19.7 min
+epoch 625: loss 0.0638, 20.5 min
+epoch 650: loss 0.0632, 21.4 min
+epoch 675: loss 0.0625, 22.2 min
+epoch 700: loss 0.0617, 23.0 min
+epoch 725: loss 0.0607, 23.8 min
+epoch 750: loss 0.0592, 24.6 min
+epoch 775: loss 0.0565, 25.4 min
+epoch 800: loss 0.0521, 26.2 min
+epoch 825: loss 0.0342, 27.0 min
+epoch 850: loss 0.0327, 27.8 min
+epoch 875: loss 0.0318, 28.6 min
+epoch 900: loss 0.0311, 29.4 min
+epoch 925: loss 0.0305, 30.2 min
+epoch 950: loss 0.0299, 31.0 min
+epoch 975: loss 0.0294, 31.8 min
+epoch 1000: loss 0.0289, 32.6 min
+hd2_run93_alpha_readout_0.4_1.6_2ph: final loss 0.0289, test error 0.0045, nodes 31/31, on-target [1.0, 1.0, 1.0, 1.0]; 32.6 min
+ALL DONE

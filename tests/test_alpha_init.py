@@ -30,3 +30,21 @@ def test_alpha_init_reproduces_saved_init(run):
     np.testing.assert_allclose(out["W2"], W2, atol=2e-6)
     np.testing.assert_allclose(out["Wout"], Wo, atol=1e-4)
     assert out["update_masks"]["output_layer.weight"][0, 0] == pytest.approx(80.0 if run == 60 else 1.0)
+
+
+def test_alpha_13_off_span_cues():
+    """alpha_13 < 1 gives every cue row an off-span part on its own direction: norms kept, in-span fraction alpha_13, all 62 off-span
+    parts mutually orthogonal, in-span parts those of alpha_13 = 1 scaled by alpha_13, probes untouched."""
+    from dataclasses import replace
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1)); U = tree.w_list
+    full = build_alpha_init(RUN_ALPHAS[60], tree); part = build_alpha_init(replace(RUN_ALPHAS[60], alpha_13=0.4), tree)
+    W, Wf = part["W1"], full["W1"]
+    np.testing.assert_allclose(W[:30], Wf[:30], atol=1e-12)
+    np.testing.assert_allclose(np.linalg.norm(W[30:], axis=1), np.sqrt(2.0), atol=1e-9)
+    np.testing.assert_allclose(np.linalg.norm(W[30:] @ U.T, axis=1) / np.linalg.norm(W[30:], axis=1), 0.4, atol=1e-9)
+    np.testing.assert_allclose(W[30:] @ U.T, 0.4 * (Wf[30:] @ U.T), atol=1e-9)
+    off = W - (W @ U.T) @ U; gram = off @ off.T
+    np.testing.assert_allclose(gram - np.diag(np.diag(gram)), 0.0, atol=1e-9)
+    assert np.abs(Wf[30:] - (Wf[30:] @ U.T) @ U).max() < 1e-9                                     # alpha_13 = 1: purely in-span cues
+    O = part["off_span_directions"]; assert O.shape == (62, 100)
+    np.testing.assert_allclose(O @ O.T, np.eye(62), atol=1e-9); np.testing.assert_allclose(O @ U.T, 0.0, atol=1e-9)

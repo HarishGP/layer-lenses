@@ -232,11 +232,17 @@ results/designed_init/hd2_run77_sym_pgf_run60_one_phase_outx1/replay/optimizer_s
 !results/designed_init/hd2_run78_sym_pgf_run60_partner_one_phase_outx1/identities.pkl
 results/designed_init/hd2_run78_sym_pgf_run60_partner_one_phase_outx1/replay/weights.npz
 results/designed_init/hd2_run78_sym_pgf_run60_partner_one_phase_outx1/replay/optimizer_state.npz
-!results/designed_init/hd2_run{79,8[0-9],9[0-6]}_alpha_*/
-!results/designed_init/hd2_run{79,8[0-9],9[0-6]}_alpha_*/replay/meta.pkl
-!results/designed_init/hd2_run{79,8[0-9],9[0-6]}_alpha_*/identities.pkl
-results/designed_init/hd2_run{79,8[0-9],9[0-6]}_alpha_*/replay/weights.npz
-results/designed_init/hd2_run{79,8[0-9],9[0-6]}_alpha_*/replay/optimizer_state.npz
+# (git has no brace expansion: one character-class pattern per decade)
+!results/designed_init/hd2_run8[0-9]_alpha_*/
+!results/designed_init/hd2_run8[0-9]_alpha_*/replay/meta.pkl
+!results/designed_init/hd2_run8[0-9]_alpha_*/identities.pkl
+results/designed_init/hd2_run8[0-9]_alpha_*/replay/weights.npz
+results/designed_init/hd2_run8[0-9]_alpha_*/replay/optimizer_state.npz
+!results/designed_init/hd2_run9[0-6]_alpha_*/
+!results/designed_init/hd2_run9[0-6]_alpha_*/replay/meta.pkl
+!results/designed_init/hd2_run9[0-6]_alpha_*/identities.pkl
+results/designed_init/hd2_run9[0-6]_alpha_*/replay/weights.npz
+results/designed_init/hd2_run9[0-6]_alpha_*/replay/optimizer_state.npz
 !results/designed_init/hd2_run79_alpha_*/
 !results/designed_init/hd2_run79_alpha_*/replay/meta.pkl
 !results/designed_init/hd2_run79_alpha_*/identities.pkl
@@ -252,8 +258,33 @@ results/designed_init/hd2_run97_sym_pgf_run73_cont/replay/optimizer_state.npz
 !results/designed_init/hd2_run98_sym_pgf_run79_cont/identities.pkl
 results/designed_init/hd2_run98_sym_pgf_run79_cont/replay/weights.npz
 results/designed_init/hd2_run98_sym_pgf_run79_cont/replay/optimizer_state.npz
-!results/designed_init/hd2_run{99,10[0-6]}_cuebias_*/
-!results/designed_init/hd2_run{99,10[0-6]}_cuebias_*/replay/meta.pkl
-!results/designed_init/hd2_run{99,10[0-6]}_cuebias_*/identities.pkl
-results/designed_init/hd2_run{99,10[0-6]}_cuebias_*/replay/weights.npz
-results/designed_init/hd2_run{99,10[0-6]}_cuebias_*/replay/optimizer_state.npz
+# (git has no brace expansion: one character-class pattern per decade)
+!results/designed_init/hd2_run99_cuebias_*/
+!results/designed_init/hd2_run99_cuebias_*/replay/meta.pkl
+!results/designed_init/hd2_run99_cuebias_*/identities.pkl
+results/designed_init/hd2_run99_cuebias_*/replay/weights.npz
+results/designed_init/hd2_run99_cuebias_*/replay/optimizer_state.npz
+!results/designed_init/hd2_run10[0-6]_cuebias_*/
+!results/designed_init/hd2_run10[0-6]_cuebias_*/replay/meta.pkl
+!results/designed_init/hd2_run10[0-6]_cuebias_*/identities.pkl
+results/designed_init/hd2_run10[0-6]_cuebias_*/replay/weights.npz
+results/designed_init/hd2_run10[0-6]_cuebias_*/replay/optimizer_state.npz
+# (git has no brace expansion: one character-class pattern per decade)
+!results/designed_init/hd2_run10[7-9]_a13_*/
+!results/designed_init/hd2_run10[7-9]_a13_*/replay/meta.pkl
+!results/designed_init/hd2_run10[7-9]_a13_*/identities.pkl
+results/designed_init/hd2_run10[7-9]_a13_*/replay/weights.npz
+results/designed_init/hd2_run10[7-9]_a13_*/replay/optimizer_state.npz
+!results/designed_init/hd2_run11[0-9]_a13_*/
+!results/designed_init/hd2_run11[0-9]_a13_*/replay/meta.pkl
+!results/designed_init/hd2_run11[0-9]_a13_*/identities.pkl
+results/designed_init/hd2_run11[0-9]_a13_*/replay/weights.npz
+results/designed_init/hd2_run11[0-9]_a13_*/replay/optimizer_state.npz
+!results/designed_init/hd2_run12[0-2]_a13_*/
+!results/designed_init/hd2_run12[0-2]_a13_*/replay/meta.pkl
+!results/designed_init/hd2_run12[0-2]_a13_*/identities.pkl
+results/designed_init/hd2_run12[0-2]_a13_*/replay/weights.npz
+results/designed_init/hd2_run12[0-2]_a13_*/replay/optimizer_state.npz
+# replay weights of every designed-init run stay untracked whatever the per-folder negations above say
+results/designed_init/hd2_run*/replay/weights.npz
+results/designed_init/hd2_run*/replay/optimizer_state.npz

@@ -1,0 +1,19 @@
+{
+  "tag": "hd2_run80_alpha_hd2_run79_alpha_a3_1.5_2ph_1ph",
+  "init_run": "hd2_run60_sgd_lr1_1000",
+  "symmetrised": true,
+  "epochs": 1000,
+  "freeze_cues": 0,
+  "schedule_epochs": 1000,
+  "partner_probe_weight": null,
+  "lr": 0.1,
+  "final_epoch_loss": 0.055351778421550986,
+  "min_epoch_loss": 0.055351778421550986,
+  "test_error_end": 0.005969999823719263,
+  "nodes_covered_end": 15,
+  "on_target_L0_end": 1.0,
+  "on_target_L1_end": 1.0,
+  "on_target_L2_end": 1.0,
+  "on_target_L3_end": 1.0,
+  "wall_min": 32.3990741332372
+}

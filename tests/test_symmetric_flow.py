@@ -33,3 +33,23 @@ def test_orbits_and_projection():
     rng = np.random.default_rng(0); R = rng.standard_normal(C.shape); P = symmetrise(R, *orb["W1"], orb["forced_zero"], orb["n_orbits"])
     np.testing.assert_allclose(symmetrise(P, *orb["W1"], orb["forced_zero"], orb["n_orbits"]), P, atol=1e-12)     # a projection
     assert np.linalg.norm(P) < 0.3 * np.linalg.norm(R)                                                               # most of a random direction is removed
+
+
+def test_orbits_with_cue_off_span_directions():
+    """With one off-span direction per row (62), the W1 block has 93 columns, 227 orbits / 181 free in all (24 new, all free: 14 probe x
+    cue-direction and 10 cue x cue-direction), and the projection fixes an alpha_13 = 0.4 init."""
+    from dataclasses import replace
+    from layer_lenses.alpha_init import RUN_ALPHAS, build_alpha_init
+    from layer_lenses.designed_init import cue_row_identity
+    from layer_lenses.init_sweep import SweepRunSpec, build_tree
+    tree = build_tree(SweepRunSpec(tree_seed=5178, data_seed=0, init_seed=0, batch_size=1)); U = tree.w_list
+    b = build_alpha_init(replace(RUN_ALPHAS[60], alpha_13=0.4), tree); W1 = b["W1"]
+    cue_rows = [b["cue_rows"][k] for k in sorted(b["cue_rows"], key=lambda k: b["cue_rows"][k])]
+    cid = cue_row_identity(W1, tree, cue_rows); units = [(u["node"], u["block_sign"], u["path_sign"]) for u in b["units"]]
+    orb = symmetric_orbits(cid, units, off_rows=list(range(62)))
+    assert orb["W1"][0].shape == (62, 93) and orb["n_orbits"] == 227 and orb["n_free"] == 181
+    B = np.vstack([U, b["off_span_directions"]]); C = W1 @ B.T
+    np.testing.assert_allclose(C @ B, W1, atol=1e-9)
+    np.testing.assert_allclose(symmetrise(C, *orb["W1"], orb["forced_zero"], orb["n_orbits"]), C, atol=1e-9)
+    for block, val in (("W2", b["W2"]), ("Wout", b["Wout"].ravel())):
+        np.testing.assert_allclose(symmetrise(val, *orb[block], orb["forced_zero"], orb["n_orbits"]), val, atol=1e-9)

@@ -11,12 +11,16 @@ estimate of the population flow (plain SGD discretisation, noise only within the
   runs 79-94 (alpha sweep A, 2026-10-19): --alpha-json '{...}' builds the init from layer_lenses.alpha_init (run 60's design = RUN_ALPHAS[60]
           with the given overrides; off-span directions from --orth-seed); alpha_11 / alpha_12 give the readout / W2 rate scales. Each
           init is run two-phase (--freeze-cues 500) and one-phase; see scripts/launch_alpha_sweep_A.sh.
+  runs 107-122 (alpha_13 sweep, 2026-10-21): --alpha-base 60 | 70 picks the base design (run 74's = run 60's, run 73's = run 70's);
+          alpha_13 < 1 gives the cues off-span parts on their own directions, and the projection basis is then the built init's 62
+          off-span directions (93 coordinates per row, 227 orbits / 181 free). --restart-schedule starts a fresh cosine at the unfreeze
+          epoch (phase 2 at full rate, as run 97's continuation); --lr-min-frac sets the cosine floor (default 0.05).
 """
 import argparse, json, os, pickle, time, numpy as np, pandas as pd, torch
 from layer_lenses.designed_init import cue_row_identity, hierarchy_probe_table, NODE_LEVEL, HIERARCHY_TARGETS
 from layer_lenses.init_sweep import SweepRunSpec, build_data, build_data_chunked, load_tree, save_tree
 from layer_lenses.symmetric_flow import symmetric_orbits, symmetrise
-ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--init-run", default="hd2_run60_sgd_lr1_1000"); ap.add_argument("--alpha-json", default=None, help="overrides of run 60's alphas (layer_lenses.alpha_init.RUN_ALPHAS[60]); builds the init instead of loading it"); ap.add_argument("--orth-seed", type=int, default=0); ap.add_argument("--init-epoch", type=int, default=0, help="start from this stored epoch of --init-run (a continuation with a fresh schedule)"); ap.add_argument("--cue-bias", type=float, default=None, help="rebuild the cue rows as pole x (v + bias u_m), at the init's cue norm, after loading"); ap.add_argument("--constant-lr", action="store_true", help="no cosine: the step stays at --lr")
+ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--tag", required=True); ap.add_argument("--init-run", default="hd2_run60_sgd_lr1_1000"); ap.add_argument("--alpha-json", default=None, help="overrides of the base design's alphas (layer_lenses.alpha_init.RUN_ALPHAS[--alpha-base]); builds the init instead of loading it"); ap.add_argument("--alpha-base", type=int, default=60, help="run whose alphas are the base of --alpha-json (60 = run 74's design, 70 = run 73's)"); ap.add_argument("--orth-seed", type=int, default=0); ap.add_argument("--init-epoch", type=int, default=0, help="start from this stored epoch of --init-run (a continuation with a fresh schedule)"); ap.add_argument("--cue-bias", type=float, default=None, help="rebuild the cue rows as pole x (v + bias u_m), at the init's cue norm, after loading"); ap.add_argument("--constant-lr", action="store_true", help="no cosine: the step stays at --lr"); ap.add_argument("--restart-schedule", action="store_true", help="restart the cosine (from --lr over the remaining epochs) at the unfreeze epoch"); ap.add_argument("--lr-min-frac", type=float, default=0.05, help="floor of the cosine schedule as a fraction of --lr")
 ap.add_argument("--epochs", type=int, default=500); ap.add_argument("--freeze-cues", type=int, default=0, help="epochs with the cue rows frozen (phase 1)"); ap.add_argument("--schedule-epochs", type=int, default=None, help="length of the cosine schedule (default: --epochs)"); ap.add_argument("--partner-probe-weight", type=float, default=None, help="if given, set every unit's weight on the pole partner of its own probe to this value"); ap.add_argument("--lr", type=float, default=0.1); ap.add_argument("--out-scale", type=float, default=1.0); ap.add_argument("--w2-scale", type=float, default=1.0)
 ap.add_argument("--n-train", type=int, default=10_000_000); ap.add_argument("--batch", type=int, default=10_000); ap.add_argument("--data-seed", type=int, default=5178); ap.add_argument("--no-symmetrise", action="store_true")
 args = ap.parse_args(); OUT = f"results/designed_init/{args.out}"; os.makedirs(f"{OUT}/runs", exist_ok=True); dev = "cuda"; t0 = time.time()
@@ -27,11 +31,11 @@ cid = cue_row_identity(z["w__hidden_layers.0.weight"][0].astype(np.float64), tre
 if args.alpha_json is not None:                                                # alpha-built init (run 60's tree / identities; the probes' off-span directions from --orth-seed)
     from layer_lenses.alpha_init import AlphaInit, RUN_ALPHAS, build_alpha_init
     from dataclasses import replace, asdict
-    ALPHAS = replace(RUN_ALPHAS[60], **{k: (tuple(v) if isinstance(v, list) else v) for k, v in json.loads(args.alpha_json).items()}); built = build_alpha_init(ALPHAS, tree, orth_seed=args.orth_seed)
+    ALPHAS = replace(RUN_ALPHAS[args.alpha_base], **{k: (tuple(v) if isinstance(v, list) else v) for k, v in json.loads(args.alpha_json).items()}); built = build_alpha_init(ALPHAS, tree, orth_seed=args.orth_seed)
     W1, W2, Wo = built["W1"], built["W2"], built["Wout"]; d = dict(d); d["cue_rows"] = [built["cue_rows"][k] for k in sorted(built["cue_rows"], key=lambda k: built["cue_rows"][k])]; d["unit_node"] = [u["node"] for u in built["units"]]; d["unit_block_sign"] = [u["block_sign"] for u in built["units"]]; d["unit_path_sign"] = [u["path_sign"] for u in built["units"]]
     d["alphas"] = {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(ALPHAS).items()}; args.out_scale = ALPHAS.alpha_11; args.w2_scale = ALPHAS.alpha_12
     cid = cue_row_identity(W1, tree, d["cue_rows"]); units = list(zip(d["unit_node"], d["unit_block_sign"], d["unit_path_sign"])); CUE_ROWS = list(d["cue_rows"])
-    print(f"alpha init: {d['alphas']}; readout rate x{args.out_scale}, W2 rate x{args.w2_scale}", flush=True)
+    print(f"alpha init (base run {args.alpha_base}): {d['alphas']}; readout rate x{args.out_scale}, W2 rate x{args.w2_scale}", flush=True)
 if args.cue_bias is not None:                                                  # cue-bias sweeps: cues = pole (v + bias u_m) renormalised, identities unchanged
     _v = U[15:31].sum(0); _cn = np.linalg.norm(W1[CUE_ROWS], axis=1).mean()
     for (m_, pole_), r_ in cid.items():
@@ -41,9 +45,14 @@ if args.partner_probe_weight is not None:
     for u_ in range(60):
         pr_ = [p_ for p_ in range(30) if W2[u_, p_] < 0][0]; W2[u_, pr_ + 1 if pr_ % 2 == 0 else pr_ - 1] = args.partner_probe_weight
     print(f"partner probe weight set to {args.partner_probe_weight}", flush=True)
-_W1_0 = z["w__hidden_layers.0.weight"][0].astype(np.float64); O = _W1_0[:30] - (_W1_0[:30] @ U.T) @ U; O /= np.linalg.norm(O, axis=1, keepdims=True); B = np.vstack([U, O]); assert np.allclose(B @ B.T, np.eye(61), atol=1e-6)   # the off-span basis of the original init
+if args.alpha_json is not None:                                                # alpha-built init: the basis is its own 62 off-span directions (probes and cues)
+    O = built["off_span_directions"]; OFF_ROWS = list(range(62))
+else:                                                                          # loaded init: the 30 probe directions of the init run's epoch 0 (continuations keep that basis)
+    _W1_0 = z["w__hidden_layers.0.weight"][0].astype(np.float64); O = _W1_0[:30] - (_W1_0[:30] @ U.T) @ U; O /= np.linalg.norm(O, axis=1, keepdims=True); OFF_ROWS = list(range(30))
+B = np.vstack([U, O]); assert np.allclose(B @ B.T, np.eye(len(B)), atol=1e-6)
+assert np.linalg.norm(W1 - (W1 @ B.T) @ B) < 1e-5 or args.init_epoch, "the init has first-layer components outside the projection basis"
 if args.init_epoch: print(f"continuing {args.init_run} from epoch {args.init_epoch}; off-span part of W1 outside the basis: {np.linalg.norm(W1 - (W1 @ B.T) @ B):.2e}", flush=True)
-orb = symmetric_orbits(cid, units); print(f"orbits: {orb['n_orbits']}, free {orb['n_free']}; init run {args.init_run}", flush=True)
+orb = symmetric_orbits(cid, units, off_rows=OFF_ROWS); print(f"orbits: {orb['n_orbits']}, free {orb['n_free']} ({len(B)} first-layer coordinates per row); init run {args.init_run}", flush=True)
 Bt = torch.as_tensor(B, dtype=torch.float32, device=dev)
 x, y = build_data_chunked(SweepRunSpec(tree_seed=5178, data_seed=args.data_seed, init_seed=0, batch_size=1, n_train=args.n_train), tree); xe, ye = build_data(SweepRunSpec(tree_seed=5178, data_seed=999_777, init_seed=0, batch_size=1, n_train=200_000), tree)
 X = torch.from_numpy(x).float().to(dev); Y = torch.from_numpy(y.astype(np.float32)).to(dev); Xe = torch.from_numpy(xe).float().to(dev); Ye = torch.from_numpy(ye.astype(np.float32)).to(dev)
@@ -59,7 +68,9 @@ snaps = {0: [p.detach().cpu().numpy().copy() for p in P]}; losses = []; lrs = []
 for ep in range(TOTAL):
     freeze = ep < args.freeze_cues; perm = torch.randperm(args.n_train, generator=gen, device=dev); run_loss = 0.0
     for b in range(steps_per_epoch):
-        lr = args.lr if args.constant_lr else args.lr * (0.05 + 0.95 * 0.5 * (1 + np.cos(np.pi * step / total_steps)))      # cosine to 5% over EPOCHS, as the runs (or constant)
+        if args.constant_lr: lr = args.lr
+        elif args.restart_schedule and not freeze and args.freeze_cues > 0: lr = args.lr * (args.lr_min_frac + (1 - args.lr_min_frac) * 0.5 * (1 + np.cos(np.pi * (step - args.freeze_cues * steps_per_epoch) / ((TOTAL - args.freeze_cues) * steps_per_epoch))))   # fresh cosine over phase 2
+        else: lr = args.lr * (args.lr_min_frac + (1 - args.lr_min_frac) * 0.5 * (1 + np.cos(np.pi * step / total_steps)))      # cosine to lr_min_frac over EPOCHS, as the runs
         idx = perm[b * args.batch:(b + 1) * args.batch]; xb, yb = X[idx], Y[idx]
         f = (torch.relu(torch.relu(xb @ P[0].T) @ P[1].T) @ P[2].T).squeeze(1); loss = torch.nn.functional.softplus(-yb * f).mean(); loss.backward()
         with torch.no_grad():
@@ -79,8 +90,8 @@ def save_replay(folder):
     from layer_lenses.relu_training import ReLUTrainConfig
     os.makedirs(folder, exist_ok=True); np.savez(f"{folder}/weights.npz", epochs=eps, **{f"w__{k}": np.stack([snaps[e][i] for e in eps]).astype(np.float32) for i, k in enumerate(names)}); np.savez(f"{folder}/optimizer_state.npz", epochs=eps)
     L = np.full(EPOCHS, np.nan); L[:TOTAL] = losses; LR = np.full(EPOCHS, np.nan); LR[:TOTAL] = lrs
-    cfg = ReLUTrainConfig(epochs=EPOCHS, lr=args.lr, batch_size=args.batch, seed=1000, device="cuda", snapshot_epochs=tuple(int(e) for e in eps), lr_scheduler_eta_min_ratio=0.05, optimizer="sgd", momentum=0.0, show_progress=False)
-    design = {**{k: (list(v) if isinstance(v, tuple) else v) for k, v in d.items()}, "init_run": args.init_run, "symmetrised_gradient": not args.no_symmetrise, "epochs": TOTAL, "freeze_cues": args.freeze_cues, "schedule_epochs": EPOCHS, "partner_probe_weight": args.partner_probe_weight, "init_epoch": args.init_epoch, "cue_bias": args.cue_bias, "constant_lr": args.constant_lr, "out_scale": args.out_scale, "w2_scale": args.w2_scale}
+    cfg = ReLUTrainConfig(epochs=EPOCHS, lr=args.lr, batch_size=args.batch, seed=1000, device="cuda", snapshot_epochs=tuple(int(e) for e in eps), lr_scheduler_eta_min_ratio=args.lr_min_frac, optimizer="sgd", momentum=0.0, show_progress=False)
+    design = {**{k: (list(v) if isinstance(v, tuple) else v) for k, v in d.items()}, "init_run": args.init_run, "symmetrised_gradient": not args.no_symmetrise, "epochs": TOTAL, "freeze_cues": args.freeze_cues, "schedule_epochs": EPOCHS, "partner_probe_weight": args.partner_probe_weight, "init_epoch": args.init_epoch, "cue_bias": args.cue_bias, "constant_lr": args.constant_lr, "restart_schedule": args.restart_schedule, "lr_min_frac": args.lr_min_frac, "alpha_base": args.alpha_base if args.alpha_json is not None else None, "out_scale": args.out_scale, "w2_scale": args.w2_scale}
     meta_out = {"tag": args.tag, "tree": tree, "data_spec": {"kind": "sweep_chunked", "tree_seed": 5178, "data_seed": args.data_seed, "n_train": args.n_train, "chunk_size": 1_000_000, "eval_seed": 999_777, "n_eval": 200_000, "dim": 100, "depth": 5},
                 "model_spec": {"input_dim": 100, "hidden_dims": [62, 60], "bias": False, "activation": "relu"}, "train_config": cfg, "design": design,
                 "out": {"epoch_losses": L.tolist(), "lr_history": LR.tolist(), "model_state_final": {k: torch.as_tensor(snaps[int(eps[-1])][i]) for i, k in enumerate(names)}},
@@ -92,7 +103,7 @@ for e in eps:
     W1e = snaps[e][0]; t = hierarchy_probe_table(W1e, tree); Ce = W1e / np.linalg.norm(W1e, axis=1, keepdims=True) @ U.T
     per.append({"epoch": int(e), "step": int(e) * steps_per_epoch, "loss": np.nan if e == 0 else losses[e - 1], **{f"on_target_L{l}": float((g.top_node == g.node).mean()) for l, g in t.groupby("level")}, **{f"cos_target_L{l}": float(g.cos_target.mean()) for l, g in t.groupby("level")}, "nodes_covered": len(set(np.abs(Ce).argmax(1)[np.abs(Ce).max(1) > 0.95]))})
 pe = pd.DataFrame(per); pe.to_csv(f"{OUT}/per_epoch_{args.tag}.csv", index=False)
-rec = {"tag": args.tag, "init_run": args.init_run, "symmetrised": not args.no_symmetrise, "epochs": TOTAL, "freeze_cues": args.freeze_cues, "schedule_epochs": EPOCHS, "partner_probe_weight": args.partner_probe_weight, "lr": args.lr, "final_epoch_loss": losses[-1], "min_epoch_loss": float(np.min(losses)), "test_error_end": te, "nodes_covered_end": int(pe.nodes_covered.iloc[-1]), **{f"on_target_L{l}_end": float(pe[f"on_target_L{l}"].iloc[-1]) for l in range(4)}, "wall_min": (time.time() - t0) / 60}
+rec = {"tag": args.tag, "init_run": args.init_run, "symmetrised": not args.no_symmetrise, "epochs": TOTAL, "freeze_cues": args.freeze_cues, "schedule_epochs": EPOCHS, "restart_schedule": args.restart_schedule, "lr_min_frac": args.lr_min_frac, "alpha_base": args.alpha_base if args.alpha_json is not None else None, "alpha_13": (d.get("alphas") or {}).get("alpha_13"), "cue_bias": args.cue_bias if args.cue_bias is not None else ((d.get("alphas") or {}).get("alpha_3", 2.0) - 1.0 if args.alpha_json is not None else None), "partner_probe_weight": args.partner_probe_weight, "lr": args.lr, "final_epoch_loss": losses[-1], "min_epoch_loss": float(np.min(losses)), "test_error_end": te, "nodes_covered_end": int(pe.nodes_covered.iloc[-1]), **{f"on_target_L{l}_end": float(pe[f"on_target_L{l}"].iloc[-1]) for l in range(4)}, "wall_min": (time.time() - t0) / 60}
 pd.DataFrame([rec]).to_csv(f"{OUT}/summary.csv", index=False); json.dump({k: (v if not isinstance(v, np.generic) else float(v)) for k, v in rec.items()}, open(f"{OUT}/manifest.json", "w"), indent=2)
-pickle.dump({"design": d, "cue_identity": {str(k): v for k, v in cid.items()}, "basis_off_span": O}, open(f"{OUT}/identities.pkl", "wb"))   # the off-span basis used for the projection
+pickle.dump({"design": d, "cue_identity": {str(k): v for k, v in cid.items()}, "basis_off_span": O, "off_rows": OFF_ROWS}, open(f"{OUT}/identities.pkl", "wb"))   # the off-span basis used for the projection
 print(f"{args.tag}: final loss {losses[-1]:.4f}, test error {te:.4f}, nodes {rec['nodes_covered_end']}/31, on-target {[round(rec[f'on_target_L{l}_end'], 2) for l in range(4)]}; {rec['wall_min']:.1f} min", flush=True); print("ALL DONE", flush=True)

@@ -98,3 +98,5 @@ $PY $S/hd2_run97_sym_pgf_run73_cont/run_symmetric_gd.py --out hd2_run97_sym_pgf_
 $PY $S/hd2_run98_sym_pgf_run79_cont/run_symmetric_gd.py --out hd2_run98_sym_pgf_run79_cont --tag hd2_run98_sym_pgf_run79_cont --init-run hd2_run79_alpha_a3_1.5_2ph --init-epoch 1000 --epochs 2000 --freeze-cues 0 --out-scale 80   # run 98 (section 36: run 79 (cue bias 0.5) continued from epoch 1000, fresh cosine from 0.1 over 2000 free epochs)
 
 # cue-bias sweeps (runs 99-106): scripts/launch_cue_bias_sweeps.sh P2 ; scripts/launch_cue_bias_sweeps.sh P1
+
+# alpha_13 sweep (runs 107-122): scripts/launch_a13_sweep.sh R74 ; scripts/launch_a13_sweep.sh R73
