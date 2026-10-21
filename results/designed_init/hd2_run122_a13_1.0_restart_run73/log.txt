@@ -1,0 +1,68 @@
+alpha init (base run 70): {'alpha_1': np.float64(1.4142135623730951), 'alpha_2': np.float64(1.4142135623730951), 'alpha_3': 2.0, 'alpha_4': 0.2, 'alpha_5': 0.1, 'alpha_6': 0.1, 'alpha_7': -1.0, 'alpha_8': 1.0, 'alpha_9': 0.8165, 'alpha_10': 0.8165, 'alpha_11': 1.0, 'alpha_12': 1.0, 'alpha_13': 1.0}; readout rate x1.0, W2 rate x1.0
+orbits: 227, free 181 (93 first-layer coordinates per row); init run hd2_run60_sgd_lr1_1000
+/home/harish/researchcodes/layer-lenses/results/designed_init/run_symmetric_gd.py:82: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  run_loss += float(loss); step += 1
+epoch 1: loss 0.7125, 0.4 min
+epoch 25: loss 0.6731, 0.9 min
+epoch 50: loss 0.6728, 1.4 min
+epoch 75: loss 0.6724, 1.9 min
+epoch 100: loss 0.6609, 2.4 min
+epoch 125: loss 0.6405, 2.9 min
+epoch 150: loss 0.6186, 3.5 min
+epoch 175: loss 0.6135, 4.0 min
+epoch 200: loss 0.6114, 4.5 min
+epoch 225: loss 0.6067, 5.0 min
+epoch 250: loss 0.5837, 5.5 min
+epoch 275: loss 0.5512, 6.0 min
+epoch 300: loss 0.5257, 6.5 min
+epoch 325: loss 0.5027, 7.1 min
+epoch 350: loss 0.4691, 7.6 min
+epoch 375: loss 0.4181, 8.1 min
+epoch 400: loss 0.3551, 8.6 min
+epoch 425: loss 0.2973, 9.2 min
+epoch 450: loss 0.2570, 9.8 min
+epoch 475: loss 0.2291, 10.3 min
+epoch 500: loss 0.2092, 10.9 min
+epoch 525: loss 0.1942, 11.5 min
+epoch 550: loss 0.1826, 12.0 min
+epoch 575: loss 0.1733, 12.5 min
+epoch 600: loss 0.1657, 12.9 min
+epoch 625: loss 0.1593, 13.4 min
+epoch 650: loss 0.1540, 13.9 min
+epoch 675: loss 0.1493, 14.3 min
+epoch 700: loss 0.1454, 14.8 min
+epoch 725: loss 0.1419, 15.3 min
+epoch 750: loss 0.1388, 15.8 min
+epoch 775: loss 0.1361, 16.2 min
+epoch 800: loss 0.1337, 16.7 min
+epoch 825: loss 0.1315, 17.1 min
+epoch 850: loss 0.1296, 17.6 min
+epoch 875: loss 0.1279, 18.1 min
+epoch 900: loss 0.1263, 18.6 min
+epoch 925: loss 0.1249, 19.1 min
+epoch 950: loss 0.1237, 19.5 min
+epoch 975: loss 0.1225, 20.0 min
+epoch 1000: loss 0.1215, 20.5 min
+epoch 1025: loss 0.1167, 20.9 min
+epoch 1050: loss 0.1132, 21.4 min
+epoch 1075: loss 0.1090, 21.9 min
+epoch 1100: loss 0.0710, 22.3 min
+epoch 1125: loss 0.0684, 22.8 min
+epoch 1150: loss 0.0666, 23.2 min
+epoch 1175: loss 0.0649, 23.7 min
+epoch 1200: loss 0.0634, 24.2 min
+epoch 1225: loss 0.0621, 24.6 min
+epoch 1250: loss 0.0610, 25.1 min
+epoch 1275: loss 0.0600, 25.5 min
+epoch 1300: loss 0.0592, 26.0 min
+epoch 1325: loss 0.0585, 26.5 min
+epoch 1350: loss 0.0580, 27.0 min
+epoch 1375: loss 0.0575, 27.4 min
+epoch 1400: loss 0.0572, 27.9 min
+epoch 1425: loss 0.0570, 28.4 min
+epoch 1450: loss 0.0568, 28.8 min
+epoch 1475: loss 0.0567, 29.3 min
+epoch 1500: loss 0.0566, 29.7 min
+hd2_run122_a13_1.0_restart_run73: final loss 0.0566, test error 0.0124, nodes 31/31, on-target [1.0, 1.0, 1.0, 1.0]; 29.8 min
+ALL DONE

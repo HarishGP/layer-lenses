@@ -1,0 +1,2 @@
+tag,init_run,symmetrised,epochs,freeze_cues,schedule_epochs,restart_schedule,lr_min_frac,alpha_base,alpha_13,cue_bias,partner_probe_weight,lr,final_epoch_loss,min_epoch_loss,test_error_end,nodes_covered_end,on_target_L0_end,on_target_L1_end,on_target_L2_end,on_target_L3_end,wall_min
+hd2_run109_a13_0.8_run74,hd2_run60_sgd_lr1_1000,True,1000,500,1000,False,0.05,60,0.8,1.0,,0.1,0.022101330192759634,0.022101330192759634,0.0035149999894201756,31,1.0,1.0,1.0,1.0,34.27080609401067

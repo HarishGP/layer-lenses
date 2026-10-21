@@ -7176,5 +7176,21 @@ The lower phase 2 learning rate has been repeatedly a problem for us, maybe we c
 - Phase-2 rate: implemented the restart (the fix that worked as a continuation in runs 97 / 98) as a runner option and added one restart run
   per chain at alpha_13 = 1; the sweep itself keeps runs 73 / 74's schedules so alpha_13 is the only change.
 
+### Results (runs 107-122, finished ~11:30 IST; notebook 2 section 38, findings cell)
+- The flow removes the cues' off-span part as soon as the cues are free: off-span norm 0.85 / 1.13 / 1.30 (alpha_13 0.8 / 0.6 / 0.4) -> ~0.02
+  within 10 / 20 / 40 epochs of the unfreeze at run 74's settings, in-span fraction 1.000 at the end of every bias-1 run; slower at x1
+  (50 / 200 epochs) and incomplete at bias 0.2 there. The purely in-span cue is the flow's own fixed point for the cue rows.
+- With the cues frozen their off-span part slows the capture far more than proportionally: root 9 / 52 / 141 / 505 epochs at alpha_13
+  1 / 0.8 / 0.6 / 0.4, and the phase-1 loss stays 0.64-0.68 even when every probe is placed (units' gates dominated by the off-span readings).
+- Restarting the cosine at the unfreeze fixes the phase-2 problem: run 114 (run 74 + restart) 0.0061 / 0.05%, cues rotated by 598 (run 74:
+  0.0291 / 0.45%, 801); run 122 (run 73 + restart) 0.0566 / 1.24%, 31 / 31 nodes, cues by 1092 (run 73: 0.1115, 15 nodes, never).
+- Bias 0.2 fails two-phase at both settings for the same phase-2 reason: alpha_13 = 1 captures every level in phase 1 (26 / 38 / 56 / 81)
+  but the cues never rotate in the cold second half (0.067, 15 nodes); alpha_13 < 1 with bias 0.2 captures nothing in phase 1 and only
+  levels 0-2 (0.6-0.8) or 0-1 (0.4) in phase 2; run 73's settings end near chance.
+- Linear-model aside (discussion): the population logistic optimum of a linear model is exactly c v (uniqueness + symmetry), c = 1.04 on
+  the sphere (1.037 Gaussian coordinates, 0.997 small-signal), loss 0.673, error 0.42; 4M-point Newton fit: cos(w, v) 0.9997.
+- Notebook 2 section 38 cells are left unexecuted (user kernel); the table cell's capture uses the replay cosines (threshold 0.95).
+
 ### Open
-- Results of runs 107-122 (ETA ~3.5 h for the R74 chain, ~8.5 h for R73); notebook 2 section 38 to be executed and summarised; memory update.
+- The earned-beta experiment proposed in the discussion (train only the cue rows from zero with the design's W2 / Wout fixed; then with a
+  random W2) is not started.
