@@ -7090,3 +7090,15 @@ Of course, the convergence is going to be horribly slow for both phase 1 and 2 (
 ### Decisions
 - In the population flow a small cue bias costs phase-1 time (~1 / beta) and nothing in phase 2; there is no threshold. The threshold
   for sampled runs comes from the noise push (estimated beta ~ 0.03-0.05 at 10M points, batch 10k).
+
+## 2026-10-21 — Clarification: the start state of the phase-2 cue-bias sweep (Q&A)
+
+### User prompts (verbatim)
+- "Great. In your phase 2 analysis, I am assuming you kept the probes to exactly +u_j, -u_j at init and the cues at (sign)*(v+\beta*u_j). But how were W2 and Wout set?"
+
+### Answer (recorded)
+- The phase-2 sweep started from run 74's epoch-500 snapshot with only the cue rows replaced: probes as trained (|cos| 0.999 with their
+  nodes, norms 17.5 / 12.2 / 9.3 / 7.1 by level, ancestor tilt rms 0.03), W2 as trained (own-probe vetoes -33 x norm, ancestor vetoes
+  153 per level-3 unit, cue blocks of norm 2.3 with side contrast 1.8 against the design's 0.8), readouts as trained (19 / 26 / 40 / 81),
+  not the design's W2 / Wout (+-0.816). So the sweep measured the cue stage against a trained network, whose W2 already encodes the
+  cue identities and the regions; a cleaner version of the question uses ideal probes with the design's W2 / Wout (proposed, not run).
