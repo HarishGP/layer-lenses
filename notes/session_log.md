@@ -7102,3 +7102,38 @@ Of course, the convergence is going to be horribly slow for both phase 1 and 2 (
   153 per level-3 unit, cue blocks of norm 2.3 with side contrast 1.8 against the design's 0.8), readouts as trained (19 / 26 / 40 / 81),
   not the design's W2 / Wout (+-0.816). So the sweep measured the cue stage against a trained network, whose W2 already encodes the
   cue identities and the regions; a cleaner version of the question uses ideal probes with the design's W2 / Wout (proposed, not run).
+
+## 2026-10-21 — The "cheating init" components and the random-init argument (discussion)
+
+### User prompts (verbatim)
+- "No need. What you have already done is closer to what I had in mind.  
+
+Let's start another line of attack. Just discuss for now.
+
+There are three main components in run 73 or 74s inits that give the solution hint at init and could potentially be called as a "cheating init" as it uses access to the ODT directions. Tyey are:
+
+1. The cue component of an individual leaf node (the beta value or alpha_3 - 1)
+2. The difference in W2 for probe rows between its left and right side cues (effectively \alpha_4 - \alpha_5)
+3. Off-span component in cues. This has been set to zero for most of our experiments, make this another component in the alpha config, say \alpha_13. for simplicity again we will have off-span components at init be orthogonal for all first layer neurons. this is still possible because 62<69.
+4. We have also been playing around with norms, but in a standard init scheme these would be fixed. We could argue that this is just layerwise changes and the ODT tree normals is not required for this, but still.
+
+
+In expectation over a random init, by symmetry an adversarial reviewer could argue that beta=0, \alpha_4=\alpha_5, and \alpha_13 = \sqrt{31/100}.
+
+We could argue using randomness and sub-network selection any of these (beta or \alpha_4-\alpha_5 or \alpha_13 ) will be slightly more than that, and SGD amplifies any such asymmetry. PGF using a symmetric init like ours is merely a proxy for understanding that.
+
+Any thoughts so far?"
+
+### Assessment (no repo changes)
+- beta and alpha_4 - alpha_5 are not independent cheats: the phase-1 push is their product (the contrast reads the leaf identity), so
+  the quantity a random init supplies is the alignment between W1's leaf components and W2's wiring, random with mean 0; the
+  per-(row, unit) extreme of it is what sub-network selection picks (the tail analysis: root 8%, level 3 1-2% above the noise push).
+- beta = 0 exactly kills phase 1 in the population flow (identical cues, zero contrast) but not phase 2 (identity from W2); the sweeps
+  give the cost of small beta (~1 / beta in phase 1) and the SGD floor (~0.03-0.05).
+- alpha_13: a random unit-norm row has in-span fraction sqrt(31 / 100) = 0.56 and off-span 0.83; off-span cue parts weaken the cue
+  gate's label correlation (the contrast is read through the gate) and add cue off-span orbits to the symmetric count; cheap to add.
+- Norms: layerwise scales are legal; the level-dependent block norms (inv_sqrt) and probe/cue norm split are the parts that use the tree.
+- Proposed programme: (i) add alpha_13 and rerun the symmetric flow; (ii) stability of the symmetric trajectory: inject a random
+  perturbation of size epsilon into the design init and run unsymmetrised GD / SGD, measuring the growth of the asymmetric residual
+  per level against the symmetric capture rate (the amplification exponent is the content of "SGD amplifies asymmetry"); (iii) replace
+  each cheat by its random counterpart one at a time under the symmetric flow for the rest.
