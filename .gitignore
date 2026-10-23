@@ -288,3 +288,12 @@ results/designed_init/hd2_run12[0-2]_a13_*/replay/optimizer_state.npz
 # replay weights of every designed-init run stay untracked whatever the per-folder negations above say
 results/designed_init/hd2_run*/replay/weights.npz
 results/designed_init/hd2_run*/replay/optimizer_state.npz
+# the four runs the anatomy notebook must be able to load from a fresh clone (60, 70, 73, 74): replay weights tracked
+!results/designed_init/hd2_run60_sgd_lr1_1000/replay/weights.npz
+!results/designed_init/hd2_run60_sgd_lr1_1000/replay/optimizer_state.npz
+!results/designed_init/hd2_run70_symcue_partner/replay/weights.npz
+!results/designed_init/hd2_run70_symcue_partner/replay/optimizer_state.npz
+!results/designed_init/hd2_run73_sym_pgf_two_phase/replay/weights.npz
+!results/designed_init/hd2_run73_sym_pgf_two_phase/replay/optimizer_state.npz
+!results/designed_init/hd2_run74_sym_pgf_run60/replay/weights.npz
+!results/designed_init/hd2_run74_sym_pgf_run60/replay/optimizer_state.npz
