@@ -294,6 +294,9 @@ results/designed_init/hd2_run*/replay/optimizer_state.npz
 !results/designed_init/hd2_run130_clean_*/
 !results/designed_init/hd2_run130_clean_*/replay/meta.pkl
 !results/designed_init/hd2_run130_clean_*/identities.pkl
+!results/designed_init/hd2_run13[1-8]_clean4k_*/
+!results/designed_init/hd2_run13[1-8]_clean4k_*/replay/meta.pkl
+!results/designed_init/hd2_run13[1-8]_clean4k_*/identities.pkl
 # replay weights of every designed-init run folder (hierarchy_* included) stay untracked
 results/designed_init/*/replay/weights.npz
 results/designed_init/*/replay/optimizer_state.npz

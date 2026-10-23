@@ -102,3 +102,5 @@ $PY $S/hd2_run98_sym_pgf_run79_cont/run_symmetric_gd.py --out hd2_run98_sym_pgf_
 # alpha_13 sweep (runs 107-122): scripts/launch_a13_sweep.sh R74 ; scripts/launch_a13_sweep.sh R73
 
 # clean comparable runs (123-130): scripts/launch_clean_runs.sh SGD ; scripts/launch_clean_runs.sh SYM
+
+# clean comparable runs, 4000-epoch schedule (131-138): scripts/launch_clean_runs_long.sh SGDA | SGDB | SYMA | SYMB
