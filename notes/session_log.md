@@ -7229,3 +7229,38 @@ Ensure that the two_layer_anatomy notebook can be run for the following runs: 60
 - Pruning: removing units 0-27 from the trained nets costs 0.40 -> 0.77% (run 60), 0.05 -> 0.39% (114), 0.11 -> 0.63% (97); removing the
   level-3 units gives 20-25%; readout refit changes nothing. Scaffold = units that can push probes the final units cannot (zero W2 link at
   init: feature needs link, link needs feature). The direct 62-32 run is the missing test.
+
+## 2026-10-23 — Handout PDF for students and collaborators (notes/handout/)
+
+### User prompts (verbatim)
+- "Ok, I want to share what we have with students/collaborators and quickly get them up to speed and have productive discussions. 
+
+I want to create a PDF with good figures explaining the basics of the work (ideally using latex). It should contain the following and anything else that is required to make them self-contained.
+
+The path decomposition of a ReLU network output.
+The ODT data setting.
+The inits corresponding to run 60 or 70 and their results. Why those inits are interesting.
+How the tree is actually represented in the final learned model.
+The symmetrisation to approximate PGF from those inits and the results of run 73 (with follow-up run 97) and run 74.
+
+Can you create about a 10 page PDF with these details? You can generate any figures from the saved trajectories."
+
+### Changes
+- `notes/handout/handout.tex` (10 pages, compiled to `notes/handout/handout.pdf`): sections on the path decomposition and the lens formula
+  (TikZ schematic), the ODT data (tree figure, symmetries, the linear optimum c v), the designed inits of runs 60 and 70 (heatmaps of
+  W1 cosines and W2, why they are interesting), results of runs 60 / 70 (table of capture epochs, trajectory figures), the learned
+  representation (W1 / W2 / readout at epoch 1000, one level-3 unit's incoming weights, unit statistics, ablation), the symmetrised flow
+  (group, orbits figure, runs 74 / 114 and 73 / 97, SGD-vs-symmetrised overlay), and a closing section with the cheating budget and the
+  random-init question, plus pointers into the repository.
+- `notes/handout/make_figures.py`: generates `notes/handout/figs/*.pdf` and `notes/handout/facts.json` (capture epochs at |cos| 0.95 from
+  the replay, test error every 10 epochs on the 200k test set, unit statistics, ablations, orbit counts, linear-model constant) from the
+  replay files of runs 60, 70, 73, 97, 74, 114.
+- Toolchain: no TeX on the machine and no passwordless sudo; the handout is compiled with the static `tectonic` 0.17 binary downloaded
+  from GitHub releases into the session scratchpad (`curl` the x86_64-unknown-linux-musl tarball; packages are fetched on first use).
+  Page rendering for checks: `uv run --no-project --with pymupdf`.
+
+### Decisions
+- Figures float within their section (`placeins`), level colours fixed throughout (blue / orange / aqua / yellow, cues violet), diverging
+  blue-grey-orange for weight heatmaps. Capture in the handout's table uses the 0.95 cosine threshold (run 70 then shows only the root
+  captured, consistent with its 19 covered nodes).
+- Not pushed (push only when asked).
