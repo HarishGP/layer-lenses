@@ -7194,3 +7194,38 @@ The lower phase 2 learning rate has been repeatedly a problem for us, maybe we c
 ### Open
 - The earned-beta experiment proposed in the discussion (train only the cue rows from zero with the design's W2 / Wout fixed; then with a
   random W2) is not started.
+
+## 2026-10-23 — Commit everything, 1 GB repository, push; notebook outputs cleared; anatomy notebook runnable for runs 60, 70, 73, 74
+
+### User prompts (verbatim)
+- "Can you commit all changes? The folder has ballooned to 30 GB. It is fine for now, as I have upto 300 GB of space for this project on my computer. Do let me know when it reaches 100 GB.
+
+Also push to remote. Ensure 1GB repository size. Clear the outputs of all notebooks. 
+
+Ensure that the two_layer_anatomy notebook can be run for the following runs: 60, 70, 73, 74. Every other stored run can be ignored in the upload."
+
+### Changes
+- Outputs of all 14 notebooks under `notebooks/` (and `notebooks/scratch/`) cleared; `notebooks/old notebooks/` untouched (read-only policy).
+- Replay weights of runs 60, 70, 73, 74 (173 MB) tracked via `.gitignore` negations; every other run folder's `replay/weights.npz` and
+  `optimizer_state.npz` ignored by a global rule (hierarchy_* folders included).
+- History: the 128 unpushed commits (after ac4cfe9, the last pushed commit) held 2.2 GiB of replay weights of other runs (66 files). They
+  were removed from those commits with `git filter-branch --index-filter` in a bare scratch clone (the working tree was never touched;
+  all 66 files remain on disk, ignored), main was pointed at the rewritten branch and pushed as a fast-forward of origin/main. Pushed
+  history: 0.88 GiB on disk (was 2.92 GiB). The pre-rewrite history is the local branch `backup/main-before-filter`.
+- GitHub warned that run 73's weights (57 MB) exceed its recommended 50 MB; accepted.
+- A local clone was executed end to end with the anatomy notebook for runs 73, 60, 70, 74 (nbconvert) to check the fresh-clone promise.
+
+### Decisions
+- Everything the user may want later stays on disk; only the upload is pruned. Memory: `repo-upload-rules`, `folder-size-watch` (tell the
+  user at 100 GB; 30 GB on 2026-10-23).
+
+### Earlier in this session (2026-10-22, discussion only)
+- Linear model optimum = c v exactly (symmetry + strict convexity), c = 1.04. Earned-beta experiment with run 74's probes / W2 is a bust by
+  symmetry (off-span lenses give c v for every cue); asymmetry needs lenses with internal-node components, giving the loop probe component
+  on u_j -> cue side contrast on j -> probe push on j (a per-node 2x2 Jacobian around the v-only saddle).
+- Run 73 phase 1: probes move only along own target + ancestors in-span (forced by symmetry), ancestor tilt points to the side of the
+  ancestor holding the node and is shared by the pole pair (peaks mid-phase), off-span motion cancels the initial component exactly with a
+  transient (0.14) on other probes' directions. Probes orthogonal at init.
+- Pruning: removing units 0-27 from the trained nets costs 0.40 -> 0.77% (run 60), 0.05 -> 0.39% (114), 0.11 -> 0.63% (97); removing the
+  level-3 units gives 20-25%; readout refit changes nothing. Scaffold = units that can push probes the final units cannot (zero W2 link at
+  init: feature needs link, link needs feature). The direct 62-32 run is the missing test.
