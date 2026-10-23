@@ -100,3 +100,5 @@ $PY $S/hd2_run98_sym_pgf_run79_cont/run_symmetric_gd.py --out hd2_run98_sym_pgf_
 # cue-bias sweeps (runs 99-106): scripts/launch_cue_bias_sweeps.sh P2 ; scripts/launch_cue_bias_sweeps.sh P1
 
 # alpha_13 sweep (runs 107-122): scripts/launch_a13_sweep.sh R74 ; scripts/launch_a13_sweep.sh R73
+
+# clean comparable runs (123-130): scripts/launch_clean_runs.sh SGD ; scripts/launch_clean_runs.sh SYM
