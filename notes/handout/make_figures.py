@@ -40,12 +40,12 @@ def load(key):
     lr = np.array(meta["out"]["lr_history"], float); lr = lr[~np.isnan(lr)]; steps = meta["data_spec"]["n_train"] // meta["train_config"].batch_size
     ft = np.array(meta["out"].get("flow_time", [np.nan]), float)
     if np.isnan(ft).all(): ft = np.cumsum(lr) * steps                            # older runs: rebuild from the per-epoch step size
-    ft = ft[~np.isnan(ft)]; ft = np.concatenate([[0.0], ft[:len(ep) - 1]]) / FT_UNIT   # flow time at every snapshot epoch
-    fc = int(d.get("freeze_cues", 500 if "phases" in d and d["phases"].get("cues") else 0)); fc_ft = float(ft[list(ep).index(fc)]) if fc in ep and fc > 0 else None
-    return {"key": key, "W1": W1, "W2": W2, "Wo": Wo, "ep": ep, "ft": ft, "loss": L, "d": d, "cue_rows": cr, "cid": cid, "inv": inv, "unode": np.array(d["unit_node"]), "usign": np.array(d["unit_path_sign"]), "ublock": np.array(d["unit_block_sign"]), "freeze": fc, "freeze_ft": fc_ft, "symmetrised": bool(d.get("symmetrised_gradient", False))}
+    ft = ft[~np.isnan(ft)]; ft_epoch = np.concatenate([[0.0], ft]) / FT_UNIT; ft = ft_epoch[ep]   # flow time at every epoch, and at the stored snapshot epochs (the replay may be thinned)
+    fc = int(d.get("freeze_cues", 500 if "phases" in d and d["phases"].get("cues") else 0)); fc_ft = float(ft_epoch[fc]) if fc > 0 else None
+    return {"key": key, "W1": W1, "W2": W2, "Wo": Wo, "ep": ep, "ft": ft, "ft_epoch": ft_epoch, "loss": L, "d": d, "cue_rows": cr, "cid": cid, "inv": inv, "unode": np.array(d["unit_node"]), "usign": np.array(d["unit_path_sign"]), "ublock": np.array(d["unit_block_sign"]), "freeze": fc, "freeze_ft": fc_ft, "symmetrised": bool(d.get("symmetrised_gradient", False))}
 
 def cosines(run): W = run["W1"]; return np.abs(W / np.linalg.norm(W, axis=2, keepdims=True) @ U.T)
-def test_error(run, every=10):
+def test_error(run, every=5):
     idx = np.arange(0, len(run["ep"]), every); out = []
     for i in idx:
         W1, W2, Wo = (torch.tensor(run[k][i], dtype=torch.float32, device=dev) for k in ("W1", "W2", "Wo"))
@@ -94,7 +94,7 @@ def traj_panels(axes, run, title, C, idx_err, err, legend=True):
     nrm = np.linalg.norm(run["W1"], axis=2)
     for l in range(4): axes[1].plot(ft, nrm[:, LEVEL_ROWS[l]].mean(1), color=LEVEL_COL[l], lw=1.6)
     axes[1].plot(ft, nrm[:, run["cue_rows"]].mean(1), color=CUE_COL, lw=1.6, ls="--"); axes[1].set_ylabel("mean weight norm")
-    axes[2].plot(ft[1:], run["loss"][:len(ft) - 1], color=INK, lw=1.4, label="train loss (epoch mean)"); axes[2].plot(ft[idx_err], err, color=ERR_COL, lw=1.4, label="test error")
+    axes[2].plot(run["ft_epoch"][1:], run["loss"], color=INK, lw=1.4, label="train loss (epoch mean)"); axes[2].plot(ft[idx_err], err, color=ERR_COL, lw=1.4, label="test error")
     axes[2].set_yscale("log"); axes[2].set_ylim(2e-4, 1); axes[2].set_ylabel("loss / error (log)"); axes[2].set_xlabel(f"flow time (cumulative step size, units of {FT_UNIT:.0f})")
     if run["freeze_ft"]:
         for a in axes: a.axvline(run["freeze_ft"], color=INK2, lw=0.7, ls=":")
@@ -128,7 +128,7 @@ if all(k in runs for k in ("sgd_d60_1ph", "sym_d60_1ph", "sgd_d70_1ph", "sym_d70
 fig, ax = plt.subplots(figsize=(7.2, 3.0))
 for key, run in runs.items():
     col = LEVEL_COL[0] if "d60" in key else LEVEL_COL[1]; ls = "-" if key.startswith("sym") else ":"; lw = 1.6 if key.endswith("2ph") else 1.0
-    ax.plot(run["ft"][1:], run["loss"][:len(run["ft"]) - 1], color=col, ls=ls, lw=lw, label=TITLE[key])
+    ax.plot(run["ft_epoch"][1:], run["loss"], color=col, ls=ls, lw=lw, label=TITLE[key])
 if r60["freeze_ft"]: ax.axvline(r60["freeze_ft"], color=INK2, lw=0.7, ls=":")
 ax.set_yscale("log"); ax.set_ylim(1e-3, 1); ax.set_ylabel("train loss (epoch mean, log)"); ax.set_xlabel(f"flow time (units of {FT_UNIT:.0f})"); ax.legend(fontsize=6.5, ncol=2, loc="lower left"); fig.savefig(f"{OUT}/losses_all.pdf"); plt.close(fig)
 # ---------------------------------------------------------------- the learned representation (design 60, symmetrised, two phases, end)

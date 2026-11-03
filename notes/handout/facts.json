@@ -1,7 +1,7 @@
 {
  "flow_time_unit": 1000.0,
  "sgd_d60_2ph": {
-  "folder": "hd2_run123_clean_sgd_d60_2ph",
+  "folder": "hd2_run131_clean4k_sgd_d60_2ph",
   "captures": {
    "L0": {
     "epoch": 10,
@@ -20,44 +20,44 @@
     "flow_time": 3.099999999998276
    },
    "cues": {
-    "epoch": 1052,
-    "flow_time": 105.19512022932996
+    "epoch": 1055,
+    "flow_time": 105.50000000165302
    }
   },
-  "final_loss": 0.004184672955656424,
-  "min_loss": 0.004184672955656424,
-  "test_error_end": 0.0008249999955296516,
-  "epochs": 2500,
-  "flow_time_end": 178.75004750133465,
+  "final_loss": 0.00284889898984693,
+  "min_loss": 0.00284889898984693,
+  "test_error_end": 0.0006949999951757491,
+  "epochs": 4000,
+  "flow_time_end": 281.250047504256,
   "freeze_epochs": 1000,
   "freeze_flow_time": 100.00000000133288,
   "loss_at_unfreeze": 0.10517241847515106,
   "nodes_covered_end": 31
  },
  "sgd_d70_2ph": {
-  "folder": "hd2_run124_clean_sgd_d70_2ph",
+  "folder": "hd2_run132_clean4k_sgd_d70_2ph",
   "captures": {
    "L0": {
-    "epoch": 107,
-    "flow_time": 10.700000000021396
+    "epoch": 110,
+    "flow_time": 11.000000000022487
    },
    "L1": null,
    "L2": null,
    "L3": null,
    "cues": null
   },
-  "final_loss": 0.057741594571620224,
-  "min_loss": 0.057740920208394525,
-  "test_error_end": 0.014454999938607216,
-  "epochs": 2500,
-  "flow_time_end": 178.75004750133465,
+  "final_loss": 0.038882589776068927,
+  "min_loss": 0.038881754411384466,
+  "test_error_end": 0.009384999983012676,
+  "epochs": 4000,
+  "flow_time_end": 281.250047504256,
   "freeze_epochs": 1000,
   "freeze_flow_time": 100.00000000133288,
   "loss_at_unfreeze": 0.21017679493129254,
-  "nodes_covered_end": 23
+  "nodes_covered_end": 25
  },
  "sym_d60_2ph": {
-  "folder": "hd2_run125_clean_sym_d60_2ph",
+  "folder": "hd2_run133_clean4k_sym_d60_2ph",
   "captures": {
    "L0": {
     "epoch": 10,
@@ -76,22 +76,22 @@
     "flow_time": 2.999999999998367
    },
    "cues": {
-    "epoch": 1129,
-    "flow_time": 112.82572571919304
+    "epoch": 1130,
+    "flow_time": 113.00000000208958
    }
   },
-  "final_loss": 0.0025655528919305655,
-  "min_loss": 0.0025655528919305655,
-  "test_error_end": 0.00013000000035390258,
-  "epochs": 2500,
-  "flow_time_end": 178.75004750133465,
+  "final_loss": 0.0018377994725015015,
+  "min_loss": 0.0018377994725015015,
+  "test_error_end": 9.999999747378752e-05,
+  "epochs": 4000,
+  "flow_time_end": 281.250047504256,
   "freeze_epochs": 1000,
   "freeze_flow_time": 100.00000000133288,
   "loss_at_unfreeze": 0.04909726257622242,
   "nodes_covered_end": 31
  },
  "sym_d70_2ph": {
-  "folder": "hd2_run126_clean_sym_d70_2ph",
+  "folder": "hd2_run134_clean4k_sym_d70_2ph",
   "captures": {
    "L0": {
     "epoch": 96,
@@ -106,138 +106,26 @@
     "flow_time": 30.99999999982938
    },
    "L3": {
-    "epoch": 363,
-    "flow_time": 36.29999999975226
+    "epoch": 365,
+    "flow_time": 36.49999999974935
    },
    "cues": {
-    "epoch": 1104,
-    "flow_time": 110.36103066112996
+    "epoch": 1105,
+    "flow_time": 110.50000000194406
    }
   },
-  "final_loss": 0.019551917554810644,
-  "min_loss": 0.019551917554810644,
-  "test_error_end": 0.004819999914616346,
-  "epochs": 2500,
-  "flow_time_end": 178.75004750133465,
+  "final_loss": 0.006195129045285285,
+  "min_loss": 0.006195129045285285,
+  "test_error_end": 0.0006249999860301614,
+  "epochs": 4000,
+  "flow_time_end": 281.250047504256,
   "freeze_epochs": 1000,
   "freeze_flow_time": 100.00000000133288,
   "loss_at_unfreeze": 0.09725257067382335,
   "nodes_covered_end": 31
  },
- "sgd_d60_1ph": {
-  "folder": "hd2_run127_clean_sgd_d60_1ph",
-  "captures": {
-   "L0": {
-    "epoch": 9,
-    "flow_time": 0.9000000000001361
-   },
-   "L1": {
-    "epoch": 16,
-    "flow_time": 1.5999999999996404
-   },
-   "L2": {
-    "epoch": 26,
-    "flow_time": 2.599999999998731
-   },
-   "L3": null,
-   "cues": null
-  },
-  "final_loss": 0.006024718904402107,
-  "min_loss": 0.006024718904402107,
-  "test_error_end": 0.0019099999917671084,
-  "epochs": 2500,
-  "flow_time_end": 178.75004750133465,
-  "freeze_epochs": 0,
-  "freeze_flow_time": null,
-  "loss_at_unfreeze": null,
-  "nodes_covered_end": 31
- },
- "sgd_d70_1ph": {
-  "folder": "hd2_run128_clean_sgd_d70_1ph",
-  "captures": {
-   "L0": {
-    "epoch": 34,
-    "flow_time": 3.3999999999980033
-   },
-   "L1": {
-    "epoch": 601,
-    "flow_time": 60.099999999405924
-   },
-   "L2": {
-    "epoch": 164,
-    "flow_time": 16.40000000004184
-   },
-   "L3": null,
-   "cues": null
-  },
-  "final_loss": 0.031225515857338907,
-  "min_loss": 0.031225515857338907,
-  "test_error_end": 0.008309999480843544,
-  "epochs": 2500,
-  "flow_time_end": 178.75004750133465,
-  "freeze_epochs": 0,
-  "freeze_flow_time": null,
-  "loss_at_unfreeze": null,
-  "nodes_covered_end": 28
- },
- "sym_d60_1ph": {
-  "folder": "hd2_run129_clean_sym_d60_1ph",
-  "captures": {
-   "L0": {
-    "epoch": 9,
-    "flow_time": 0.9000000000001361
-   },
-   "L1": {
-    "epoch": 41,
-    "flow_time": 4.099999999997384
-   },
-   "L2": {
-    "epoch": 25,
-    "flow_time": 2.499999999998822
-   },
-   "L3": null,
-   "cues": null
-  },
-  "final_loss": 0.037278966460376976,
-  "min_loss": 0.03727708692289889,
-  "test_error_end": 0.004334999714046717,
-  "epochs": 2500,
-  "flow_time_end": 178.75004750133465,
-  "freeze_epochs": 0,
-  "freeze_flow_time": null,
-  "loss_at_unfreeze": null,
-  "nodes_covered_end": 15
- },
- "sym_d70_1ph": {
-  "folder": "hd2_run130_clean_sym_d70_1ph",
-  "captures": {
-   "L0": {
-    "epoch": 33,
-    "flow_time": 3.2999999999980942
-   },
-   "L1": {
-    "epoch": 189,
-    "flow_time": 18.90000000000546
-   },
-   "L2": {
-    "epoch": 127,
-    "flow_time": 12.700000000028671
-   },
-   "L3": null,
-   "cues": null
-  },
-  "final_loss": 0.06186127929389477,
-  "min_loss": 0.06186127929389477,
-  "test_error_end": 0.008119999431073666,
-  "epochs": 2500,
-  "flow_time_end": 178.75004750133465,
-  "freeze_epochs": 0,
-  "freeze_flow_time": null,
-  "loss_at_unfreeze": null,
-  "nodes_covered_end": 15
- },
  "example_unit": {
-  "run": "125",
+  "run": "133",
   "unit": 28,
   "node": 7,
   "ancestors": [
@@ -247,25 +135,25 @@
   ],
   "weights_on_probes_of_ancestors": {
    "3": [
-    -6.09,
+    -6.14,
     0.0
    ],
    "1": [
-    -5.56,
+    -5.62,
     0.0
    ],
    "0": [
-    -5.82,
-    0.03
+    -5.84,
+    0.02
    ]
   },
   "own_probe_weights": [
-   -7.21,
+   -7.25,
    0.0
   ],
   "largest_cue_weights": [
    [
-    -4.8,
+    -5.61,
     "(15, -1)"
    ],
    [
@@ -296,46 +184,46 @@
    "active_frac": 0.5,
    "top_leaf_share": 0.127,
    "corr_label": 0.001,
-   "readout_abs": 21.749
+   "readout_abs": 21.963
   },
   {
    "level": 1,
-   "active_frac": 0.242,
+   "active_frac": 0.241,
    "top_leaf_share": 0.253,
-   "corr_label": 0.075,
-   "readout_abs": 29.165
+   "corr_label": 0.083,
+   "readout_abs": 29.429
   },
   {
    "level": 2,
-   "active_frac": 0.12,
+   "active_frac": 0.119,
    "top_leaf_share": 0.503,
-   "corr_label": 0.162,
-   "readout_abs": 49.61
+   "corr_label": 0.186,
+   "readout_abs": 49.878
   },
   {
    "level": 3,
-   "active_frac": 0.033,
-   "top_leaf_share": 0.986,
-   "corr_label": 0.319,
-   "readout_abs": 118.168
+   "active_frac": 0.032,
+   "top_leaf_share": 0.985,
+   "corr_label": 0.317,
+   "readout_abs": 121.896
   }
  ],
  "ablation": {
-  "full": 0.00013,
-  "L3_only": 0.001435,
-  "L0-2_only": 0.25165,
-  "L0_removed": 0.00081
+  "full": 0.0001,
+  "L3_only": 0.000985,
+  "L0-2_only": 0.25333,
+  "L0_removed": 0.000605
  },
  "norms_end": {
-  "L0": 25.807116774306188,
-  "L1": 17.620177714342823,
-  "L2": 13.23483318416276,
-  "L3": 10.248005911877625,
-  "cues": 3.3391429282309453
+  "L0": 26.201936827880687,
+  "L1": 17.872265976337076,
+  "L2": 13.418947152428796,
+  "L3": 10.383104082158034,
+  "cues": 4.4642656001679715
  },
  "w2_end": {
-  "veto_on_own_probe_L3": -7.214133262634277,
-  "mean_abs_cue_weight_L3": 0.15742519352352247
+  "veto_on_own_probe_L3": -7.2515363693237305,
+  "mean_abs_cue_weight_L3": 0.18079251394374296
  },
  "orbits": {
   "n_orbits": 203,

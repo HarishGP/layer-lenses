@@ -5,8 +5,9 @@ metadata:
   type: project
 ---
 
-`notes/handout/handout.tex` is the 10-page introduction for students and collaborators (path decomposition, ODT data, runs 60 / 70 inits
-and results, learned representation, symmetrised flow with runs 73 / 97 / 74), written 2026-10-23. Its figures come from
+`notes/handout/handout.tex` is the 10-page introduction for students and collaborators (path decomposition, ODT data, the two designs,
+runs 131-134 under SGD and the symmetrised flow, learned representation, symmetrised flow), v2 of 2026-11-03 with flow-time axes;
+numbers come from `facts.tex` macros written by make_figures.py (`\\fact{run-key}{name}`), so rerunning the script updates the text. Its figures come from
 `notes/handout/make_figures.py` (reads the replay files of runs 60, 70, 73, 97, 74, 114; writes figs/*.pdf and facts.json).
 
 **Why:** the machine has no TeX distribution and sudo needs a password, so LaTeX is compiled with the static `tectonic` binary
