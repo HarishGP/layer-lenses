@@ -59,6 +59,7 @@ orb = symmetric_orbits(cid, units, off_rows=OFF_ROWS); print(f"orbits: {orb['n_o
 Bt = torch.as_tensor(B, dtype=torch.float32, device=dev)
 x, y = build_data_chunked(SweepRunSpec(tree_seed=5178, data_seed=args.data_seed, init_seed=0, batch_size=1, n_train=args.n_train), tree); xe, ye = build_data(SweepRunSpec(tree_seed=5178, data_seed=999_777, init_seed=0, batch_size=1, n_train=200_000), tree)
 X = torch.from_numpy(x).float().to(dev); Y = torch.from_numpy(y.astype(np.float32)).to(dev); Xe = torch.from_numpy(xe).float().to(dev); Ye = torch.from_numpy(ye.astype(np.float32)).to(dev)
+del x, y; import gc; gc.collect()                                              # the 4 GB host copy of the data is not needed once it is on the GPU (the WSL VM has 15 GB of RAM)
 P = [torch.as_tensor(w, dtype=torch.float32, device=dev).requires_grad_(True) for w in (W1, W2, Wo)]
 EPOCHS = args.schedule_epochs or args.epochs; TOTAL = args.epochs; assert EPOCHS >= TOTAL; steps_per_epoch = args.n_train // args.batch; total_steps = EPOCHS * steps_per_epoch; cue_mask = torch.ones(62, 1, device=dev); cue_mask[CUE_ROWS] = 0.0
 def project(G1, G2, Go, freeze_cues):

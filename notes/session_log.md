@@ -7281,3 +7281,13 @@ Once that is done, we can redo the pdf. Several small comments:
 1. make fresh plots, with x-axis not epochs but rather flow-time (cumulative LR).
 
 2. Figure 3a can be removed as the equation for W1 does a good enough job already. Figure 3b and 3c are too small
+### 2026-11-03: two crashes of the WSL machine, cause and fix
+- The machine went down on 2026-10-23 19:06 (a minute after the last commit, ten minutes into runs 131-133) and again on 2026-11-03
+  14:44 (when runs 131 / 132 finished and 134 / 135 / 136 started together). The WSL2 VM has 15 GB of RAM (+4 GB swap); each run held
+  its 10M-point data set (4 GB) in host memory for the whole run and needed ~5 GB more while building it, so three starts at once
+  exhausted the VM. Git lost the commit made just before the first crash (empty object files): repaired by deleting the empty objects,
+  pointing main at the last intact commit, rebuilding the index and cleaning the reflog; the working tree had every file, recommitted
+  as f41eecf. Runs 131 and 132 (SGD, two phases) completed; 133-138 relaunched twice (`scratchpad/chainA.sh` / `chainB.sh`: two
+  sequential chains, chain B starts 4 min later and waits for fewer than two runner processes before each start).
+- `run_symmetric_gd.py`: the host copy of the training data is freed once it is on the GPU (steady RSS 1.5 GB instead of 5 GB; the
+  start-up peak stays ~5 GB). Memory: `crash-recovery-and-gpu-startup`.
