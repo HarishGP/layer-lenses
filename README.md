@@ -34,6 +34,19 @@ Run tests:
 uv run pytest
 ```
 
+Running the analysis notebooks from a fresh clone (no GPU needed):
+
+```bash
+uv run jupyter lab
+```
+
+`notebooks/two_layer_network_anatomy.ipynb` runs for the runs whose replay trajectories are in the repository: 60, 70, 73, 74 (full
+trajectories) and 131-134 (the clean 4000-epoch runs, thinned to every epoch up to 100, every 5th up to 1500 and every 20th after;
+pick EPOCH from that grid). Set `RUN` in its first cell. `notebooks/hierarchy_design_runs_2.ipynb` has one section per run with the
+findings; the sections of runs whose weights are not pushed need the local results. `notes/handout/handout.pdf` is the introduction for
+collaborators and `notes/session_log.md` the chronological record (prompts verbatim); `notes/agent_memory/` holds the agent's project
+notes so that a Claude Code session on another machine starts with the same context.
+
 Use notebooks for exploratory analysis, especially:
 
 - `notebooks/scratch.ipynb` — current ReLU-on-ODT analysis notebook.
