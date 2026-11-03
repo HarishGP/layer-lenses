@@ -7264,3 +7264,20 @@ Can you create about a 10 page PDF with these details? You can generate any figu
   blue-grey-orange for weight heatmaps. Capture in the handout's table uses the 0.95 cosine threshold (run 70 then shows only the root
   captured, consistent with its 19 covered nodes).
 - Not pushed (push only when asked).
+
+## 2026-10-23 14:20 IST — Clean comparable runs (123-138) and the handout redo (in progress)
+
+### User prompts (verbatim)
+- "Ok, let's clean up some issues. Fresh runs first.
+
+First, Let's make new clean comparable runs for 60, 70, 74 and 73.  No need for restarts due to low learning rate choices made earlier. 
+
+Use appropriate learning rate schedule so that all of them get to the final answer of log loss <0.01 for the symmetrised runs and comparable loss for the SGD runs. 
+
+Then run all of these in a single phase mode too, just so we know the answer to the question "why two phases?". 
+
+Once that is done, we can redo the pdf. Several small comments:
+
+1. make fresh plots, with x-axis not epochs but rather flow-time (cumulative LR).
+
+2. Figure 3a can be removed as the equation for W1 does a good enough job already. Figure 3b and 3c are too small
