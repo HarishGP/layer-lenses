@@ -117,18 +117,20 @@ def overlay(ax, keys, styles, title, show_cues=True):
 fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.7), sharey=True, constrained_layout=True)
 overlay(axes[0], ["sgd_d60_2ph", "sym_d60_2ph"], ["-", "--"], "design 60: SGD (solid) and symmetrised (dashed)"); overlay(axes[1], ["sgd_d70_2ph", "sym_d70_2ph"], ["-", "--"], "design 70: SGD (solid) and symmetrised (dashed)")
 axes[0].set_ylabel("mean |cos| with own normal"); fig.savefig(f"{OUT}/overlay_sgd_vs_sym.pdf"); plt.close(fig)
-fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.0), sharey=True, sharex=True, constrained_layout=True)
-for ax, (a, b, ttl) in zip(axes.ravel(), [("sgd_d60_2ph", "sgd_d60_1ph", "design 60, plain SGD"), ("sym_d60_2ph", "sym_d60_1ph", "design 60, symmetrised flow"), ("sgd_d70_2ph", "sgd_d70_1ph", "design 70, plain SGD"), ("sym_d70_2ph", "sym_d70_1ph", "design 70, symmetrised flow")]):
+if all(k in runs for k in ("sgd_d60_1ph", "sym_d60_1ph", "sgd_d70_1ph", "sym_d70_1ph")):
+  fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.0), sharey=True, sharex=True, constrained_layout=True)
+  for ax, (a, b, ttl) in zip(axes.ravel(), [("sgd_d60_2ph", "sgd_d60_1ph", "design 60, plain SGD"), ("sym_d60_2ph", "sym_d60_1ph", "design 60, symmetrised flow"), ("sgd_d70_2ph", "sgd_d70_1ph", "design 70, plain SGD"), ("sym_d70_2ph", "sym_d70_1ph", "design 70, symmetrised flow")]):
     overlay(ax, [a, b], ["-", "--"], ttl)
-axes[0, 0].set_ylabel("mean |cos| with own normal"); axes[1, 0].set_ylabel("mean |cos| with own normal")
-from matplotlib.lines import Line2D
-axes[0, 0].legend(handles=[Line2D([], [], color=LEVEL_COL[l], lw=1.6, label=f"probes of level {l}") for l in range(4)] + [Line2D([], [], color=CUE_COL, lw=1.6, label="cues"), Line2D([], [], color=INK, lw=1.2, ls="-", label="two phases"), Line2D([], [], color=INK, lw=1.2, ls="--", label="one phase")], fontsize=6.5, loc="lower right", ncol=2, frameon=True, framealpha=0.92, edgecolor="white"); fig.savefig(f"{OUT}/overlay_phases.pdf"); plt.close(fig)
+  axes[0, 0].set_ylabel("mean |cos| with own normal"); axes[1, 0].set_ylabel("mean |cos| with own normal")
+  from matplotlib.lines import Line2D
+  axes[0, 0].legend(handles=[Line2D([], [], color=LEVEL_COL[l], lw=1.6, label=f"probes of level {l}") for l in range(4)] + [Line2D([], [], color=CUE_COL, lw=1.6, label="cues"), Line2D([], [], color=INK, lw=1.2, ls="-", label="two phases"), Line2D([], [], color=INK, lw=1.2, ls="--", label="one phase")], fontsize=6.5, loc="lower right", ncol=2, frameon=True, framealpha=0.92, edgecolor="white"); fig.savefig(f"{OUT}/overlay_phases.pdf"); plt.close(fig)
 # loss curves of all runs on one axis (flow time)
 fig, ax = plt.subplots(figsize=(7.2, 3.0))
 for key, run in runs.items():
     col = LEVEL_COL[0] if "d60" in key else LEVEL_COL[1]; ls = "-" if key.startswith("sym") else ":"; lw = 1.6 if key.endswith("2ph") else 1.0
     ax.plot(run["ft"][1:], run["loss"][:len(run["ft"]) - 1], color=col, ls=ls, lw=lw, label=TITLE[key])
-ax.set_yscale("log"); ax.set_ylim(2e-3, 1); ax.set_ylabel("train loss (epoch mean, log)"); ax.set_xlabel(f"flow time (units of {FT_UNIT:.0f})"); ax.legend(fontsize=6.5, ncol=2, loc="lower left"); fig.savefig(f"{OUT}/losses_all.pdf"); plt.close(fig)
+if r60["freeze_ft"]: ax.axvline(r60["freeze_ft"], color=INK2, lw=0.7, ls=":")
+ax.set_yscale("log"); ax.set_ylim(1e-3, 1); ax.set_ylabel("train loss (epoch mean, log)"); ax.set_xlabel(f"flow time (units of {FT_UNIT:.0f})"); ax.legend(fontsize=6.5, ncol=2, loc="lower left"); fig.savefig(f"{OUT}/losses_all.pdf"); plt.close(fig)
 # ---------------------------------------------------------------- the learned representation (design 60, symmetrised, two phases, end)
 ref = r60; W1e, W2e, Woe = ref["W1"][-1], ref["W2"][-1], ref["Wo"][-1]; lev = np.array([NODE_LEVEL[j] for j in ref["unode"]]); refname = RUNS[ref["key"]].split("_")[1][3:]
 fig, axes = plt.subplots(2, 1, figsize=(7.2, 6.0), constrained_layout=True)
@@ -195,6 +197,6 @@ for name, val in facts["ablation"].items(): deff("ablation", name.replace("_", "
 for name, val in facts["norms_end"].items(): deff("norms", name, f"{val:.1f}")
 ex = facts["example_unit"]; deff("unit", "num", ex["unit"]); deff("unit", "node", ex["node"]); deff("unit", "ownveto", f"{min(ex['own_probe_weights']):.1f}"); deff("unit", "ancvetoes", ", ".join(f"{min(w):.1f}" for w in ex["weights_on_probes_of_ancestors"].values())); deff("unit", "anclist", ", ".join(f"$u_{{{a}}}$" for a in ex["ancestors"])); deff("unit", "cueveto", f"{ex['largest_cue_weights'][0][0]:.1f}"); deff("unit", "cueid", ex["largest_cue_weights"][0][1].replace("(", "").replace(")", "").replace(" ", "")); deff("unit", "run", ex["run"])
 deff("orbits", "n", facts["orbits"]["n_orbits"]); deff("orbits", "free", facts["orbits"]["n_free"]); deff("orbits", "coords", facts["orbits"]["n_coordinates"]); deff("linear", "c", f"{facts['linear']['c']:.2f}"); deff("linear", "loss", f"{facts['linear']['loss']:.3f}"); deff("linear", "err", f"{100 * facts['linear']['error']:.1f}")
-r2 = runs["sym_d60_2ph"]; deff("sched", "freezeft", f"{r2['freeze_ft']:.0f}" if r2["freeze_ft"] else "--"); deff("sched", "epochs", int(r2["ep"][-1])); deff("sched", "warm", int(r2["d"].get("warm_epochs", 0))); deff("sched", "freeze", int(r2["freeze"]))
+r2 = r60; deff("sched", "freezeft", f"{r2['freeze_ft']:.0f}" if r2["freeze_ft"] else "--"); deff("sched", "epochs", int(r2["ep"][-1])); deff("sched", "warm", int(r2["d"].get("warm_epochs", 0))); deff("sched", "freeze", int(r2["freeze"]))
 open("notes/handout/facts.tex", "w").write("% generated by make_figures.py: \\fact{key}{name} -> \\csname fact.key.name\\endcsname\n" + "\n".join(lines) + "\n")
 print("facts.tex:", len(lines), "macros;", {k: (v["folder"], round(v["final_loss"], 4), round(100 * v["test_error_end"], 2), v["nodes_covered_end"]) for k, v in facts.items() if k in RUNS})
